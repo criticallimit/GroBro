@@ -30,6 +30,20 @@
         "type": "text"
       }
     },
+    "mqtt_ip": {
+      "growatt": {
+        "register_no": 17,
+        "data": {
+          "data_type": "STRING"
+        }
+      },
+      "homeassistant": {
+        "publish": true,
+        "name": "MQTT IP",
+        "type": "text",
+        "icon": "mdi:ip-network"
+      }
+    },
     "mqtt_port": {
       "growatt": {
         "register_no": 18,
