@@ -2,6 +2,7 @@ import json
 from types import SimpleNamespace
 
 from grobro.ha.cleanup import (
+    _clean_discovery_payload,
     _configured_serial,
     _detect_bat_count,
     _initialize_instance_state,
@@ -58,6 +59,62 @@ def test_configured_serial_prefers_config_and_keeps_device_id_fallback():
 
     client._config_cache["0PVPTEST"] = SimpleNamespace(serial_number="SERIAL-NEW")
     assert _configured_serial(client, "0PVPTEST") == "SERIAL-NEW"
+
+
+def test_clean_discovery_payload_keeps_identity_and_removes_internal_fields():
+    client = SimpleNamespace(
+        _config_cache={
+            "0PVPTEST": SimpleNamespace(serial_number="SERIAL-NEW")
+        }
+    )
+    data = {
+        "o": {"name": "grobro", "url": "https://github.com/robertzaage/GroBro"},
+        "dev": {
+            "identifiers": ["0PVPTEST"],
+            "serial_number": "0PVPTEST",
+        },
+        "cmps": {
+            "grobro_0PVPTEST_cmd_wifi_signal_strength": {
+                "platform": "sensor",
+                "name": "Wi-Fi Signal Strength",
+                "unique_id": "grobro_0PVPTEST_cmd_wifi_signal_strength",
+                "state_topic": "homeassistant/config/grobro/0PVPTEST/76/get",
+                "command_topic": "homeassistant/config/grobro/0PVPTEST/76/set",
+                "publish": True,
+                "type": "sensor",
+                "device_class": "signal_strength",
+                "state_class": "measurement",
+                "unit_of_measurement": "dBm",
+            },
+            "grobro_0PVPTEST_cmd_mqtt_port": {
+                "platform": "number",
+                "name": "MQTT Port",
+                "unique_id": "grobro_0PVPTEST_cmd_mqtt_port",
+                "state_topic": "homeassistant/config/grobro/0PVPTEST/18/get",
+                "command_topic": "homeassistant/config/grobro/0PVPTEST/18/set",
+                "publish": True,
+                "type": "number",
+            },
+        },
+    }
+
+    cleaned = _clean_discovery_payload(client, "0PVPTEST", data)
+
+    assert cleaned["dev"]["identifiers"] == ["0PVPTEST"]
+    assert cleaned["dev"]["serial_number"] == "SERIAL-NEW"
+    assert cleaned["o"]["url"] == "https://github.com/criticallimit/GroBro"
+
+    sensor = cleaned["cmps"]["grobro_0PVPTEST_cmd_wifi_signal_strength"]
+    assert sensor["unique_id"] == "grobro_0PVPTEST_cmd_wifi_signal_strength"
+    assert sensor["state_topic"] == "homeassistant/config/grobro/0PVPTEST/76/get"
+    assert "command_topic" not in sensor
+    assert "publish" not in sensor
+    assert "type" not in sensor
+
+    number = cleaned["cmps"]["grobro_0PVPTEST_cmd_mqtt_port"]
+    assert number["command_topic"] == "homeassistant/config/grobro/0PVPTEST/18/set"
+    assert "publish" not in number
+    assert "type" not in number
 
 
 def test_availability_topic_always_goes_offline(monkeypatch):
