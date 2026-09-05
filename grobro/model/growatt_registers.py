@@ -154,12 +154,15 @@ class GroBroConfigRegister(BaseModel):
 class HomeAssistantConfigRegister(BaseModel):
     publish: bool
     name: str
-    type: str  # sensor | number | button
+    type: str  # sensor | number | button | text | select
     min: Optional[int] = None
     max: Optional[int] = None
     step: Optional[int] = None
+    state_class: Optional[str] = None
+    device_class: Optional[str] = None
     unit_of_measurement: Optional[str] = None
     icon: Optional[str] = None
+    options: Optional[dict[str, str]] = None
 
 
 class GroBroConfigRegisterDef(BaseModel):
