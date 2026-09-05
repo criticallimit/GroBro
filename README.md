@@ -1,69 +1,55 @@
-# GroBro - Growatt MQTT Message Broker
+# GroBro Register Debug
 
-[![CI](https://github.com/robertzaage/GroBro/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/robertzaage/GroBro/actions/workflows/tests.yml)
-[![codecov](https://codecov.io/gh/robertzaage/GroBro/branch/main/graph/badge.svg)](https://codecov.io/gh/robertzaage/GroBro)
-[![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue?logo=python)](https://github.com/robertzaage/GroBro)
-[![GitHub Release](https://img.shields.io/github/v/release/robertzaage/GroBro?logo=github)](https://github.com/robertzaage/GroBro/releases)
-[![License](https://img.shields.io/github/license/robertzaage/GroBro)](LICENSE)
+> Debug fork of [robertzaage/GroBro](https://github.com/robertzaage/GroBro) for passive Growatt register discovery in Home Assistant. The upstream project remains the source for normal GroBro development and releases.
 
-GroBro is a bridge service that decodes encrypted MQTT packets from Growatt NEO, NOAH, NEXA, SPF (Shine WiFi-X), TL-XH2, ShineWeLink-X2 devices and republishes them in a format compatible with Home Assistant. 
-It supports auto-discovery via MQTT and allows full integration of Growatt data into your smart home.
+GroBro is a bridge service that decodes encrypted MQTT packets from Growatt NEO, NOAH, NEXA, SPF (Shine WiFi-X), TL-XH2 and ShineWeLink-X2 devices and republishes them in a format compatible with Home Assistant.
 
-![GroBro Logo](https://raw.githubusercontent.com/robertzaage/GroBro/refs/heads/main/assets/grobro_logo.png)
+This fork keeps the normal GroBro behavior and adds a passive register capture mode. It does **not** actively scan devices and does **not** send additional register read/write commands.
 
-Join us at [#grobro:matrix.org](https://matrix.to/#/#grobro:matrix.org)
+## Debug additions
 
----
+- Passive capture of successfully parsed Modbus register blocks.
+- Captures confirmed register numbers from `0` through the configured maximum (`3000` by default).
+- Stores uint16, int16, hex, high byte, low byte, previous value and change state.
+- Captures the first observation of every register even when `REGISTER_DEBUG_CHANGES_ONLY` is enabled.
+- Records special NOAH/NEXA `0x0103` payload values separately as indexes when their real start address is not known.
+- Writes the JSONL capture to `/share/GroBro/register_debug/registers.jsonl`.
 
-## Features
-- Decodes and maps encrypted register payloads from Growatt NEO/SPF-series inverters and NOAH/NEXA-series batteries
-- Bridges inverter data from a dedicated MQTT source
-- Proxies messages to the Growatt Cloud to keep the ShinePhone app functional (optional)
-- Enables a local-only setup - keeping your device off the cloud
-- Supports Home Assistant MQTT auto-discovery
-- Containerized and configurable via environment variables
+See [REGISTER_DEBUG.md](REGISTER_DEBUG.md) for details.
 
----
+## Installation as Home Assistant app/add-on
 
-Example of a Growatt NEO 800M-X sending its data to Home Assistant:
- 
-![HA Screenshot](https://raw.githubusercontent.com/robertzaage/GroBro/refs/heads/main/assets/ha_device_screenshot.png)
+Use this fork as the repository:
 
-## Setup Instructions
+[![Open your Home Assistant instance and add the GroBro Register Debug repository.](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fcriticallimit%2FGroBro)
 
-1. Configure your **Growatt NEO/SPF inverter** or **NOAH/NEXA battery** to send data to a custom MQTT broker
-2. Configure a Mosquitto instance **with TLS**
-3. Run **GroBro HA Bridge** Container
+Or add this repository manually in the Home Assistant app/add-on store:
 
-[View the Configuration Guide](https://github.com/robertzaage/GroBro/blob/main/CONFIGURATION.md) for details.
+`https://github.com/criticallimit/GroBro`
 
-### Minimal Example 
-Mosquitto TLS for Growatt to plain Mosquitto configured in Home Assistant
+Then refresh the store and install **GroBro Register Debug**.
 
-```bash
-docker run --rm \
-  -e SOURCE_MQTT_HOST=<source-mqtt-host> \
-  -e SOURCE_MQTT_PORT=<source-mqtt-port> \
-  -e SOURCE_MQTT_TLS=true \
-  -e TARGET_MQTT_HOST=<target-mqtt-host> \
-  -e TARGET_MQTT_PORT=<target-mqtt-port> \
-  ghcr.io/robertzaage/grobro:latest
+Do not run the upstream GroBro add-on and this debug add-on against the same Growatt MQTT source at the same time unless you deliberately configured separate MQTT client identities and understand the consequences. For a normal capture, stop the upstream GroBro add-on first and run this debug build instead.
+
+## Default debug settings
+
+```yaml
+REGISTER_DEBUG: true
+REGISTER_DEBUG_DIR: /share/GroBro/register_debug
+REGISTER_DEBUG_MAX_REGISTER: 3000
+REGISTER_DEBUG_CHANGES_ONLY: true
 ```
 
-### Installation as Add-On
-1. Click the button below to add this repositiory on your Home Assistant instance
+`REGISTER_DEBUG_MAX_REGISTER=3000` is only a capture filter. It does not cause GroBro to query registers 0-3000. Registers are captured only when the device actually sends them in a message that GroBro can parse.
 
-   [![Open your Home Assistant instance and show the add add-on repository dialog with a specific repository URL pre-filled.](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Frobertzaage%2FGroBro)
+## Normal GroBro setup
 
-2. Refresh your add-ons in your `Add-On Store` and search for `GroBro`
-3. Click the `Install` button to install the add-on
-4. Configure the `GroBro` add-on. Don't forget to set your register filter.
-5. Start the `GroBro` add-on
-6. Check the logs of the `GroBro` add-on to see it in action
+The underlying MQTT/TLS setup is unchanged from upstream GroBro. For the full setup, certificates and device configuration documentation, use the upstream project documentation:
 
-## Hint
-Growatt NEO, NOAH and NEXA devices rely on a TLS-enabled Mosquitto broker to send their packages. 
-The full trust chain must be present, including the root certificate. [View the Certificates Guide](https://github.com/robertzaage/GroBro/blob/main/CERTIFICATES.md) for setup instructions.
+- [GroBro upstream](https://github.com/robertzaage/GroBro)
+- [Configuration guide](https://github.com/robertzaage/GroBro/blob/main/CONFIGURATION.md)
+- [Certificates guide](https://github.com/robertzaage/GroBro/blob/main/CERTIFICATES.md)
 
-## Contributions
-Questions? Issues? PRs welcome!
+## License and upstream attribution
+
+This repository is a fork of GroBro by Robert Zaage and contributors. The original project license remains in [LICENSE](LICENSE).
