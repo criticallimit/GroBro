@@ -40,17 +40,22 @@ def test_unknown_device_is_not_guessed():
 
 
 def test_clock_sync_capability_is_explicit():
-    assert supports_time_sync("0PVPTEST") is True
-    assert supports_time_sync("0HVRTEST") is True
-    assert supports_time_sync("QMNTEST") is True
-    assert supports_time_sync("PTQTEST") is True
+    # Every current inverter/device register map that explicitly exposes
+    # system_time as config register 31 uses the shared automatic sync path.
+    for device_id in (
+        "0PVPTEST",  # NOAH
+        "0HVRTEST",  # NEXA
+        "QMNTEST",   # NEO
+        "PTQTEST",   # NEO behind ShineWeLink
+        "HAQTEST",   # SPF
+        "ZGQTEST",   # MIN-XH2
+        "VWQTEST",   # MOD
+    ):
+        assert supports_time_sync(device_id) is True
 
-    # Gateways/other inverter families must never inherit clock writes merely
-    # because they share parts of a register map.
+    # RAQ is the ShineWeLink gateway itself; time writes belong to the PTQ
+    # inverter discovered behind it, never the gateway serial.
     assert supports_time_sync("RAQTEST") is False
-    assert supports_time_sync("HAQTEST") is False
-    assert supports_time_sync("ZGQTEST") is False
-    assert supports_time_sync("VWQTEST") is False
 
 
 def test_dynamic_pv_detection_capability_is_explicit():
