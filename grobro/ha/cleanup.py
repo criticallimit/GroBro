@@ -15,7 +15,12 @@ from datetime import datetime, timedelta
 from threading import Lock, Timer
 
 from grobro.ha import client as ha_client_module
-from grobro.model.device_family import supports_time_sync
+from grobro.model.device_family import (
+    get_device_type_name,
+    get_known_registers,
+    supports_time_sync,
+    uses_dynamic_pv_count,
+)
 
 LOG = logging.getLogger(__name__)
 _INSTALLED = False
@@ -154,7 +159,6 @@ def _discovery_signature(client, device_id: str, effective_max_bat: int) -> tupl
 
 
 def _seconds_until_next_time_sync(now: datetime | None = None) -> float:
-    """Return seconds until the next local 00:00 or 12:00 synchronization."""
     current = now or datetime.now()
     candidates = []
     for hour in _TIME_SYNC_HOURS:
@@ -166,7 +170,6 @@ def _seconds_until_next_time_sync(now: datetime | None = None) -> float:
 
 
 def _sync_supported_clocks(client, now: datetime | None = None) -> int:
-    """Write local wall clock to register 31 for families that support it."""
     callback = getattr(client, "on_config_command", None)
     if not callable(callback):
         return 0
@@ -193,7 +196,6 @@ def _sync_noah_clocks(client, now: datetime | None = None) -> int:
 
 
 def _schedule_next_time_sync(client) -> None:
-    """Schedule clock sync at fixed local 00:00/12:00 and re-arm afterwards."""
     previous = getattr(client, "_time_sync_timer", None)
     if previous is not None:
         try:
@@ -228,9 +230,6 @@ def _clean_discovery_payload(client, device_id: str, data: dict) -> dict:
 
     components = data.get("cmps")
     if isinstance(components, dict):
-        # Clock sync is managed automatically for supported families. For all
-        # other families the generic button was never capability-validated, so
-        # it is not exposed either.
         components.pop(f"grobro_{device_id}_sync_time", None)
 
         for component in components.values():
@@ -249,6 +248,9 @@ def install_ha_cleanup_hook() -> None:
     if _INSTALLED:
         return
 
+    # Make the central device-family registry the active source of truth for HA.
+    ha_client_module.get_known_registers = get_known_registers
+    ha_client_module.get_device_type_name = get_device_type_name
     ha_client_module._detect_bat_count = _detect_bat_count
     ha_client_module._resolve_max_bat = _resolve_max_bat
     client_cls = ha_client_module.Client
@@ -271,6 +273,15 @@ def install_ha_cleanup_hook() -> None:
         return result
 
     client_cls.start = start_clean
+
+    original_detect_pv_count = client_cls._Client__detect_neo_pv_count
+
+    def detect_pv_count_clean(self, device_id: str, payload: dict):
+        if not uses_dynamic_pv_count(device_id):
+            return
+        return original_detect_pv_count(self, device_id, payload)
+
+    client_cls._Client__detect_neo_pv_count = detect_pv_count_clean
 
     original_on_connect = client_cls._Client__on_connect
 
