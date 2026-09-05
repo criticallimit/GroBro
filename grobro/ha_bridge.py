@@ -12,6 +12,7 @@ import time
 
 from grobro import model, ha, grobro
 from grobro.grobro.register_debug import install_register_debug_hook
+from grobro.ha.cleanup import install_ha_cleanup_hook
 
 # Setup Logger
 LOG_LEVEL = os.getenv("LOG_LEVEL", "ERROR").upper()
@@ -29,7 +30,9 @@ except Exception as e:
     print(f"Failed to setup logger {e} USING DEFAULT LOG Level(Error)")
 LOG = logging.getLogger(__name__)
 
-# Install the optional passive register logger before clients start parsing messages.
+# Install compatibility cleanup and optional passive register logger before
+# clients start processing messages.
+install_ha_cleanup_hook()
 install_register_debug_hook()
 
 # Configuration from environment variables
@@ -51,12 +54,7 @@ RUNNING = True
 
 # pylint: disable-next=too-few-public-methods
 class SignalHandler:
-    """
-    Catches SIGINT and SIGTERM in order to trigger
-graceful shutdown.
-    """
-
-    _caught: bool
+    """Catch SIGINT/SIGTERM and trigger graceful shutdown."""
 
     def __init__(self):
         self._running = True
@@ -69,7 +67,7 @@ graceful shutdown.
 
     @property
     def caught(self) -> bool:
-        """Whether the signal was caught."""
+        """Return whether the main loop should keep running."""
         return self._running
 
 
@@ -86,9 +84,10 @@ if __name__ == "__main__":
     # setup com: ha -> grobro
     ha_client.on_command = grobro_client.send_command
     ha_client.on_config_read = grobro_client.send_config_read_message
-    ha_client.on_config_command = lambda dev, reg, val: grobro_client.send_config_message(dev, reg, val)
+    ha_client.on_config_command = (
+        lambda dev, reg, val: grobro_client.send_config_message(dev, reg, val)
+    )
 
-    RUNNING = True
     signal_handler = SignalHandler()
 
     ha_client.start()
