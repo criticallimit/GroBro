@@ -3,6 +3,7 @@ from types import SimpleNamespace
 
 from grobro.ha.cleanup import (
     _clean_discovery_payload,
+    _configured_local_ip,
     _configured_serial,
     _detect_bat_count,
     _initialize_instance_state,
@@ -61,10 +62,28 @@ def test_configured_serial_prefers_config_and_keeps_device_id_fallback():
     assert _configured_serial(client, "0PVPTEST") == "SERIAL-NEW"
 
 
+def test_configured_local_ip_uses_only_valid_local_ip():
+    client = SimpleNamespace(
+        _config_cache={
+            "0PVPTEST": SimpleNamespace(
+                local_ip="192.168.1.50",
+                remote_ip="203.0.113.10",
+            )
+        }
+    )
+    assert _configured_local_ip(client, "0PVPTEST") == "192.168.1.50"
+
+    client._config_cache["0PVPTEST"].local_ip = "not-an-ip"
+    assert _configured_local_ip(client, "0PVPTEST") is None
+
+
 def test_clean_discovery_payload_keeps_identity_and_removes_internal_fields():
     client = SimpleNamespace(
         _config_cache={
-            "0PVPTEST": SimpleNamespace(serial_number="SERIAL-NEW")
+            "0PVPTEST": SimpleNamespace(
+                serial_number="SERIAL-NEW",
+                local_ip="192.168.1.50",
+            )
         }
     )
     data = {
@@ -102,6 +121,7 @@ def test_clean_discovery_payload_keeps_identity_and_removes_internal_fields():
 
     assert cleaned["dev"]["identifiers"] == ["0PVPTEST"]
     assert cleaned["dev"]["serial_number"] == "SERIAL-NEW"
+    assert cleaned["dev"]["configuration_url"] == "http://192.168.1.50"
     assert cleaned["o"]["url"] == "https://github.com/criticallimit/GroBro"
 
     sensor = cleaned["cmps"]["grobro_0PVPTEST_cmd_wifi_signal_strength"]
@@ -160,6 +180,7 @@ def test_cleanup_keeps_device_sn_entity_and_fixes_origin(monkeypatch):
         "0PVPTEST": SimpleNamespace(
             serial_number="SERIAL-NEW",
             sw_version="19.19.14",
+            local_ip="192.168.1.50",
         )
     }
     client._discovery_payload_cache = {}
@@ -210,6 +231,7 @@ def test_cleanup_keeps_device_sn_entity_and_fixes_origin(monkeypatch):
     data = json.loads(discovery_payloads[-1])
     assert f"grobro_{device_id}_serial" in data["cmps"]
     assert data["o"]["url"] == "https://github.com/criticallimit/GroBro"
+    assert data["dev"]["configuration_url"] == "http://192.168.1.50"
 
     serial_values = [
         payload
