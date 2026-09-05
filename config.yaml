@@ -1,6 +1,6 @@
 name: "GroBro Register Debug"
 description: "Growatt MQTT Message Broker with passive Modbus register logging"
-version: "2.7.5-debug1"
+version: "2.7.5-debug2"
 slug: "grobro_register_debug"
 init: false
 url: https://github.com/criticallimit/GroBro
@@ -39,7 +39,7 @@ options:
   REGISTER_DEBUG: true
   REGISTER_DEBUG_DIR: "/share/GroBro/register_debug"
   REGISTER_DEBUG_MAX_REGISTER: 3000
-  REGISTER_DEBUG_CHANGES_ONLY: false
+  REGISTER_DEBUG_CHANGES_ONLY: true
   MAX_SLOTS: 1
   MAX_BAT: "auto"
   AVAILABILITY_SENSOR: false
