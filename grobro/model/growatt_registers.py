@@ -21,6 +21,18 @@ class GrowattRegisterEnumTypes(str, Enum):
     BITFIELD = "BITFIELD"
 
 
+_UNSIGNED_UNPACK_TYPES = {1: "!B", 2: "!H", 4: "!I"}
+_SIGNED_DATA_TYPES = frozenset(
+    (GrowattRegisterDataTypes.SIGNED_INT, GrowattRegisterDataTypes.SIGNED_FLOAT)
+)
+_FLOAT_DATA_TYPES = frozenset(
+    (GrowattRegisterDataTypes.FLOAT, GrowattRegisterDataTypes.SIGNED_FLOAT)
+)
+_INT_DATA_TYPES = frozenset(
+    (GrowattRegisterDataTypes.INT, GrowattRegisterDataTypes.SIGNED_INT)
+)
+
+
 class GrowattRegisterFloatOptions(BaseModel):
     delta: float = 1
     multiplier: float = 1
@@ -38,38 +50,29 @@ class GrowattRegisterDataType(BaseModel):
     mult: Optional[float] = None
 
     def parse(self, data_raw: bytes | None):
-        if not data_raw:
-            return None
-        if not isinstance(data_raw, (bytes, bytearray, memoryview)):
+        if not data_raw or not isinstance(data_raw, (bytes, bytearray, memoryview)):
             return None
 
         raw = bytes(data_raw)
         if self.data_type == GrowattRegisterDataTypes.STRING:
             return raw.decode("ascii", errors="ignore").strip("\x00")
 
-        unpack_type = {1: "!B", 2: "!H", 4: "!I"}.get(len(raw))
+        unpack_type = _UNSIGNED_UNPACK_TYPES.get(len(raw))
         if unpack_type is None:
             # Numeric Growatt register values supported by the model are 8, 16,
             # or 32 bit. Reject malformed/unsupported lengths instead of leaking
             # a KeyError into the MQTT callback and dropping the whole packet.
             return None
 
-        is_signed = self.data_type in [
-            GrowattRegisterDataTypes.SIGNED_INT,
-            GrowattRegisterDataTypes.SIGNED_FLOAT,
-        ]
-        if is_signed:
+        if self.data_type in _SIGNED_DATA_TYPES:
             unpack_type = unpack_type.lower()
 
         try:
-            value = struct.unpack(unpack_type, raw)[0]
+            value = struct.unpack_from(unpack_type, raw, 0)[0]
         except struct.error:
             return None
 
-        if self.data_type in [
-            GrowattRegisterDataTypes.FLOAT,
-            GrowattRegisterDataTypes.SIGNED_FLOAT,
-        ]:
+        if self.data_type in _FLOAT_DATA_TYPES:
             if self.mult is not None:
                 value *= self.mult
             elif self.float_options:
@@ -84,10 +87,7 @@ class GrowattRegisterDataType(BaseModel):
                 return None
             return f"{hour:02d}:{minute:02d}"
 
-        if self.data_type in [
-            GrowattRegisterDataTypes.INT,
-            GrowattRegisterDataTypes.SIGNED_INT,
-        ]:
+        if self.data_type in _INT_DATA_TYPES:
             return value
 
         if self.data_type == GrowattRegisterDataTypes.ENUM:
