@@ -36,6 +36,12 @@ except (TypeError, ValueError):
 
 REGISTER_DEBUG_MAX_REGISTER = max(0, min(65535, REGISTER_DEBUG_MAX_REGISTER))
 
+# Passive watch-only registers discovered in the embedded NOAH 0x0103 holding
+# block. Their semantics are intentionally unknown. They must not become HA
+# entities or writable controls until independently validated.
+NOAH_0103_WATCH_REGISTERS = frozenset(range(299, 305))
+NOAH_0103_WATCH_GROUP = "noah_r299_r304_unknown_descriptor"
+
 _LOCK = threading.Lock()
 _LAST_VALUES: dict[tuple[str, int, int], int] = {}
 _INSTALLED = False
@@ -168,27 +174,49 @@ def _write_noah_0103(result: dict) -> None:
                 _LAST_VALUES[key] = value
                 if REGISTER_DEBUG_CHANGES_ONLY and not changed:
                     continue
-                records.append(
-                    {
-                        "captured_at": now,
-                        "device_timestamp": None,
-                        "device_id": device_id,
-                        "source": "noah_0103_modbus",
-                        "message_type": "0x0103",
-                        "function": 3,
-                        "block_offset": block_offset,
-                        "block_start": start,
-                        "block_end": end,
-                        "register": register_no,
-                        "uint16": value,
-                        "int16": _signed_16(value),
-                        "hex": f"0x{value:04X}",
-                        "high_byte": (value >> 8) & 0xFF,
-                        "low_byte": value & 0xFF,
-                        "previous": previous,
-                        "changed": changed,
-                    }
-                )
+
+                record = {
+                    "captured_at": now,
+                    "device_timestamp": None,
+                    "device_id": device_id,
+                    "source": "noah_0103_modbus",
+                    "message_type": "0x0103",
+                    "function": 3,
+                    "block_offset": block_offset,
+                    "block_start": start,
+                    "block_end": end,
+                    "register": register_no,
+                    "uint16": value,
+                    "int16": _signed_16(value),
+                    "hex": f"0x{value:04X}",
+                    "high_byte": (value >> 8) & 0xFF,
+                    "low_byte": value & 0xFF,
+                    "previous": previous,
+                    "changed": changed,
+                }
+
+                if register_no in NOAH_0103_WATCH_REGISTERS:
+                    record.update(
+                        {
+                            "watch_register": True,
+                            "watch_group": NOAH_0103_WATCH_GROUP,
+                            "watch_reason": (
+                                "Unknown NOAH 0x0103 descriptor candidate; "
+                                "observed R299=800, R300=257, R301-R304=0xFFFF"
+                            ),
+                        }
+                    )
+                    if previous is not None and changed:
+                        LOG.warning(
+                            "NOAH 0x0103 watch register changed: device=%s "
+                            "register=%s previous=%s current=%s",
+                            device_id,
+                            register_no,
+                            previous,
+                            value,
+                        )
+
+                records.append(record)
 
     _append_records(records)
 
