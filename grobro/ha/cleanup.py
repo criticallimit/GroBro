@@ -5,8 +5,9 @@ correcting legacy runtime behavior in this debug fork:
 - battery count prefers the explicit ``bat_cnt`` register and uses a conservative
   one-battery fallback before telemetry is available;
 - mutable HA client caches, timers and read queues are initialized per instance;
-- persisted config files are also indexed by the MQTT device id encoded in their
+- persisted config files are indexed by the MQTT device id encoded in their
   filename so a differing internal serial number does not orphan the cache;
+- sensitive live-only config fields are excluded from persistence comparisons;
 - the existing Device SN entity keeps the same name/topic/unique id but publishes
   the configured serial number when available;
 - a legacy ``sw_version`` publish that accidentally used the device id is fixed;
@@ -30,6 +31,7 @@ from grobro.ha import client as ha_client_module
 LOG = logging.getLogger(__name__)
 _INSTALLED = False
 FORK_URL = "https://github.com/criticallimit/GroBro"
+_PERSIST_EXCLUDE = {"password", "raw"}
 
 
 def _detect_bat_count(payload: dict) -> int:
@@ -38,8 +40,6 @@ def _detect_bat_count(payload: dict) -> int:
     if isinstance(bat_cnt, int) and 1 <= bat_cnt <= 4:
         return bat_cnt
 
-    # Battery 1 is represented by the main NOAH device id in the current map;
-    # additional battery serial fragments begin at bat2_*.
     count = 1
     for bat_num in range(2, 5):
         value = payload.get(f"bat{bat_num}_ser_part_1")
@@ -68,6 +68,13 @@ def _configured_serial(client, device_id: str) -> str:
     if serial and str(serial).strip():
         return str(serial).strip()
     return device_id
+
+
+def _persisted_config_data(config) -> dict:
+    """Return only fields intentionally persisted by DeviceConfig.to_file."""
+    if config is None:
+        return {}
+    return config.model_dump(exclude_none=True, exclude=_PERSIST_EXCLUDE)
 
 
 def _initialize_instance_state(client) -> None:
@@ -125,8 +132,6 @@ def install_ha_cleanup_hook() -> None:
 
     client_cls = ha_client_module.Client
 
-    # Ensure all mutable state belongs to the actual Client instance. Initialize
-    # it before upstream __init__ loads cached config files into _config_cache.
     original_init = client_cls.__init__
 
     def init_clean(self, *args, **kwargs):
@@ -137,10 +142,37 @@ def install_ha_cleanup_hook() -> None:
 
     client_cls.__init__ = init_clean
 
-    # The upstream implementation suppresses the main availability=offline
-    # publish when AVAILABILITY_SENSOR is enabled. All discovered entities still
-    # use that availability topic, so always update it and publish the optional
-    # binary sensor in addition.
+    # Compare the same sanitized representation that is actually written to
+    # disk. This avoids rewriting the config on every live packet merely because
+    # password/raw fields intentionally remain RAM-only. It also rewrites old
+    # files once if they still contain sensitive fields from a previous version.
+    def set_config_clean(self, device_id, config):
+        config_path = f"config_{device_id}.json"
+        existing_config = ha_client_module.model.DeviceConfig.from_file(config_path)
+        needs_sensitive_cleanup = bool(
+            existing_config
+            and (
+                getattr(existing_config, "password", None) is not None
+                or getattr(existing_config, "raw", None) is not None
+            )
+        )
+        if (
+            existing_config is None
+            or needs_sensitive_cleanup
+            or _persisted_config_data(existing_config) != _persisted_config_data(config)
+        ):
+            LOG.info("Saving updated config for %s", device_id)
+            config.to_file(config_path)
+        else:
+            LOG.debug("No persisted config change for %s", device_id)
+
+        self._config_cache[device_id] = config
+        if device_id in self._discovery_cache:
+            self._discovery_cache.remove(device_id)
+        self._Client__publish_device_discovery(device_id)
+
+    client_cls.set_config = set_config_clean
+
     def publish_availability_clean(self, device_id: str, online: bool):
         self._client.publish(
             f"{ha_client_module.HA_BASE_TOPIC}/grobro/{device_id}/availability",
@@ -188,12 +220,9 @@ def install_ha_cleanup_hook() -> None:
                 except (TypeError, ValueError):
                     pass
 
-            # Keep the existing Device SN entity/topic/unique id exactly as-is,
-            # but feed it from the configured serial number when available.
             if topic == f"{ha_client_module.HA_BASE_TOPIC}/grobro/{device_id}/serial":
                 payload = _configured_serial(self, device_id)
 
-            # Suppress the historical bogus device-id-as-software-version value.
             if (
                 topic
                 == f"{ha_client_module.HA_BASE_TOPIC}/grobro/{device_id}/sw_version"
