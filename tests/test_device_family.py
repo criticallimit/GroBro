@@ -1,4 +1,5 @@
 from grobro.model.device_family import (
+    DEVICE_FAMILIES,
     get_device_family,
     get_device_type_name,
     get_known_registers,
@@ -40,22 +41,28 @@ def test_unknown_device_is_not_guessed():
 
 
 def test_clock_sync_capability_is_explicit():
-    # Every current inverter/device register map that explicitly exposes
-    # system_time as config register 31 uses the shared automatic sync path.
     for device_id in (
-        "0PVPTEST",  # NOAH
-        "0HVRTEST",  # NEXA
-        "QMNTEST",   # NEO
-        "PTQTEST",   # NEO behind ShineWeLink
-        "HAQTEST",   # SPF
-        "ZGQTEST",   # MIN-XH2
-        "VWQTEST",   # MOD
+        "0PVPTEST",
+        "0HVRTEST",
+        "QMNTEST",
+        "PTQTEST",
+        "HAQTEST",
+        "ZGQTEST",
+        "VWQTEST",
     ):
         assert supports_time_sync(device_id) is True
 
-    # RAQ is the ShineWeLink gateway itself; time writes belong to the PTQ
-    # inverter discovered behind it, never the gateway serial.
     assert supports_time_sync("RAQTEST") is False
+
+
+def test_every_time_sync_family_has_system_time_register_31():
+    for family in DEVICE_FAMILIES:
+        if not family.supports_time_sync:
+            continue
+        system_time = family.registers.config_registers.get("system_time")
+        assert system_time is not None, family.key
+        assert system_time.growatt.register_no == 31, family.key
+        assert system_time.growatt.data.data_type == "STRING", family.key
 
 
 def test_dynamic_pv_detection_capability_is_explicit():
