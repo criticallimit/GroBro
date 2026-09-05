@@ -3,13 +3,11 @@
 Keeps upstream GroBro behavior intact while correcting a few legacy behaviors:
 - battery count fallback prefers the explicit bat_cnt input register and never
   assumes four batteries when no evidence is present;
-- the redundant Device SN entity is removed from MQTT discovery because the same
-  serial is already part of the Home Assistant device metadata;
 - a legacy sw_version publish that accidentally used the device id is corrected;
 - MQTT discovery origin metadata points to this debug fork.
 
-The MQTT device id itself remains unchanged so existing Home Assistant device and
-entity identifiers stay stable.
+Existing Home Assistant entity names, unique IDs and device identifiers are kept
+unchanged so existing dashboards and automations continue to work.
 """
 
 from __future__ import annotations
@@ -42,7 +40,7 @@ def _detect_bat_count(payload: dict) -> int:
 
 
 def install_ha_cleanup_hook() -> None:
-    """Install narrowly scoped fixes without changing stable HA identifiers."""
+    """Install narrowly scoped fixes without changing HA entity identities."""
     global _INSTALLED
     if _INSTALLED:
         return
@@ -57,8 +55,8 @@ def install_ha_cleanup_hook() -> None:
         original_publish = self._client.publish
 
         def publish(topic, payload=None, *args, **kwargs):
-            # Remove the duplicate Device SN entity from device discovery. The
-            # serial number remains present in the device metadata itself.
+            # Keep all existing entities and unique IDs unchanged. Only update
+            # the discovery origin URL so Home Assistant points to this fork.
             if (
                 topic
                 == f"{ha_client_module.HA_BASE_TOPIC}/device/{device_id}/config"
@@ -66,9 +64,6 @@ def install_ha_cleanup_hook() -> None:
             ):
                 try:
                     data = json.loads(payload)
-                    components = data.get("cmps")
-                    if isinstance(components, dict):
-                        components.pop(f"grobro_{device_id}_serial", None)
                     origin = data.get("o")
                     if isinstance(origin, dict):
                         origin["url"] = FORK_URL
