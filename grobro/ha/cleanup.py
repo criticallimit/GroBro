@@ -10,7 +10,8 @@ import ipaddress
 import json
 import logging
 import os
-from threading import Lock
+import time
+from threading import Lock, Timer
 
 from grobro.ha import client as ha_client_module
 
@@ -87,6 +88,9 @@ def _initialize_instance_state(client) -> None:
     client._discovery_cache = []
     client._discovery_signature = {}
     client._device_timers = {}
+    client._device_last_seen = {}
+    client._device_timer_lock = Lock()
+    client._last_availability = {}
     client._last_energy_values = {}
     client._config_read_queues = {}
     client._config_read_inflight = {}
@@ -122,6 +126,7 @@ def _cancel_runtime_timers(client) -> None:
             except Exception:  # pragma: no cover
                 pass
         timer_map.clear()
+    getattr(client, "_device_last_seen", {}).clear()
 
 
 def _migration_set(client) -> set:
@@ -226,6 +231,15 @@ def install_ha_cleanup_hook() -> None:
     client_cls.set_config = set_config_clean
 
     def publish_availability_clean(self, device_id: str, online: bool):
+        # Telemetry calls this for every packet. Retained MQTT availability only
+        # needs publishing when the state actually changes.
+        availability = getattr(self, "_last_availability", None)
+        if availability is None:
+            availability = {}
+            self._last_availability = availability
+        if availability.get(device_id) is online:
+            return
+
         self._client.publish(
             f"{ha_client_module.HA_BASE_TOPIC}/grobro/{device_id}/availability",
             "online" if online else "offline",
@@ -237,8 +251,48 @@ def install_ha_cleanup_hook() -> None:
                 "ON" if online else "OFF",
                 retain=ha_client_module.PUBLISH_SENSORS_RETAINED,
             )
+        availability[device_id] = online
 
     client_cls._Client__publish_availability = publish_availability_clean
+
+    if ha_client_module.DEVICE_TIMEOUT > 0:
+        def reset_device_timer_clean(self, device_id: str):
+            # Keep one timer per device. Every telemetry packet only updates the
+            # monotonic last-seen deadline; the timer reschedules itself if needed.
+            now = time.monotonic()
+            lock = getattr(self, "_device_timer_lock", None)
+            if lock is None:
+                lock = Lock()
+                self._device_timer_lock = lock
+
+            def check_timeout(d_id: str):
+                with lock:
+                    last_seen = self._device_last_seen.get(d_id)
+                    if last_seen is None:
+                        self._device_timers.pop(d_id, None)
+                        return
+                    remaining = ha_client_module.DEVICE_TIMEOUT - (time.monotonic() - last_seen)
+                    if remaining > 0:
+                        timer = Timer(remaining, check_timeout, args=(d_id,))
+                        self._device_timers[d_id] = timer
+                        timer.start()
+                        return
+                    self._device_timers.pop(d_id, None)
+                    self._device_last_seen.pop(d_id, None)
+
+                LOG.warning("Device %s timed out. Mark it as unavailable.", d_id)
+                self._Client__publish_availability(d_id, False)
+
+            with lock:
+                self._device_last_seen[device_id] = now
+                timer = self._device_timers.get(device_id)
+                if timer is not None and timer.is_alive():
+                    return
+                timer = Timer(ha_client_module.DEVICE_TIMEOUT, check_timeout, args=(device_id,))
+                self._device_timers[device_id] = timer
+                timer.start()
+
+        client_cls._Client__reset_device_timer = reset_device_timer_clean
 
     original_stop = client_cls.stop
 
