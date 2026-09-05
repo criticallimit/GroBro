@@ -193,9 +193,6 @@ def install_ha_cleanup_hook() -> None:
     original_on_connect = client_cls._Client__on_connect
 
     def on_connect_clean(self, client, userdata, flags, reason_code, properties):
-        # A broker restart can lose retained discovery/availability while the
-        # process-local caches survive. Invalidate only publish caches so the next
-        # telemetry packet recreates retained state without disturbing device data.
         getattr(self, "_last_availability", {}).clear()
         getattr(self, "_discovery_signature", {}).clear()
         getattr(self, "_discovery_payload_cache", {}).clear()
@@ -252,7 +249,7 @@ def install_ha_cleanup_hook() -> None:
             self._client.publish(
                 f"{ha_client_module.HA_BASE_TOPIC}/grobro/{device_id}/online",
                 "ON" if online else "OFF",
-                retain=ha_client_module.PUBLISH_SENSORS_RETAINED,
+                retain=True,
             )
         availability[device_id] = online
 
