@@ -7,6 +7,7 @@ from grobro.model.device_family import (
     uses_dynamic_pv_count,
 )
 from grobro.model.growatt_registers import (
+    GrowattRegisterDataTypes,
     KNOWN_MOD_REGISTERS,
     KNOWN_NEO_REGISTERS,
     KNOWN_NEXA_REGISTERS,
@@ -40,7 +41,7 @@ def test_unknown_device_is_not_guessed():
     assert get_known_registers("UNKNOWN") is None
 
 
-def test_clock_sync_capability_is_explicit():
+def test_clock_sync_capability_is_derived_from_register_map():
     for device_id in (
         "0PVPTEST",
         "0HVRTEST",
@@ -57,12 +58,13 @@ def test_clock_sync_capability_is_explicit():
 
 def test_every_time_sync_family_has_system_time_register_31():
     for family in DEVICE_FAMILIES:
-        if not family.supports_time_sync:
+        supported_device = family.prefixes[0] + "TEST"
+        if not supports_time_sync(supported_device):
             continue
         system_time = family.registers.config_registers.get("system_time")
         assert system_time is not None, family.key
         assert system_time.growatt.register_no == 31, family.key
-        assert system_time.growatt.data.data_type == "STRING", family.key
+        assert system_time.growatt.data.data_type == GrowattRegisterDataTypes.STRING, family.key
 
 
 def test_dynamic_pv_detection_capability_is_explicit():
