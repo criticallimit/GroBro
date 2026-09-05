@@ -14,12 +14,14 @@ The add-on exposes these options:
 - `REGISTER_DEBUG_DIR`: output directory. Default: `/share/GroBro/register_debug`.
 - `REGISTER_DEBUG_MAX_REGISTER`: highest confirmed Modbus register number written to the debug file. Default: `65535` (the full 16-bit Modbus address range).
 - `REGISTER_DEBUG_CHANGES_ONLY`: when `true`, unchanged values are skipped after their first observation. Default: `true`.
+- `DUMP_MESSAGES`: enable/disable complete raw MQTT packet capture.
+- `DUMP_DIR`: raw MQTT capture directory. Default for the add-on: `/share/GroBro/dump`.
 
 The debug build uses the slug `grobro_register_debug` so it can be distinguished from the upstream add-on.
 
-## Output
+## Register-debug output
 
-The logger writes:
+The passive register logger writes:
 
 `/share/GroBro/register_debug/registers.jsonl`
 
@@ -39,6 +41,16 @@ For ordinary Modbus blocks each line contains:
 - changed flag
 
 With `REGISTER_DEBUG_CHANGES_ONLY: true`, the first observation of every register is still written, so static values such as firmware bytes or SOH candidates are not lost.
+
+## Consolidated raw-message output
+
+When `DUMP_MESSAGES: true`, this debug fork writes all raw MQTT packets to a single append-only file instead of creating one `.bin` file per packet:
+
+`/share/GroBro/dump/messages.jsonl`
+
+Each line contains the capture timestamp, MQTT topic, original payload length and the complete unmodified payload encoded as Base64. Decoding `payload_base64` reconstructs exactly the raw bytes that older builds stored in individual `.bin` files.
+
+This format avoids thousands of small files while preserving the information needed for byte-level reverse engineering.
 
 ## NOAH 0x0103 messages
 
@@ -65,6 +77,10 @@ These confirmed values are additionally logged as:
 - real `register` numbers
 
 This is intentionally **debug-only**. The values are not automatically published as Home Assistant entities. Upstream GroBro previously attempted to publish `0x0103` values and reverted that behavior because incorrect interpretation caused zero/invalid sensor states. This fork therefore keeps discovery separate from reverse engineering until individual new registers are validated.
+
+### R299-R304 watch group
+
+The currently unknown registers `R299-R304` are specially tagged in the JSONL output as a passive watch group. The logger records their initial values and marks later changes with `watch_register` / `watch_group` metadata. No write is performed and these registers remain unavailable as Home Assistant controls until their semantics are independently confirmed.
 
 ## Important limitation
 
