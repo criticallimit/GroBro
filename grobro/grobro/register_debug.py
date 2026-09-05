@@ -21,10 +21,17 @@ LOG = logging.getLogger(__name__)
 
 REGISTER_DEBUG = os.getenv("REGISTER_DEBUG", "false").lower() == "true"
 REGISTER_DEBUG_DIR = os.getenv("REGISTER_DEBUG_DIR", "/share/GroBro/register_debug")
-REGISTER_DEBUG_MAX_REGISTER = int(os.getenv("REGISTER_DEBUG_MAX_REGISTER", "3000"))
 REGISTER_DEBUG_CHANGES_ONLY = (
-    os.getenv("REGISTER_DEBUG_CHANGES_ONLY", "false").lower() == "true"
+    os.getenv("REGISTER_DEBUG_CHANGES_ONLY", "true").lower() == "true"
 )
+
+try:
+    REGISTER_DEBUG_MAX_REGISTER = int(os.getenv("REGISTER_DEBUG_MAX_REGISTER", "3000"))
+except (TypeError, ValueError):
+    REGISTER_DEBUG_MAX_REGISTER = 3000
+    LOG.warning("Invalid REGISTER_DEBUG_MAX_REGISTER; falling back to 3000")
+
+REGISTER_DEBUG_MAX_REGISTER = max(0, min(65535, REGISTER_DEBUG_MAX_REGISTER))
 
 _LOCK = threading.Lock()
 _LAST_VALUES: dict[tuple[str, int, int], int] = {}
@@ -58,6 +65,8 @@ def _write_modbus_message(message: GrowattModbusMessage) -> None:
     records: list[dict] = []
 
     for block in message.register_blocks:
+        if block is None:
+            continue
         for register_no in range(block.start, block.end + 1):
             if register_no < 0 or register_no > REGISTER_DEBUG_MAX_REGISTER:
                 continue
@@ -99,37 +108,35 @@ def _write_modbus_message(message: GrowattModbusMessage) -> None:
 
 
 def _write_noah_0103(result: dict) -> None:
-    """Record NOAH 0x0103 holding-register dumps.
+    """Record NOAH 0x0103 holding-register dump values by payload index.
 
-    GroBro's current decoder exposes the values as a sequential list without an
-    explicit start address. We retain them as registers 0..N-1 and mark that
-    addressing assumption explicitly in every record.
+    The current GroBro decoder exposes a sequential list of 16-bit values but no
+    confirmed Modbus start address. Therefore these values are deliberately NOT
+    labelled as real register numbers. They are logged as ``value_index`` until a
+    start-address field is confirmed from protocol evidence.
     """
     now = datetime.now(timezone.utc).isoformat()
     device_id = result.get("device_id", "")
     records: list[dict] = []
 
-    for register_no, value in enumerate(result.get("registers", [])):
-        if register_no > REGISTER_DEBUG_MAX_REGISTER:
-            break
-        key = (device_id, 3, register_no)
+    for value_index, value in enumerate(result.get("registers", [])):
+        key = (device_id, 0x0103, value_index)
         previous = _LAST_VALUES.get(key)
         changed = previous is None or previous != value
         _LAST_VALUES[key] = value
         if REGISTER_DEBUG_CHANGES_ONLY and not changed:
             continue
+
         records.append(
             {
                 "captured_at": now,
                 "device_timestamp": None,
                 "device_id": device_id,
                 "source": "noah_0103",
-                "function": 3,
                 "message_type": "0x0103",
-                "address_assumption": "sequential_from_zero",
-                "block_start": 0,
-                "block_end": max(0, result.get("register_count", 0) - 1),
-                "register": register_no,
+                "addressing": "unknown",
+                "value_index": value_index,
+                "value_count": result.get("register_count", len(result.get("registers", []))),
                 "uint16": value,
                 "int16": _signed_16(value),
                 "hex": f"0x{value:04X}",
@@ -165,6 +172,7 @@ def install_register_debug_hook() -> None:
 
     _ORIGINAL_NOAH_0103 = growatt_parser.NOAH_DECODERS.get(0x0103)
     if _ORIGINAL_NOAH_0103 is not None:
+
         def parse_noah_0103_and_dump(data):
             result = _ORIGINAL_NOAH_0103(data)
             try:
