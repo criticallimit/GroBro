@@ -11,6 +11,7 @@ LOG = logging.getLogger(__name__)
 HEADER_STRUCT = ">HHHBB30s"
 HEADER_SIZE = struct.calcsize(HEADER_STRUCT)
 MIN_BLOCK_SIZE = 6  # start + end + one 16-bit register
+TRAILER_SIZE = 2  # Growatt packets commonly carry a two-byte protocol trailer/CRC
 
 
 class GrowattModbusBlock(BaseModel):
@@ -152,6 +153,7 @@ class GrowattModbusMessage(BaseModel):
         - 30s - 30 byte zero-padded device id
         - optional GrowattModbusMetadata - only present when function == READ_INPUT_REGISTER
         - N register blocks
+        - optional 2-byte Growatt trailer/CRC
     """
 
     unknown: int
@@ -213,8 +215,8 @@ class GrowattModbusMessage(BaseModel):
                     return None
                 offset += metadata.size()
 
-            # A one-register block is exactly six bytes. The old strict '>' check
-            # skipped such a final block entirely.
+            # A one-register block is exactly six bytes. Equality must be accepted
+            # so a final single-register block is not skipped.
             while len(buffer) - offset >= MIN_BLOCK_SIZE:
                 block = GrowattModbusBlock.parse_grobro(buffer[offset:])
                 if block is None:
@@ -222,13 +224,14 @@ class GrowattModbusMessage(BaseModel):
                 register_blocks.append(block)
                 offset += block.size()
 
-            # Reject unexplained trailing bytes instead of silently accepting a
-            # partially parsed message.
-            if offset != len(buffer):
+            remaining = len(buffer) - offset
+            # Real Growatt telemetry fixtures carry a two-byte trailer/CRC after
+            # the last register block. Synthetic/unit-built messages may omit it.
+            if remaining not in (0, TRAILER_SIZE):
                 LOG.debug(
-                    "Trailing bytes after Modbus blocks for %s: %s",
+                    "Unexpected trailing bytes after Modbus blocks for %s: %s",
                     device_id,
-                    len(buffer) - offset,
+                    remaining,
                 )
                 return None
 
