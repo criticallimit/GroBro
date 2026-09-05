@@ -45,8 +45,15 @@ class DeviceConfig(BaseModel):
         return self.serial_number
 
     def to_file(self, file_path: str) -> None:
+        # Password and raw fallback payloads are useful while processing a live
+        # packet but are not required to restore HA discovery after restart.
+        # Avoid persisting them to disk even in the add-on's private /data area.
+        persisted = self.model_dump_json(
+            exclude_none=True,
+            exclude={"password", "raw"},
+        )
         with open(file_path, "w", encoding="utf-8") as handle:
-            handle.write(self.model_dump_json(exclude_none=True))
+            handle.write(persisted)
         try:
             os.chmod(file_path, 0o600)
         except OSError:
@@ -60,8 +67,8 @@ class DeviceConfig(BaseModel):
         try:
             with open(file_path, "r", encoding="utf-8") as handle:
                 data = json.load(handle)
-            # Do not log the full config: it may contain passwords or other
-            # credentials. Log only the source path at DEBUG level.
+            # Do not log the full config: it may contain credentials left by an
+            # older GroBro version. Log only the source path at DEBUG level.
             LOG.debug("Loaded device config from %s", file_path)
             return DeviceConfig(**data)
         except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
