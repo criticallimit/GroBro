@@ -1,55 +1,131 @@
 # GroBro Register Debug
 
-> Debug fork of [robertzaage/GroBro](https://github.com/robertzaage/GroBro) for passive Growatt register discovery in Home Assistant. The upstream project remains the source for normal GroBro development and releases.
+> Enhanced fork of [robertzaage/GroBro](https://github.com/robertzaage/GroBro) focused on Home Assistant robustness, runtime efficiency, passive protocol diagnostics and validated NOAH 2000 behavior.
 
-GroBro is a bridge service that decodes encrypted MQTT packets from Growatt NEO, NOAH, NEXA, SPF (Shine WiFi-X), TL-XH2 and ShineWeLink-X2 devices and republishes them in a format compatible with Home Assistant.
+GroBro is a bridge service that decodes Growatt MQTT packets and republishes device data and controls for Home Assistant.
 
-This fork keeps the normal GroBro behavior and adds a passive register capture mode. It does **not** actively scan devices and does **not** send additional register read/write commands.
+This fork keeps the existing GroBro architecture and entity compatibility where possible, while adding targeted hardening and diagnostics across the supported device families.
 
-## Debug additions
+## Current fork release
 
-- Passive capture of successfully parsed Modbus register blocks.
-- Captures confirmed register numbers from `0` through the configured maximum (`3000` by default).
-- Stores uint16, int16, hex, high byte, low byte, previous value and change state.
-- Captures the first observation of every register even when `REGISTER_DEBUG_CHANGES_ONLY` is enabled.
-- Records special NOAH/NEXA `0x0103` payload values separately as indexes when their real start address is not known.
-- Writes the JSONL capture to `/share/GroBro/register_debug/registers.jsonl`.
+**2.8.0**
+
+Reference upstream baseline for this release:
+
+`robertzaage/GroBro` main @ `4797f8419bd574bcebd32d1a859569f97b58b774` (2026-08-08)
+
+For the detailed, evidence-level comparison with upstream, see:
+
+- [FORK_CHANGES.md](FORK_CHANGES.md)
+- [CHANGELOG.md](CHANGELOG.md)
+
+## Supported device-family routing
+
+The fork uses one central runtime registry for the currently known serial prefixes:
+
+- `0PVP` -> NOAH
+- `0HVR` -> NEXA
+- `QMN` / `PTQ` -> NEO
+- `RAQ` -> ShineWeLink gateway
+- `HAQ` -> SPF
+- `ZGQ` -> MIN-XH2
+- `VWQ` -> MOD
+
+This keeps Home Assistant and Growatt MQTT register-map selection consistent.
+
+## Main additions in this fork
+
+- Hardened Home Assistant discovery, availability and reconnect behavior.
+- Lower runtime allocation/timer/discovery overhead across device families.
+- Centralized device-family detection and capability handling.
+- Automatic clock synchronization at 00:00 and 12:00 local time for maps that expose `system_time` as config register 31.
+- Atomic/sanitized device config persistence.
+- Defensive Modbus/config parser validation.
+- Safer Growatt Cloud forwarding/filter behavior.
+- Passive register diagnostics and exact raw MQTT JSONL capture.
+- NOAH 2000 validation from real captures, including the embedded `0x0103` block.
+
+## Passive register diagnostics
+
+Register debugging observes only traffic already received by GroBro. The logger does **not** actively scan the configured register range.
+
+Register log:
+
+`/share/GroBro/register_debug/registers.jsonl`
+
+Optional raw MQTT log:
+
+`/share/GroBro/dump/messages.jsonl`
+
+Raw payloads are preserved exactly as Base64 inside JSONL records.
 
 See [REGISTER_DEBUG.md](REGISTER_DEBUG.md) for details.
 
-## Installation as Home Assistant app/add-on
+## NOAH validation
 
-Use this fork as the repository:
+The NOAH-specific reverse-engineering and evidence levels are documented separately in [NOAH_VALIDATION.md](NOAH_VALIDATION.md).
 
-[![Open your Home Assistant instance and add the GroBro Register Debug repository.](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fcriticallimit%2FGroBro)
+The current NOAH map intentionally does not expose the experimental Home Assistant entities:
 
-Or add this repository manually in the Home Assistant app/add-on store:
+- MQTT IP
+- Temperature PV1
+- Temperature PV2
+- System Temperature
+
+NOAH Battery Health/SOH is emitted as a whole-number percentage.
+
+## Installation as Home Assistant add-on
+
+Use this repository:
+
+[![Open your Home Assistant instance and add this GroBro repository.](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fcriticallimit%2FGroBro)
+
+Or add manually:
 
 `https://github.com/criticallimit/GroBro`
 
-Then refresh the store and install **GroBro Register Debug**.
+Then refresh the add-on store and install/update **GroBro Register Debug**.
 
-Do not run the upstream GroBro add-on and this debug add-on against the same Growatt MQTT source at the same time unless you deliberately configured separate MQTT client identities and understand the consequences. For a normal capture, stop the upstream GroBro add-on first and run this debug build instead.
+Do not run two GroBro instances against the same Growatt MQTT source unless you deliberately configured separate MQTT client identities and understand the consequences.
 
-## Default debug settings
+## Current relevant defaults
 
 ```yaml
+DUMP_MESSAGES: false
+DUMP_DIR: /share/GroBro/dump
 REGISTER_DEBUG: true
 REGISTER_DEBUG_DIR: /share/GroBro/register_debug
-REGISTER_DEBUG_MAX_REGISTER: 3000
+REGISTER_DEBUG_MAX_REGISTER: 65535
 REGISTER_DEBUG_CHANGES_ONLY: true
+PUBLISH_SENSORS_RETAINED: false
+MAX_SLOTS: 1
+MAX_BAT: auto
+AVAILABILITY_SENSOR: false
 ```
 
-`REGISTER_DEBUG_MAX_REGISTER=3000` is only a capture filter. It does not cause GroBro to query registers 0-3000. Registers are captured only when the device actually sends them in a message that GroBro can parse.
+`REGISTER_DEBUG_MAX_REGISTER=65535` is only a passive capture filter. It does not cause GroBro to query registers `0-65535`.
 
-## Normal GroBro setup
+## Automatic time sync
 
-The underlying MQTT/TLS setup is unchanged from upstream GroBro. For the full setup, certificates and device configuration documentation, use the upstream project documentation:
+The old manual Sync Time button is not exposed by this fork.
 
-- [GroBro upstream](https://github.com/robertzaage/GroBro)
-- [Configuration guide](https://github.com/robertzaage/GroBro/blob/main/CONFIGURATION.md)
-- [Certificates guide](https://github.com/robertzaage/GroBro/blob/main/CERTIFICATES.md)
+For supported register maps, system time is synchronized automatically twice daily at local:
 
-## License and upstream attribution
+- 00:00
+- 12:00
+
+If `TZ` is left empty, the add-on launcher attempts to inherit the Home Assistant Supervisor timezone. A manually configured `TZ` remains an override.
+
+## Testing status
+
+The fork contains additional regression tests for parser validation, persistence safety, Home Assistant caching/reconnect behavior, device-family routing, time synchronization and NOAH diagnostics.
+
+At the time of this release, GitHub Actions shows no workflow runs in this fork. The tests therefore must not be interpreted as automatically CI-passed; real runtime testing remains important.
+
+## Upstream and license
 
 This repository is a fork of GroBro by Robert Zaage and contributors. The original project license remains in [LICENSE](LICENSE).
+
+Upstream project:
+
+- [robertzaage/GroBro](https://github.com/robertzaage/GroBro)
