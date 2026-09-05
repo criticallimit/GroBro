@@ -1,7 +1,7 @@
 """Compatibility and cleanup layer for the Home Assistant bridge.
 
 Keeps upstream GroBro behavior and Home Assistant entity identities stable while
-correcting legacy runtime behavior in this debug fork.
+correcting legacy runtime behavior in this fork.
 """
 
 from __future__ import annotations
@@ -15,6 +15,7 @@ from datetime import datetime, timedelta
 from threading import Lock, Timer
 
 from grobro.ha import client as ha_client_module
+from grobro.model.device_family import supports_time_sync
 
 LOG = logging.getLogger(__name__)
 _INSTALLED = False
@@ -55,7 +56,6 @@ def _configured_serial(client, device_id: str) -> str:
 
 
 def _configured_local_ip(client, device_id: str) -> str | None:
-    """Return the validated local IP of the device/master, never the broker IP."""
     config = getattr(client, "_config_cache", {}).get(device_id)
     value = getattr(config, "local_ip", None) if config else None
     if not value:
@@ -73,7 +73,6 @@ def _configured_local_ip(client, device_id: str) -> str | None:
 
 
 def _configuration_url_for_ip(ip_value: str) -> str:
-    """Build a valid HTTP configuration URL for IPv4 or IPv6."""
     address = ipaddress.ip_address(ip_value)
     if address.version == 6:
         return f"http://[{address}]"
@@ -150,7 +149,6 @@ def _migration_set(client) -> set:
 
 
 def _discovery_signature(client, device_id: str, effective_max_bat: int) -> tuple[int, int | None]:
-    """Return the small subset of runtime state that changes discovery contents."""
     pv_count = getattr(client, "_neo_pv_count", {}).get(device_id)
     return effective_max_bat, pv_count
 
@@ -167,8 +165,8 @@ def _seconds_until_next_time_sync(now: datetime | None = None) -> float:
     return max(1.0, (min(candidates) - current).total_seconds())
 
 
-def _sync_noah_clocks(client, now: datetime | None = None) -> int:
-    """Write the local wall clock to NOAH register 31 for known NOAH devices."""
+def _sync_supported_clocks(client, now: datetime | None = None) -> int:
+    """Write local wall clock to register 31 for families that support it."""
     callback = getattr(client, "on_config_command", None)
     if not callable(callback):
         return 0
@@ -177,20 +175,25 @@ def _sync_noah_clocks(client, now: datetime | None = None) -> int:
     value = current.strftime("%Y-%m-%d %H:%M:%S")
     synced = 0
     for device_id in tuple(getattr(client, "_config_cache", {})):
-        if not str(device_id).startswith("0PVP"):
+        if not supports_time_sync(device_id):
             continue
         try:
             callback(device_id, _TIME_SYNC_REGISTER, value)
             synced += 1
-        except Exception as exc:  # one device must not block the others
+        except Exception as exc:
             LOG.warning("Automatic time sync failed for %s: %s", device_id, exc)
     if synced:
-        LOG.info("Automatically synchronized time for %s NOAH device(s)", synced)
+        LOG.info("Automatically synchronized time for %s Growatt device(s)", synced)
     return synced
 
 
+# Backwards-compatible helper name retained for tests/older callers.
+def _sync_noah_clocks(client, now: datetime | None = None) -> int:
+    return _sync_supported_clocks(client, now)
+
+
 def _schedule_next_time_sync(client) -> None:
-    """Schedule one NOAH clock sync and re-arm for the following fixed time."""
+    """Schedule clock sync at fixed local 00:00/12:00 and re-arm afterwards."""
     previous = getattr(client, "_time_sync_timer", None)
     if previous is not None:
         try:
@@ -200,7 +203,7 @@ def _schedule_next_time_sync(client) -> None:
 
     def run_and_reschedule():
         client._time_sync_timer = None
-        _sync_noah_clocks(client)
+        _sync_supported_clocks(client)
         _schedule_next_time_sync(client)
 
     timer = Timer(_seconds_until_next_time_sync(), run_and_reschedule)
@@ -210,7 +213,6 @@ def _schedule_next_time_sync(client) -> None:
 
 
 def _clean_discovery_payload(client, device_id: str, data: dict) -> dict:
-    """Remove GroBro-only fields while preserving HA entity identities/topics."""
     origin = data.get("o")
     if isinstance(origin, dict):
         origin["url"] = FORK_URL
@@ -226,8 +228,9 @@ def _clean_discovery_payload(client, device_id: str, data: dict) -> dict:
 
     components = data.get("cmps")
     if isinstance(components, dict):
-        # Time synchronization is automatic twice daily; do not expose the old
-        # manual button in Home Assistant anymore.
+        # Clock sync is managed automatically for supported families. For all
+        # other families the generic button was never capability-validated, so
+        # it is not exposed either.
         components.pop(f"grobro_{device_id}_sync_time", None)
 
         for component in components.values():
