@@ -1,39 +1,30 @@
 # Parser and unscrambler for Growatt MQTT data packages.
 # Automatically descrambles the binary data and decodes it into a structured format.
 
-import struct
 import logging
-import grobro.model as model
+import struct
 from itertools import cycle
+
+import grobro.model as model
 
 LOG = logging.getLogger(__name__)
 
 
 def unscramble(decdata: bytes):
-    """
-    Unscrambling algorithm based on XOR with "Growatt" mask
-    """
+    """Unscramble Growatt payload bytes using the repeating ``Growatt`` mask."""
     ndecdata = len(decdata)
     mask = "Growatt"
     hex_mask = ["{:02x}".format(ord(x)) for x in mask]
     nmask = len(hex_mask)
 
-    unscrambled = bytes(decdata[0:8])  # Preserve the 8-byte header
+    unscrambled = bytes(decdata[0:8])
     for i, j in zip(range(0, ndecdata - 8), cycle(range(0, nmask))):
         unscrambled += bytes([decdata[i + 8] ^ int(hex_mask[j], 16)])
-
-    # hexdump(unscrambled)
     return unscrambled
 
 
 def parse_config_type(data, offset) -> model.DeviceConfig:
-    """
-    Parse a configuration message starting at offset as a TLV block
-    Each parameter is stored as:
-      - 2 bytes: key_id (big-endian)
-      - 2 bytes: key_len
-      - key_len bytes: value (ASCII if possible, else hex)
-    """
+    """Parse a TLV configuration block starting at ``offset``."""
     config = {}
     end = len(data)
     raw_hex = data[offset:].hex()
@@ -88,7 +79,7 @@ def parse_config_type(data, offset) -> model.DeviceConfig:
             val = raw_val.decode("ascii").strip("\x00")
             if any(ord(c) < 32 or ord(c) > 126 for c in val):
                 raise ValueError()
-        except Exception:
+        except (UnicodeDecodeError, ValueError):
             val = raw_val.hex()
 
         label = param_map.get(key_id, f"param_{key_id}")
@@ -102,10 +93,7 @@ def parse_config_type(data, offset) -> model.DeviceConfig:
 
 
 def find_config_offset(data):
-    """
-    Heuristically search for the start of the TLV configuration block by
-    looking for a repeating pattern of a 2-byte key followed by a 2-byte length.
-    """
+    """Heuristically locate the start of a TLV configuration block."""
     for i in range(0x1C, len(data) - 4):
         key = int.from_bytes(data[i : i + 2], "big")
         length = int.from_bytes(data[i + 2 : i + 4], "big")
@@ -116,6 +104,8 @@ def find_config_offset(data):
 
 def parse_config_message(data: bytes):
     config_read_struct = struct.Struct(">4sHH16s14sH1xH2x")
+    if len(data) < config_read_struct.size + 2:
+        raise ValueError("config read response is truncated")
 
     (
         header,
@@ -127,14 +117,14 @@ def parse_config_message(data: bytes):
         register_no,
     ) = config_read_struct.unpack_from(data)
 
-    # remove trailing checksum
-    value = data[config_read_struct.size:-2].decode("ascii")
+    # Remove the known two-byte protocol trailer/checksum.
+    value = data[config_read_struct.size:-2].decode("ascii", errors="replace")
 
     return {
         "header": header,
         "message_length": msg_len,
         "message_type": msg_type,
-        "device_id": device_id.rstrip(b"\x00").decode("ascii"),
+        "device_id": device_id.rstrip(b"\x00").decode("ascii", errors="replace"),
         "config_type": config_type,
         "register_no": register_no,
         "value": value,
@@ -143,9 +133,11 @@ def parse_config_message(data: bytes):
 
 def parse_config_ack(data: bytes):
     config_ack_struct = struct.Struct(">4sHH16s14sH")
+    if len(data) < config_ack_struct.size:
+        raise ValueError("config acknowledgement is truncated")
 
     (
-     	header,
+        header,
         msg_len,
         msg_type,
         device_id,
@@ -154,10 +146,10 @@ def parse_config_ack(data: bytes):
     ) = config_ack_struct.unpack_from(data)
 
     return {
-	"header": header,
+        "header": header,
         "message_length": msg_len,
         "message_type": msg_type,
-        "device_id": device_id.rstrip(b"\x00").decode("ascii"),
+        "device_id": device_id.rstrip(b"\x00").decode("ascii", errors="replace"),
         "register_no": register_no,
     }
 
@@ -168,10 +160,7 @@ def parse_config_ack(data: bytes):
 
 
 def parse_noah_0103(data: bytes) -> dict:
-    """
-    NOAH type 0x0103 — Holding register dump.
-    Payload: 14 zero bytes + 16B device serial (offset 14) + register data.
-    """
+    """Parse NOAH type 0x0103 as an address-unknown sequence of 16-bit values."""
     payload = data[24:]
     device_id = payload[14:30].rstrip(b"\x00").decode("ascii", errors="replace")
     reg_data = payload[30:]
@@ -187,13 +176,9 @@ def parse_noah_0103(data: bytes) -> dict:
 
 
 def parse_noah_0110(data: bytes) -> dict:
-    """
-    NOAH type 0x0110 — Preset-multiple register response/ack.
-    Payload: 14 zero bytes + subtype(2B, 0x0001) + padding(2B) + echoed register/value pairs(4B each).
-    """
+    """Parse NOAH type 0x0110 preset-multiple response/ack."""
     payload = data[24:]
     regs = {}
-    # register data at payload[14:] in the format: reg_lo(1B) + val_hi(1B) or reg(2B) + val(2B)
     body = payload[14:]
     pos = 0
     while pos + 4 <= len(body):
@@ -209,30 +194,27 @@ def parse_noah_0110(data: bytes) -> dict:
 
 
 def parse_noah_0125(data: bytes) -> dict:
-    """
-    NOAH type 0x0125 — Serial number query response.
-    Payload: 14 zero bytes + 16B device serial (offset 14).
-    """
+    """Parse NOAH type 0x0125 serial-number query response."""
     payload = data[24:]
+    if len(payload) < 30:
+        return {"message_type": 0x0125, "device_id": "", "error": "payload too short"}
     device_id = payload[14:30].rstrip(b"\x00").decode("ascii", errors="replace")
-    return {
-        "message_type": 0x0125,
-        "device_id": device_id,
-    }
+    return {"message_type": 0x0125, "device_id": device_id}
 
 
 def parse_noah_fe18(data: bytes) -> dict:
-    """
-    NOAH type 0xFE18 — Datetime set command (server to device).
-    Payload: 14 zero bytes + TLV {type(2B, 0x0001) + length(2B, 23)
-             + field_1(2B) + field_2(2B) + ASCII_datetime(19B)}.
-    """
+    """Parse NOAH type 0xFE18 datetime command."""
     payload = data[24:]
+    if len(payload) < 18:
+        return {"message_type": 0xFE18, "error": "payload too short"}
+
     sub_type = struct.unpack_from(">H", payload, 14)[0]
     tlv_len = struct.unpack_from(">H", payload, 16)[0]
     f1 = struct.unpack_from(">H", payload, 18)[0] if len(payload) >= 20 else 0
     f2 = struct.unpack_from(">H", payload, 20)[0] if len(payload) >= 22 else 0
-    datetime_str = payload[22:41].decode("ascii", errors="replace") if len(payload) >= 41 else ""
+    datetime_str = (
+        payload[22:41].decode("ascii", errors="replace") if len(payload) >= 41 else ""
+    )
     return {
         "message_type": 0xFE18,
         "device_id": data[8:24].rstrip(b"\x00").decode("ascii", errors="replace"),
@@ -249,11 +231,7 @@ FE19_SUBTYPE_DEV_STATUS = 0x0001
 
 
 def parse_noah_fe19(data: bytes) -> dict:
-    """
-    NOAH type 0xFE19 — Config/status TLV message.
-    Payload: 14 zero bytes + subtype(2B) + padding(2B, 0x0000) + TLV entries.
-    Subtype 0x0020 = full device config, 0x0001 = dev status TLV.
-    """
+    """Parse NOAH type 0xFE19 configuration/status TLV message."""
     payload = data[24:]
     if len(payload) < 18:
         return {"message_type": 0xFE19, "error": "payload too short"}
@@ -270,13 +248,10 @@ def parse_noah_fe19(data: bytes) -> dict:
 
 
 def parse_noah_fe25(data: bytes) -> dict:
-    """
-    NOAH type 0xFE25 — Heartbeat / empty keepalive.
-    Payload: zeros except for CRC at end.
-    """
+    """Parse NOAH type 0xFE25 heartbeat/keepalive."""
     payload = data[24:]
-    # Check first 40 bytes for emptiness (last bytes may be non-payload data)
-    check_len = min(40, len(payload) - 4)  # exclude unknown trailing + CRC
+    # Exclude the known tail when present; never allow a negative slice length.
+    check_len = max(0, min(40, len(payload) - 4))
     payload_body = payload[:check_len]
     return {
         "message_type": 0xFE25,
@@ -287,28 +262,36 @@ def parse_noah_fe25(data: bytes) -> dict:
 
 
 def parse_noah_6f64(data: bytes) -> dict:
-    """
-    NOAH type 0x6F64 (28516) — Smart Meter (EcoTracker, Shelly etc.) JSON data.
-    Structure:
-        [0:8]   - header (2B unknown, 2B const7, 2B len, 2B msg_type)
-        [8:38]  - device ID (30B ASCII, zero-padded)
-        [38:68] - Smart Meter serial (30B ASCII, zero-padded)
-        [68:75] - timestamp (7B: year-2000, month, day, hour, minute, second, millis)
-        [75:79] - JSON length (4B big-endian)
-        [79:-2] - JSON data
-        [-2:]   - checksum (ignored)
-    """
+    """Parse NOAH/NEXA type 0x6F64 smart-meter JSON data."""
+    # 79 bytes fixed header + at least the 2-byte protocol trailer.
+    if len(data) < 81:
+        return {"message_type": 0x6F64, "error": "payload too short"}
+
     device_id = data[8:38].rstrip(b"\x00").decode("ascii", errors="replace")
     smart_meter_sn = data[38:68].rstrip(b"\x00").decode("ascii", errors="replace")
-    year_b, month, day, hour, minute, second, millis = struct.unpack_from(">BBBBBBB", data, 68)
+    year_b, month, day, hour, minute, second, millis = struct.unpack_from(
+        ">BBBBBBB", data, 68
+    )
     json_len = struct.unpack_from(">I", data, 75)[0]
-    json_bytes = data[79:79 + json_len]
+    json_end = 79 + json_len
+    if json_end > len(data) - 2:
+        return {
+            "message_type": 0x6F64,
+            "device_id": device_id,
+            "smart_meter_sn": smart_meter_sn,
+            "error": "JSON payload length exceeds packet",
+        }
+
+    json_bytes = data[79:json_end]
     json_str = json_bytes.decode("ascii", errors="replace")
     return {
         "message_type": 0x6F64,
         "device_id": device_id,
         "smart_meter_sn": smart_meter_sn,
-        "timestamp": f"{2000 + year_b:04d}-{month:02d}-{day:02d}T{hour:02d}:{minute:02d}:{second:02d}.{millis:03d}",
+        "timestamp": (
+            f"{2000 + year_b:04d}-{month:02d}-{day:02d}T"
+            f"{hour:02d}:{minute:02d}:{second:02d}.{millis:03d}"
+        ),
         "json_length": json_len,
         "data": json_str,
     }
@@ -326,9 +309,7 @@ NOAH_DECODERS = {
 
 
 def parse_noah_message(data: bytes) -> dict | None:
-    """
-    Dispatch a NOAH message (msg_type at offset 6) to the appropriate parser.
-    """
+    """Dispatch a NOAH message using the message type at offset 6."""
     if len(data) < 8:
         return None
     msg_type = struct.unpack_from(">H", data, 6)[0]
