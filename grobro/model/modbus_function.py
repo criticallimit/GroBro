@@ -1,9 +1,33 @@
-from grobro.model.modbus_message import GrowattModbusFunction
 import struct
-from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional
 
+from pydantic import BaseModel, ConfigDict, Field
+
+from grobro.model.modbus_message import GrowattModbusFunction
+
 MODBUS_COMMAND_STRUCT = ">HHHBB30sHH"
+MODBUS_COMMAND_SIZE = struct.calcsize(MODBUS_COMMAND_STRUCT)
+
+
+def _unpack_command_header(buffer: bytes):
+    """Return the common command tuple or None for malformed data."""
+    if len(buffer) < MODBUS_COMMAND_SIZE:
+        return None
+    try:
+        values = struct.unpack(MODBUS_COMMAND_STRUCT, buffer[:MODBUS_COMMAND_SIZE])
+    except struct.error:
+        return None
+
+    header_id, constant_7, msg_len, device_address, function, *_ = values
+    if header_id != 1 or constant_7 != 7 or device_address != 1:
+        return None
+    # Command messages encode length as total packet length minus the first
+    # three 16-bit header fields (6 bytes).
+    if msg_len != len(buffer) - 6:
+        return None
+    if function not in [entry.value for entry in GrowattModbusFunction]:
+        return None
+    return values
 
 
 class GrowattModbusFunctionMultiple(BaseModel):
@@ -12,15 +36,15 @@ class GrowattModbusFunctionMultiple(BaseModel):
     to read or write multiple registers.
 
     Structure:
-        - H - 2 byte unknown
+        - H - 2 byte header id
         - H - 2 byte constant 7
-        - H - 2 byte message length (excluding register count, constant and message length)
-        - B - 1 byte modbus device address (seems to be constant 1 in mqtt)
+        - H - 2 byte message length
+        - B - 1 byte modbus device address (normally 1 in MQTT)
         - B - 1 byte function
         - 30s - 30 byte zero-padded device id
         - H - 2 byte start register
         - H - 2 byte end register
-        - N x H - N bytes values
+        - N x H - N 16-bit values (when present)
     """
 
     device_id: str
@@ -31,20 +55,31 @@ class GrowattModbusFunctionMultiple(BaseModel):
 
     @staticmethod
     def parse_grobro(buffer) -> Optional["GrowattModbusFunctionMultiple"]:
+        unpacked = _unpack_command_header(buffer)
+        if unpacked is None:
+            return None
+
         (
-            constant_1,
-            constant_7,
-            msg_len,
-            constant_1,
+            _header_id,
+            _constant_7,
+            _msg_len,
+            _device_address,
             function,
             device_id_raw,
             start,
             end,
-        ) = struct.unpack(MODBUS_COMMAND_STRUCT, buffer[0:42])
+        ) = unpacked
+
+        if end < start:
+            return None
+
+        values = buffer[MODBUS_COMMAND_SIZE:]
+        if function == GrowattModbusFunction.PRESET_MULTIPLE_REGISTER:
+            expected_value_bytes = (end - start + 1) * 2
+            if len(values) != expected_value_bytes:
+                return None
 
         device_id = device_id_raw.decode("ascii", errors="ignore").strip("\x00")
-        values = buffer[42:]
-
         return GrowattModbusFunctionMultiple(
             device_id=device_id,
             function=function,
@@ -71,17 +106,17 @@ class GrowattModbusFunctionMultiple(BaseModel):
 class GrowattModbusFunctionSingle(BaseModel):
     """
     Represents a message that can be sent to the inverter
-    to read or write single registers.
+    to read or write a single register.
 
     Structure:
-        - H - 2 byte unknown
+        - H - 2 byte header id
         - H - 2 byte constant 7
-        - H - 2 byte message length (excluding register count, constant and message length)
-        - B - 1 byte modbus device address (seems to be constant 1 in mqtt)
+        - H - 2 byte message length
+        - B - 1 byte modbus device address (normally 1 in MQTT)
         - B - 1 byte function
         - 30s - 30 byte zero-padded device id
         - H - 2 byte register
-        - H - 2 byte either: register (again) for READ_SINGLE_REGISTER or value for PRESET_SINGLE_REGISTER
+        - H - 2 byte register again for READ_SINGLE_REGISTER, or value for write
     """
 
     device_id: str
@@ -91,19 +126,26 @@ class GrowattModbusFunctionSingle(BaseModel):
 
     @staticmethod
     def parse_grobro(buffer) -> Optional["GrowattModbusFunctionSingle"]:
+        unpacked = _unpack_command_header(buffer)
+        if unpacked is None:
+            return None
+
         (
-            constant_1,
-            constant_7,
-            msg_len,
-            constant_1,
+            _header_id,
+            _constant_7,
+            _msg_len,
+            _device_address,
             function,
             device_id_raw,
             register,
             value,
-        ) = struct.unpack(MODBUS_COMMAND_STRUCT, buffer[0:42])
+        ) = unpacked
+
+        # A single-register command must not have unexplained trailing data.
+        if len(buffer) != MODBUS_COMMAND_SIZE:
+            return None
 
         device_id = device_id_raw.decode("ascii", errors="ignore").strip("\x00")
-
         return GrowattModbusFunctionSingle(
             device_id=device_id,
             function=function,
