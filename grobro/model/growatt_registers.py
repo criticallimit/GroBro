@@ -37,42 +37,61 @@ class GrowattRegisterDataType(BaseModel):
     enum_options: Optional[GrowattRegisterEnumOptions] = None
     mult: Optional[float] = None
 
-    def parse(self, data_raw: bytes):
+    def parse(self, data_raw: bytes | None):
         if not data_raw:
             return None
+        if not isinstance(data_raw, (bytes, bytearray, memoryview)):
+            return None
+
+        raw = bytes(data_raw)
         if self.data_type == GrowattRegisterDataTypes.STRING:
-            return data_raw.decode("ascii", errors="ignore").strip("\x00")
-        unpack_type = {1: "!B", 2: "!H", 4: "!I"}[len(data_raw)]
+            return raw.decode("ascii", errors="ignore").strip("\x00")
+
+        unpack_type = {1: "!B", 2: "!H", 4: "!I"}.get(len(raw))
+        if unpack_type is None:
+            # Numeric Growatt register values supported by the model are 8, 16,
+            # or 32 bit. Reject malformed/unsupported lengths instead of leaking
+            # a KeyError into the MQTT callback and dropping the whole packet.
+            return None
+
         is_signed = self.data_type in [
             GrowattRegisterDataTypes.SIGNED_INT,
             GrowattRegisterDataTypes.SIGNED_FLOAT,
         ]
         if is_signed:
             unpack_type = unpack_type.lower()
+
+        try:
+            value = struct.unpack(unpack_type, raw)[0]
+        except struct.error:
+            return None
+
         if self.data_type in [
             GrowattRegisterDataTypes.FLOAT,
             GrowattRegisterDataTypes.SIGNED_FLOAT,
         ]:
-            value = struct.unpack(unpack_type, data_raw)[0]
             if self.mult is not None:
                 value *= self.mult
             elif self.float_options:
                 value *= self.float_options.multiplier
                 value += self.float_options.delta
             return round(value, 3)
+
         if self.data_type == GrowattRegisterDataTypes.TIME_HHMM:
-            value = struct.unpack(unpack_type, data_raw)[0]
             hour = (value >> 8) & 0xFF
             minute = value & 0xFF
+            if hour > 23 or minute > 59:
+                return None
             return f"{hour:02d}:{minute:02d}"
+
         if self.data_type in [
             GrowattRegisterDataTypes.INT,
             GrowattRegisterDataTypes.SIGNED_INT,
         ]:
-            return struct.unpack(unpack_type, data_raw)[0]
+            return value
+
         if self.data_type == GrowattRegisterDataTypes.ENUM:
             opts = self.enum_options
-            value = struct.unpack(unpack_type, data_raw)[0]
             if not opts:
                 return None
             if opts.enum_type == GrowattRegisterEnumTypes.BITFIELD:
