@@ -74,8 +74,9 @@ class TestModule:
             dump_message_binary("s/33/test", b"data")
             # should not raise
 
-    def test_growatt_cloud_disabled(self):
-        assert hasattr(grobro_client, "GROWATT_CLOUD_ENABLED")
+    def test_growatt_cloud_disabled_by_default(self):
+        assert grobro_client.GROWATT_CLOUD_ENABLED is False
+        assert grobro_client.GROWATT_CLOUD_FILTER == set()
 
 
 class TestClientLifecycle:
@@ -111,9 +112,10 @@ class TestClientLifecycle:
         client.stop()
         fc.loop_stop.assert_called_once()
         fc.disconnect.assert_called_once()
+        assert client._forward_clients == {}
 
     def test_on_connect(self, client):
-        client._client.on_connect(None, None, None, 0, None)
+        client._client.on_connect(client._client, None, None, 0, None)
         client._client.subscribe.assert_called_once_with("c/#")
 
 
@@ -207,12 +209,14 @@ class TestClientOnMessage:
         client._client.on_message(None, None, msg)
         client.on_input_register.assert_called_once()
 
+    @patch("grobro.grobro.client._cloud_lower", "true")
     @patch("grobro.grobro.client.GROWATT_CLOUD", "true")
     @patch("grobro.grobro.client.GROWATT_CLOUD_ENABLED", True)
     def test_growatt_cloud_forwarding(self, client):
         client._forward_clients = {}
         with patch.object(client, "_Client__connect_to_growatt_server") as mock_connect:
             fc = MagicMock()
+            fc.publish.return_value = (0, MagicMock())
             mock_connect.return_value = fc
             data = (Path(DATA_DIR) / "NeoConfigTLV_340.bin").read_bytes()
             msg = _msg("c/33/QMN000ABC1D2E3FG", data)
@@ -362,27 +366,34 @@ class TestClientOnMessage:
 
 
 class TestClientCloudConfig:
+    @patch("grobro.grobro.client._cloud_lower", "true")
     @patch("grobro.grobro.client.GROWATT_CLOUD", "true")
     @patch("grobro.grobro.client.GROWATT_CLOUD_ENABLED", True)
     @patch("grobro.grobro.client.GROWATT_CLOUD_FILTER", set())
     @patch("grobro.grobro.client.GROWATT_CLOUD_CONFIG_FILTER", "true")
-    def test_config_filter_blocks_0118(self, client):
+    def test_config_filter_does_not_block_device_to_cloud(self, client):
         with patch.object(client, "_Client__connect_to_growatt_server") as mock_connect:
+            fc = MagicMock()
+            fc.publish.return_value = (0, MagicMock())
+            mock_connect.return_value = fc
             data = (Path(DATA_DIR) / "NeoConfigWriteAck_DataInterval.bin").read_bytes()
             msg = _msg("c/33/QMN000ABC1D2E3FG", data)
             client._client.on_message(None, None, msg)
-            mock_connect.assert_not_called()
+            mock_connect.assert_called_once_with("QMN000ABC1D2E3FG")
+            fc.publish.assert_called_once()
 
+    @patch("grobro.grobro.client._cloud_lower", "true")
     @patch("grobro.grobro.client.GROWATT_CLOUD", "true")
     @patch("grobro.grobro.client.GROWATT_CLOUD_ENABLED", True)
     @patch("grobro.grobro.client.GROWATT_CLOUD_FILTER", set())
     @patch("grobro.grobro.client.GROWATT_CLOUD_CONFIG_FILTER", "true")
-    def test_config_filter_invalid_payload(self, client):
-        with patch.object(client, "_Client__connect_to_growatt_server") as mock_connect:
-            msg = _msg("c/33/QMN000ABC1D2E3FG", b"garbage")
-            client._client.on_message(None, None, msg)
-            mock_connect.assert_not_called()
+    def test_config_filter_blocks_cloud_to_device_0110(self, client):
+        data = (Path(DATA_DIR) / "NoahType0110_PresetMResp.bin").read_bytes()
+        msg = _msg("s/0PVP0000TEST0001", data)
+        client._Client__on_message_forward_client(None, None, msg)
+        client._client.publish.assert_not_called()
 
+    @patch("grobro.grobro.client._cloud_lower", "true")
     @patch("grobro.grobro.client.GROWATT_CLOUD", "true")
     @patch("grobro.grobro.client.GROWATT_CLOUD_ENABLED", True)
     @patch("grobro.grobro.client.GROWATT_CLOUD_FILTER", set())
@@ -397,11 +408,16 @@ class TestClientCloudConfig:
 
 
 class TestClientForward:
+    @patch("grobro.grobro.client._cloud_lower", "true")
+    @patch("grobro.grobro.client.GROWATT_CLOUD", "true")
+    @patch("grobro.grobro.client.GROWATT_CLOUD_ENABLED", True)
     def test_forward_client_message(self, client):
-        with patch("grobro.grobro.client.GROWATT_CLOUD", "true"):
-            client._Client__on_message_forward_client(None, None, _msg(
-                "s/QMN000ABC1D2E3FG", b"data", [("forwarded-for", "growatt")],
-            ))
+        data = (Path(DATA_DIR) / "NeoConfigTLV_340.bin").read_bytes()
+        client._Client__on_message_forward_client(
+            None,
+            None,
+            _msg("s/QMN000ABC1D2E3FG", data, [("forwarded-for", "growatt")]),
+        )
         client._client.publish.assert_called_once()
 
     def test_connect_to_growatt_server(self, client):
@@ -421,31 +437,41 @@ class TestClientForward:
     def test_forward_client_dump_messages(self, client):
         with patch("grobro.grobro.client.DUMP_MESSAGES", True):
             with patch("grobro.grobro.client.dump_message_binary") as mock_dump:
-                with patch("grobro.grobro.client.GROWATT_CLOUD", "true"):
-                    client._Client__on_message_forward_client(None, None, _msg(
-                        "s/device1", b"data",
-                    ))
-                    mock_dump.assert_called_once()
+                client._Client__on_message_forward_client(
+                    None,
+                    None,
+                    _msg("s/device1", b"data"),
+                )
+                mock_dump.assert_called_once()
 
     def test_forward_client_cloud_disabled(self, client):
         with patch("grobro.grobro.client.GROWATT_CLOUD_ENABLED", False):
-            client._Client__on_message_forward_client(None, None, _msg(
-                "s/device1", b"data",
-            ))
+            client._Client__on_message_forward_client(
+                None,
+                None,
+                _msg("s/device1", b"data"),
+            )
             client._client.publish.assert_not_called()
 
     def test_forward_client_device_not_in_filter(self, client):
-        client._Client__on_message_forward_client(None, None, _msg(
-            "s/device1", b"data",
-        ))
+        client._Client__on_message_forward_client(
+            None,
+            None,
+            _msg("s/device1", b"data"),
+        )
         client._client.publish.assert_not_called()
 
+    @patch("grobro.grobro.client._cloud_lower", "true")
+    @patch("grobro.grobro.client.GROWATT_CLOUD", "true")
+    @patch("grobro.grobro.client.GROWATT_CLOUD_ENABLED", True)
     def test_forward_client_publish_exception(self, client):
-        with patch("grobro.grobro.client.GROWATT_CLOUD", "true"):
-            with patch.object(client._client, "publish", side_effect=Exception("boom")):
-                client._Client__on_message_forward_client(None, None, _msg(
-                    "s/device1", b"data",
-                ))
+        data = (Path(DATA_DIR) / "NeoConfigTLV_340.bin").read_bytes()
+        with patch.object(client._client, "publish", side_effect=Exception("boom")):
+            client._Client__on_message_forward_client(
+                None,
+                None,
+                _msg("s/QMN000ABC1D2E3FG", data),
+            )
 
 
 class TestExtractDeviceId:
