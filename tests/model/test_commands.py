@@ -131,8 +131,8 @@ MODBUS_ROUNDTRIP_FILES = [
 ]
 
 MODBUS_PARSE_FILES = [
-    "NoahReadInputRegisters_0-124.bin",
-    "NoahPresetSingle_OutputLimit.bin",
+    ("NoahReadInputRegisters_0-124.bin", GrowattModbusMessage),
+    ("NoahPresetSingle_OutputLimit.bin", GrowattModbusFunctionSingle),
 ]
 
 
@@ -148,11 +148,11 @@ def test_modbus_roundtrip(file_name, msg_type):
     assert rebuilt == expect, f"Round-trip mismatch in {file_name}"
 
 
-@pytest.mark.parametrize("file_name", MODBUS_PARSE_FILES)
-def test_modbus_parse(file_name):
+@pytest.mark.parametrize(("file_name", "msg_type"), MODBUS_PARSE_FILES)
+def test_modbus_parse(file_name, msg_type):
     data = (DATA_DIR / file_name).read_bytes()
     unscrambled = parser.unscramble(data)
-    parsed = GrowattModbusMessage.parse_grobro(unscrambled)
+    parsed = msg_type.parse_grobro(unscrambled)
     assert parsed is not None, f"Failed to parse {file_name}"
     assert parsed.device_id == NOAH_TEST_DEVICE_ID
 
