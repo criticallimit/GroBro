@@ -12,6 +12,7 @@ import logging
 import os
 import time
 from datetime import datetime, timedelta
+from functools import lru_cache
 from threading import Lock, Timer
 
 from grobro.ha import client as ha_client_module
@@ -28,6 +29,13 @@ FORK_URL = "https://github.com/criticallimit/GroBro"
 _PERSIST_EXCLUDE = {"password", "raw"}
 _TIME_SYNC_REGISTER = 31
 _TIME_SYNC_HOURS = (0, 12)
+_BASE_GET_BAT_NUMBER = ha_client_module._get_bat_number
+
+
+@lru_cache(maxsize=256)
+def _get_bat_number_cached(name: str):
+    """Cache parsing of stable register names used on every telemetry packet."""
+    return _BASE_GET_BAT_NUMBER(name)
 
 
 def _detect_bat_count(payload: dict) -> int:
@@ -251,6 +259,7 @@ def install_ha_cleanup_hook() -> None:
     # Make the central device-family registry the active source of truth for HA.
     ha_client_module.get_known_registers = get_known_registers
     ha_client_module.get_device_type_name = get_device_type_name
+    ha_client_module._get_bat_number = _get_bat_number_cached
     ha_client_module._detect_bat_count = _detect_bat_count
     ha_client_module._resolve_max_bat = _resolve_max_bat
     client_cls = ha_client_module.Client
@@ -365,6 +374,7 @@ def install_ha_cleanup_hook() -> None:
                     remaining = ha_client_module.DEVICE_TIMEOUT - (time.monotonic() - last_seen)
                     if remaining > 0:
                         timer = Timer(remaining, check_timeout, args=(d_id,))
+                        timer.daemon = True
                         self._device_timers[d_id] = timer
                         timer.start()
                         return
@@ -380,6 +390,7 @@ def install_ha_cleanup_hook() -> None:
                 if timer is not None and timer.is_alive():
                     return
                 timer = Timer(ha_client_module.DEVICE_TIMEOUT, check_timeout, args=(device_id,))
+                timer.daemon = True
                 self._device_timers[device_id] = timer
                 timer.start()
 
