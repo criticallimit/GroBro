@@ -52,6 +52,7 @@ def test_instance_state_is_not_shared():
     assert second._discovery_cache == []
     assert second._config_read_queues == {}
     assert first._config_read_lock is not second._config_read_lock
+    assert first._device_timer_lock is not second._device_timer_lock
 
 
 def test_configured_serial_prefers_config_and_keeps_device_id_fallback():
@@ -150,6 +151,7 @@ def test_availability_topic_always_goes_offline(monkeypatch):
 
     client = object.__new__(ha_client_module.Client)
     client._client = FakeMqtt()
+    client._last_availability = {}
 
     client._Client__publish_availability("0PVPTEST", False)
 
@@ -162,6 +164,30 @@ def test_availability_topic_always_goes_offline(monkeypatch):
         topic == "homeassistant/grobro/0PVPTEST/online" and payload == "OFF"
         for topic, payload, _ in published
     )
+
+
+def test_repeated_availability_state_is_not_republished(monkeypatch):
+    install_ha_cleanup_hook()
+    monkeypatch.setattr(ha_client_module, "AVAILABILITY_SENSOR", True)
+
+    published = []
+
+    class FakeMqtt:
+        def publish(self, topic, payload=None, *args, **kwargs):
+            published.append((topic, payload, kwargs))
+            return SimpleNamespace()
+
+    client = object.__new__(ha_client_module.Client)
+    client._client = FakeMqtt()
+    client._last_availability = {}
+
+    client._Client__publish_availability("0PVPTEST", True)
+    first_count = len(published)
+    client._Client__publish_availability("0PVPTEST", True)
+    assert len(published) == first_count
+
+    client._Client__publish_availability("0PVPTEST", False)
+    assert len(published) > first_count
 
 
 def test_cleanup_keeps_device_sn_entity_and_fixes_origin(monkeypatch):
