@@ -20,3 +20,16 @@ def test_sensitive_device_config_fields_are_not_persisted(tmp_path: Path):
     assert data["sw_version"] == "19.19.14"
     assert "password" not in data
     assert "raw" not in data
+    assert not Path(f"{path}.tmp").exists()
+
+
+def test_device_config_atomic_replace_updates_existing_file(tmp_path: Path):
+    path = tmp_path / "config_TEST.json"
+    DeviceConfig(serial_number="TEST", sw_version="1.0").to_file(str(path))
+    DeviceConfig(serial_number="TEST", sw_version="2.0").to_file(str(path))
+
+    restored = DeviceConfig.from_file(str(path))
+    assert restored is not None
+    assert restored.serial_number == "TEST"
+    assert restored.sw_version == "2.0"
+    assert not Path(f"{path}.tmp").exists()
