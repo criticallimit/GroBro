@@ -14,6 +14,7 @@ from grobro import ha, model, grobro
 from grobro.grobro.cleanup import install_grobro_cleanup_hook
 from grobro.grobro.register_debug import install_register_debug_hook
 from grobro.ha.cleanup import install_ha_cleanup_hook
+from grobro.ha.system_time_cleanup import install_system_time_entity_cleanup
 
 # Setup Logger
 LOG_LEVEL = os.getenv("LOG_LEVEL", "ERROR").upper()
@@ -34,6 +35,7 @@ LOG = logging.getLogger(__name__)
 # clients start processing messages.
 install_grobro_cleanup_hook()
 install_ha_cleanup_hook()
+install_system_time_entity_cleanup()
 install_register_debug_hook()
 
 # Configuration from environment variables
