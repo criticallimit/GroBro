@@ -8,6 +8,7 @@ one place prevents the MQTT and Home Assistant paths from drifting apart.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 
 from grobro.model.growatt_registers import (
     GroBroRegisters,
@@ -84,11 +85,21 @@ DEVICE_FAMILIES: tuple[DeviceFamily, ...] = (
     ),
 )
 
+_PREFIX_TO_FAMILY = {
+    prefix: family
+    for family in DEVICE_FAMILIES
+    for prefix in family.prefixes
+}
+_PREFIX_LENGTHS = tuple(sorted({len(prefix) for prefix in _PREFIX_TO_FAMILY}, reverse=True))
 
+
+@lru_cache(maxsize=128)
 def get_device_family(device_id: str) -> DeviceFamily | None:
+    """Resolve one stable device serial to its family with a tiny process cache."""
     text = str(device_id)
-    for family in DEVICE_FAMILIES:
-        if text.startswith(family.prefixes):
+    for prefix_len in _PREFIX_LENGTHS:
+        family = _PREFIX_TO_FAMILY.get(text[:prefix_len])
+        if family is not None:
             return family
     return None
 
