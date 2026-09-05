@@ -8,7 +8,10 @@ correcting legacy runtime behavior in this debug fork:
 - the existing Device SN entity keeps the same name/topic/unique id but publishes
   the configured serial number when available;
 - a legacy ``sw_version`` publish that accidentally used the device id is fixed;
-- MQTT discovery origin metadata points to this fork.
+- MQTT discovery origin metadata points to this fork;
+- the main availability topic is always updated on online/offline transitions,
+  even when the optional Online binary sensor is enabled;
+- outstanding timers are cancelled during client shutdown.
 
 Device/entity identifiers and existing sensor names are intentionally unchanged.
 """
@@ -76,6 +79,18 @@ def _initialize_instance_state(client) -> None:
     client._config_read_lock = Lock()
 
 
+def _cancel_runtime_timers(client) -> None:
+    """Cancel pending timeout/config-read timers before disconnecting."""
+    for timer_map_name in ("_device_timers", "_config_read_timers"):
+        timer_map = getattr(client, timer_map_name, {})
+        for timer in list(timer_map.values()):
+            try:
+                timer.cancel()
+            except Exception:  # pragma: no cover - defensive cleanup only
+                pass
+        timer_map.clear()
+
+
 def install_ha_cleanup_hook() -> None:
     """Install narrowly scoped fixes without changing HA entity identities."""
     global _INSTALLED
@@ -96,6 +111,33 @@ def install_ha_cleanup_hook() -> None:
         return original_init(self, *args, **kwargs)
 
     client_cls.__init__ = init_clean
+
+    # The upstream implementation suppresses the main availability=offline
+    # publish when AVAILABILITY_SENSOR is enabled. All discovered entities still
+    # use that availability topic, so always update it and publish the optional
+    # binary sensor in addition.
+    def publish_availability_clean(self, device_id: str, online: bool):
+        self._client.publish(
+            f"{ha_client_module.HA_BASE_TOPIC}/grobro/{device_id}/availability",
+            "online" if online else "offline",
+            retain=True,
+        )
+        if ha_client_module.AVAILABILITY_SENSOR:
+            self._client.publish(
+                f"{ha_client_module.HA_BASE_TOPIC}/grobro/{device_id}/online",
+                "ON" if online else "OFF",
+                retain=ha_client_module.PUBLISH_SENSORS_RETAINED,
+            )
+
+    client_cls._Client__publish_availability = publish_availability_clean
+
+    original_stop = client_cls.stop
+
+    def stop_clean(self):
+        _cancel_runtime_timers(self)
+        return original_stop(self)
+
+    client_cls.stop = stop_clean
 
     original_publish_discovery = client_cls._Client__publish_device_discovery
 
