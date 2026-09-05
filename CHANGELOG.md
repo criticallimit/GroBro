@@ -1,3 +1,28 @@
+## v2.8.3
+
+### CI, release pipeline and identity hardening
++ Enabled and validated GitHub Actions for the fork. The current codebase passes Ruff and the full pytest suite on Python 3.11, 3.12 and 3.13 with coverage above the configured 85% threshold.
++ Added CI concurrency so superseded runs on the same branch are cancelled instead of consuming runner time.
++ Fixed the fork container workflow to publish to `ghcr.io/criticallimit/grobro` instead of the upstream `ghcr.io/robertzaage/grobro` namespace. The multi-architecture build for amd64, arm64 and arm/v7 now completes and pushes successfully.
++ Hardened parsed device metadata so placeholder serials consisting only of `X` characters (for example `XXXXXXXXXX`) are discarded instead of replacing the stable MQTT device identity in Home Assistant.
++ Aligned regression tests with the current architecture: time-sync capability is derived from register 31, discovery caching intentionally suppresses unchanged republishes, `MAX_BAT=auto` remains conservative when the actual battery count is unknown, and family fixtures are no longer misused as evidence for unrelated device families.
++ Corrected NOAH test expectations against the actual captured fixtures, including the embedded `R251` value and preset-single parsing path.
+
+## v2.8.2
+
+### NOAH Heater state
++ Kept the existing Home Assistant `Heater` entity and added a NOAH-specific runtime override from the validated status frame (`0x0104` / decimal 260), payload byte offset 84 after the 24-byte header (absolute offset 108).
++ Valid heater values `0..15` reuse the existing Heater enum/bitmask representation; if no valid status byte is available, the previous register-17-derived value remains the fallback.
++ The override is restricted to NOAH (`0PVP`) status frames and does not create a second Heater entity or change its existing identity.
++ Added regression coverage for valid heater extraction and rejection of unsupported packets/families.
+
+## v2.8.1
+
+### Home Assistant time-sync cleanup
++ Removed the manual `Sync Time` button from Home Assistant discovery because clock synchronization is automatic.
++ Removed the `System Time` Home Assistant config entity while keeping config register 31 internally available for scheduled synchronization.
++ Automatic clock synchronization remains scheduled for 00:00 and 12:00 local time for supported families.
+
 ## v2.8.0
 
 ### Consolidated fork release
@@ -44,7 +69,7 @@ This release consolidates the material changes in `criticallimit/GroBro` compare
 + Added `FORK_CHANGES.md` with the detailed upstream comparison and evidence levels.
 + Added `NOAH_VALIDATION.md` and `REGISTER_DEBUG.md`.
 + Added regression tests for parser validation, config persistence/security, discovery/availability caching, reconnect behavior, family resolution, time sync, NOAH `0x0103` handling and passive diagnostics.
-+ GitHub Actions currently shows no workflow runs in this fork; tests are present but are not claimed as CI-passed.
++ GitHub Actions was not enabled yet at the time of the 2.8.0 consolidation; later releases enabled and validated the CI pipeline.
 
 ## v2.7.5
 
