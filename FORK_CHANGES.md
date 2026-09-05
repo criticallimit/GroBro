@@ -6,8 +6,8 @@ Reference baseline for this release:
 
 - Upstream repository: `robertzaage/GroBro`
 - Upstream `main`: `4797f8419bd574bcebd32d1a859569f97b58b774` (2026-08-08)
-- Fork release: `2.8.3`
-- Comparison date: 2026-09-05
+- Fork release: `2.8.4`
+- Comparison date: 2026-09-06
 
 The goal of this fork is to keep GroBro's normal MQTT/Home Assistant behavior compatible while improving robustness, runtime efficiency and diagnostics, and while validating additional NOAH 2000 behavior from real captures.
 
@@ -120,6 +120,8 @@ Raw MQTT capture can also be enabled and is stored in one append-only JSONL file
 
 This replaces the old behavior of creating large numbers of individual binary dump files in this fork.
 
+For normal operation, `REGISTER_DEBUG` and `DUMP_MESSAGES` are now disabled by default. When register debugging is enabled with `REGISTER_DEBUG_CHANGES_ONLY=true`, unchanged Modbus blocks are skipped before per-register unpacking and JSON-record construction.
+
 ## 6. Parser and protocol hardening
 
 Growatt packet handling was made more defensive against malformed or truncated traffic.
@@ -174,7 +176,13 @@ The fork includes several low-risk hot-path optimizations that apply across devi
 - Home Assistant discovery is rebuilt only when its effective signature changes,
 - repeated identical availability publications are skipped,
 - device timeout timer churn is reduced,
-- device-family lookup uses a prepared prefix table and caches resolved serial IDs.
+- device-family lookup uses a prepared prefix table and caches resolved serial IDs,
+- stable battery-key parsing and MQTT topic-to-device-id extraction are cached,
+- decrypted payload hex strings are created only when DEBUG logging is actually enabled,
+- debug-only MQTT property work is skipped at normal log levels,
+- MQTT v5 `UserProperty` is read directly on the common path instead of constructing a full JSON property representation,
+- timeout/config timers are daemonized while still being explicitly cancelled on shutdown,
+- unchanged passive-debug Modbus blocks are rejected before per-register decoding.
 
 The larger architectural optimization of removing Pydantic object construction from telemetry hot paths has intentionally not been done yet because it is more invasive and should be benchmarked before adoption.
 
@@ -187,7 +195,7 @@ The Home Assistant add-on launcher now:
 - keeps application code explicitly on `PYTHONPATH`,
 - derives timezone from Home Assistant Supervisor when `TZ` is empty where possible.
 
-Default debug options were adjusted for the current fork. The effective `REGISTER_DEBUG_MAX_REGISTER` default is `65535`; this is only a passive capture filter and does not make GroBro scan that register range.
+Normal-operation defaults favor low overhead: `LOG_LEVEL=ERROR`, `DUMP_MESSAGES=false` and `REGISTER_DEBUG=false`. `REGISTER_DEBUG_CHANGES_ONLY=true` remains the efficient mode if passive register diagnostics are explicitly enabled.
 
 ## 11. Tests, CI and release pipeline
 
@@ -206,9 +214,9 @@ Additional tests cover areas including:
 - NOAH removed entities,
 - NOAH Heater status-frame override,
 - NOAH embedded `0x0103` parsing,
-- passive register debug behavior.
+- passive register debug behavior and unchanged-block fast-path behavior.
 
-GitHub Actions is enabled for this fork. The 2.8.3 code path has been validated with Ruff and the full pytest suite on Python 3.11, 3.12 and 3.13, with coverage above the configured 85% threshold. The Docker workflow then successfully built the image for `linux/amd64`, `linux/arm64` and `linux/arm/v7` and pushed it to the fork-owned `ghcr.io/criticallimit/grobro` namespace. Superseded CI runs on the same branch are cancelled automatically to reduce runner churn.
+GitHub Actions is enabled for this fork. Releases are validated with Ruff and the full pytest suite on Python 3.11, 3.12 and 3.13. The Docker workflow builds for `linux/amd64`, `linux/arm64` and `linux/arm/v7` and publishes to the fork-owned `ghcr.io/criticallimit/grobro` namespace after successful CI. Superseded CI runs on the same branch are cancelled automatically to reduce runner churn.
 
 Runtime/hardware testing remains important because CI cannot validate every physical Growatt model or firmware revision.
 
