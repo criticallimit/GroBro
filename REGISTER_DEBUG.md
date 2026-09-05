@@ -42,7 +42,29 @@ With `REGISTER_DEBUG_CHANGES_ONLY: true`, the first observation of every registe
 
 ## NOAH 0x0103 messages
 
-GroBro also receives a special NOAH/NEXA message type `0x0103`. The current decoder exposes a sequence of 16-bit values but does not prove the Modbus start address. These values are therefore logged as `value_index` with `addressing: unknown` and are **not** labelled as real register numbers until protocol evidence confirms their addresses.
+GroBro also receives a special NOAH/NEXA message type `0x0103`. Its prefix contains additional structured data whose complete meaning is not yet known. The legacy sequential 16-bit interpretation is therefore retained only as:
+
+- `source: noah_0103`
+- `addressing: unknown`
+- `value_index: ...`
+
+Those prefix values are **not** presented as real register numbers.
+
+However, real NOAH packets also contain a standard register block near the end of `0x0103`. The block is accepted only when its encoded start/end/count make it fit exactly before the normal two-byte Growatt trailer. In the currently verified NOAH fixture and live dump this block is:
+
+- start register: `250`
+- end register: `374`
+- register count: `125`
+
+These confirmed values are additionally logged as:
+
+- `source: noah_0103_modbus`
+- `function: 3`
+- `block_start: 250`
+- `block_end: 374`
+- real `register` numbers
+
+This is intentionally **debug-only**. The values are not automatically published as Home Assistant entities. Upstream GroBro previously attempted to publish `0x0103` values and reverted that behavior because incorrect interpretation caused zero/invalid sensor states. This fork therefore keeps discovery separate from reverse engineering until individual new registers are validated.
 
 ## Important limitation
 
