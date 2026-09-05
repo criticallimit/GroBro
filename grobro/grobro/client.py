@@ -283,7 +283,8 @@ class Client:
             if len(unscrambled) < 8:
                 LOG.debug("Ignoring truncated Growatt message for %s", device_id)
                 return
-            LOG.debug("Received: %s %s", msg.topic, unscrambled.hex(" "))
+            if LOG.isEnabledFor(logging.DEBUG):
+                LOG.debug("Received: %s %s", msg.topic, unscrambled.hex(" "))
 
             # Read msg_type from both possible offsets
             msg_type_4 = struct.unpack_from(">H", unscrambled, 4)[0]
@@ -464,7 +465,8 @@ class Client:
 
                 return
 
-            LOG.debug("Unknown msg_type %s: %s", msg_type, unscrambled.hex())
+            if LOG.isEnabledFor(logging.DEBUG):
+                LOG.debug("Unknown msg_type %s: %s", msg_type, unscrambled.hex())
         except (struct.error, TypeError, ValueError, KeyError) as exc:
             LOG.error("Processing malformed message from %s: %s", msg.topic, exc)
         except Exception as exc:
@@ -483,7 +485,8 @@ class Client:
             if len(unscrambled) < 8:
                 LOG.debug("Ignoring truncated Growatt cloud message for %s", device_id)
                 return
-            LOG.debug("Received Growatt forward: %s %s", msg.topic, unscrambled.hex(" "))
+            if LOG.isEnabledFor(logging.DEBUG):
+                LOG.debug("Received Growatt forward: %s %s", msg.topic, unscrambled.hex(" "))
 
             if not GROWATT_CLOUD_ENABLED:
                 return
