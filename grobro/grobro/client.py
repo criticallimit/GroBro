@@ -582,6 +582,20 @@ def get_property(msg, prop) -> str | None:
     properties = getattr(msg, "properties", None)
     if properties is None:
         return None
+
+    # Paho MQTT v5 exposes UserProperty directly. This avoids building a full
+    # JSON representation for the common per-message forwarded-for check.
+    user_properties = getattr(properties, "UserProperty", None)
+    if isinstance(user_properties, (list, tuple)):
+        for entry in user_properties:
+            if not isinstance(entry, (list, tuple)) or len(entry) != 2:
+                continue
+            key, value = entry
+            if key == prop:
+                return value
+        return None
+
+    # Compatibility fallback for mocks/older property implementations.
     try:
         data = properties.json()
     except (AttributeError, TypeError, ValueError):
