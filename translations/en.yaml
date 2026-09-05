@@ -29,45 +29,60 @@ configuration:
   TARGET_MQTT_PASS:
     name: TARGET_MQTT_PASS
     description: Password for the target MQTT broker
+  MQTT_CLIENT_SUFFIX:
+    name: MQTT_CLIENT_SUFFIX
+    description: Optional suffix for MQTT client IDs. Only needed when multiple GroBro instances share the same broker.
   HA_BASE_TOPIC:
     name: HA_BASE_TOPIC
     description: Base MQTT topic used for Home Assistant auto-discovery and sensor states
-  REGISTER_FILTER:
-    name: REGISTER_FILTER
-    description: Comma-separated list of serial:alias pairs (e.g. 123456789:NOAH,987654321:NEO800). Allows specifying which register set to apply per device. Defaults to inverter register map if not set.
   GROWATT_CLOUD:
     name: GROWATT_CLOUD
-    description: Set to True to redirect messages to and from the Growatt Server. Default is False
+    description: Set to true to forward messages to and from the Growatt server. Default is false.
   GROWATT_CLOUD_CONFIG_FILTER:
     name: GROWATT_CLOUD_CONFIG_FILTER
-    description: Enable to prevent forwarding config messages. This protects the datalogger from remote setting changes initiated by the Growatt Cloud. Default is False
+    description: Blocks forwarded configuration messages to protect the datalogger from remote setting changes initiated by the Growatt Cloud.
   LOG_LEVEL:
     name: LOG_LEVEL
-    description: Sets the Logging Level. The program currently only use the levels ERROR, DEBUG, and INFO. Default is ERROR.
+    description: Logging level ERROR, DEBUG, or INFO. Default is ERROR.
   DUMP_MESSAGES:
     name: DUMP_MESSAGES
-    description: Dumps every received messages into $DUMP_DIR for later in-depth inspection.
-  MAX_SLOTS:
-    name: MAX_SLOTS
-    description: How many time slots to show in Home Assistant for battery scheduling (NOAH only, max 9). Default is 1.
-  MAX_BAT:
-    name: MAX_BAT
-    description: How many battery packs to display in Home Assistant. Set to "auto" (default) to detect automatically from serial numbers, or a number to override.
+    description: Dumps every received raw message into DUMP_DIR for later analysis.
   DUMP_DIR:
     name: DUMP_DIR
-    description: Directory to store dumped messages. Default is /share/GroBro/dump. In Addon it has to start with /share
+    description: Directory used for raw message dumps. Default is /share/GroBro/dump.
+  REGISTER_DEBUG:
+    name: REGISTER_DEBUG
+    description: Enables passive register logging. No additional read requests or register writes are sent to devices.
+  REGISTER_DEBUG_DIR:
+    name: REGISTER_DEBUG_DIR
+    description: Directory used for register dumps. Default is /share/GroBro/register_debug.
+  REGISTER_DEBUG_MAX_REGISTER:
+    name: REGISTER_DEBUG_MAX_REGISTER
+    description: Highest register address retained from actually received Modbus blocks. Default is 65535.
+  REGISTER_DEBUG_CHANGES_ONLY:
+    name: REGISTER_DEBUG_CHANGES_ONLY
+    description: When enabled, every value is logged on first observation and then only when it changes.
+  PUBLISH_SENSORS_RETAINED:
+    name: PUBLISH_SENSORS_RETAINED
+    description: Publish sensor states with the MQTT retain flag. Default is false.
+  MAX_SLOTS:
+    name: MAX_SLOTS
+    description: Number of battery scheduling slots shown in Home Assistant (NOAH max 9). Default is 1.
+  MAX_BAT:
+    name: MAX_BAT
+    description: Number of battery modules shown in Home Assistant. "auto" prefers the reported battery count and falls back to detected serial fragments only when needed.
   DEVICE_TIMEOUT:
     name: DEVICE_TIMEOUT
-    description: Set the timeout in seconds for the device communication. Default is 0 (disabled). Recommendation 300+ seconds.
+    description: Timeout in seconds before a device is considered unavailable. 0 disables the timeout; 300 seconds or more is recommended.
   AVAILABILITY_SENSOR:
     name: AVAILABILITY_SENSOR
-    description: Expose device availability only as a dedicated online sensor instead of marking the device and all its entities unavailable after timeout.
+    description: When enabled, an additional Online binary sensor is exposed. The normal device/entity availability topic remains active as well.
   FILTER_DATA_GLITCHES:
     name: FILTER_DATA_GLITCHES
-    description: When enabled, prevents glitches on total_increasing sensors (energy counters, etc.) after a device reconnects from being offline. Default is false.
+    description: Suppress decreases in total_increasing sensors such as energy counters. Default is false.
   TZ:
     name: Timezone
-    description: Configure your local timezone to ensure all application logs and system events are recorded with accurate localized timestamps.
+    description: Local timezone used for correct timestamps in logs and system events.
   KEEP_BATTERY_POSITION:
     name: KEEP_BATTERY_POSITION
-    description: When enabled, GroBro tracks NOAH battery serial numbers across position changes and logs a warning if a battery moves to a different slot. Default is false.
+    description: Track NOAH battery serial numbers across slot changes and log a warning when a module moves to a different position.
