@@ -1,22 +1,7 @@
 """Compatibility and cleanup layer for the Home Assistant bridge.
 
 Keeps upstream GroBro behavior and Home Assistant entity identities stable while
-correcting legacy runtime behavior in this debug fork:
-- battery count prefers the explicit ``bat_cnt`` register and uses a conservative
-  one-battery fallback before telemetry is available;
-- mutable HA client caches, timers and read queues are initialized per instance;
-- persisted config files are indexed by the MQTT device id encoded in their
-  filename so a differing internal serial number does not orphan the cache;
-- sensitive live-only config fields are excluded from persistence comparisons;
-- the existing Device SN entity keeps the same name/topic/unique id but publishes
-  the configured serial number when available;
-- a legacy ``sw_version`` publish that accidentally used the device id is fixed;
-- MQTT discovery origin metadata points to this fork;
-- the main availability topic is always updated on online/offline transitions,
-  even when the optional Online binary sensor is enabled;
-- outstanding timers are cancelled during client shutdown.
-
-Device/entity identifiers and existing sensor names are intentionally unchanged.
+correcting legacy runtime behavior in this debug fork.
 """
 
 from __future__ import annotations
@@ -35,7 +20,6 @@ _PERSIST_EXCLUDE = {"password", "raw"}
 
 
 def _detect_bat_count(payload: dict) -> int:
-    """Resolve battery count from telemetry with a conservative fallback."""
     bat_cnt = payload.get("bat_cnt")
     if isinstance(bat_cnt, int) and 1 <= bat_cnt <= 4:
         return bat_cnt
@@ -49,7 +33,6 @@ def _detect_bat_count(payload: dict) -> int:
 
 
 def _resolve_max_bat(device_id: str, payload: dict | None = None) -> int:
-    """Resolve MAX_BAT without the legacy implicit four-battery fallback."""
     if isinstance(ha_client_module.MAX_BAT, int):
         return max(1, min(4, ha_client_module.MAX_BAT))
 
@@ -62,7 +45,6 @@ def _resolve_max_bat(device_id: str, payload: dict | None = None) -> int:
 
 
 def _configured_serial(client, device_id: str) -> str:
-    """Return the best available serial while keeping device_id as fallback."""
     config = client._config_cache.get(device_id)
     serial = getattr(config, "serial_number", None) if config else None
     if serial and str(serial).strip():
@@ -71,14 +53,12 @@ def _configured_serial(client, device_id: str) -> str:
 
 
 def _persisted_config_data(config) -> dict:
-    """Return only fields intentionally persisted by DeviceConfig.to_file."""
     if config is None:
         return {}
     return config.model_dump(exclude_none=True, exclude=_PERSIST_EXCLUDE)
 
 
 def _initialize_instance_state(client) -> None:
-    """Create mutable HA client runtime state per instance instead of per class."""
     client._config_cache = {}
     client._discovery_cache = []
     client._device_timers = {}
@@ -87,10 +67,10 @@ def _initialize_instance_state(client) -> None:
     client._config_read_inflight = {}
     client._config_read_timers = {}
     client._config_read_lock = Lock()
+    client._migration_done = set()
 
 
 def _restore_config_cache_by_filename(client) -> None:
-    """Index persisted config files by their stable MQTT device-id filename."""
     prefix = "config_"
     suffix = ".json"
     try:
@@ -110,19 +90,17 @@ def _restore_config_cache_by_filename(client) -> None:
 
 
 def _cancel_runtime_timers(client) -> None:
-    """Cancel pending timeout/config-read timers before disconnecting."""
     for timer_map_name in ("_device_timers", "_config_read_timers"):
         timer_map = getattr(client, timer_map_name, {})
         for timer in list(timer_map.values()):
             try:
                 timer.cancel()
-            except Exception:  # pragma: no cover - defensive cleanup only
+            except Exception:  # pragma: no cover
                 pass
         timer_map.clear()
 
 
 def install_ha_cleanup_hook() -> None:
-    """Install narrowly scoped fixes without changing HA entity identities."""
     global _INSTALLED
     if _INSTALLED:
         return
@@ -142,10 +120,6 @@ def install_ha_cleanup_hook() -> None:
 
     client_cls.__init__ = init_clean
 
-    # Compare the same sanitized representation that is actually written to
-    # disk. This avoids rewriting the config on every live packet merely because
-    # password/raw fields intentionally remain RAM-only. It also rewrites old
-    # files once if they still contain sensitive fields from a previous version.
     def set_config_clean(self, device_id, config):
         config_path = f"config_{device_id}.json"
         existing_config = ha_client_module.model.DeviceConfig.from_file(config_path)
@@ -169,6 +143,9 @@ def install_ha_cleanup_hook() -> None:
         self._config_cache[device_id] = config
         if device_id in self._discovery_cache:
             self._discovery_cache.remove(device_id)
+        # A changed config may affect device metadata/discovery, so allow the
+        # one-time legacy migration to run again for this device only.
+        self._migration_done.discard(device_id)
         self._Client__publish_device_discovery(device_id)
 
     client_cls.set_config = set_config_clean
@@ -196,6 +173,18 @@ def install_ha_cleanup_hook() -> None:
 
     client_cls.stop = stop_clean
 
+    # Legacy entity migration only needs to be published once per device per
+    # process/config generation, not on every telemetry packet.
+    original_migrate = client_cls._Client__migrate_entity_discovery
+
+    def migrate_once(self, device_id, known_registers):
+        if device_id in self._migration_done:
+            return
+        original_migrate(self, device_id, known_registers)
+        self._migration_done.add(device_id)
+
+    client_cls._Client__migrate_entity_discovery = migrate_once
+
     original_publish_discovery = client_cls._Client__publish_device_discovery
 
     def publish_discovery_clean(self, device_id: str, effective_max_bat=None):
@@ -212,6 +201,14 @@ def install_ha_cleanup_hook() -> None:
                     origin = data.get("o")
                     if isinstance(origin, dict):
                         origin["url"] = FORK_URL
+                    device_meta = data.get("dev")
+                    if isinstance(device_meta, dict):
+                        # Keep identifiers unchanged so HA entity/device identity
+                        # remains stable; only correct the visible serial metadata.
+                        device_meta["serial_number"] = _configured_serial(
+                            self,
+                            device_id,
+                        )
                     payload = json.dumps(
                         data,
                         sort_keys=True,
