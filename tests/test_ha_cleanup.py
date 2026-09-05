@@ -1,7 +1,13 @@
 import json
 from types import SimpleNamespace
 
-from grobro.ha.cleanup import _configured_serial, _detect_bat_count, install_ha_cleanup_hook
+from grobro.ha.cleanup import (
+    _configured_serial,
+    _detect_bat_count,
+    _initialize_instance_state,
+    _resolve_max_bat,
+    install_ha_cleanup_hook,
+)
 from grobro.ha import client as ha_client_module
 
 
@@ -19,6 +25,31 @@ def test_detect_bat_count_falls_back_conservatively():
     assert _detect_bat_count({}) == 1
     assert _detect_bat_count({"bat2_ser_part_1": "BAT2"}) == 2
     assert _detect_bat_count({"bat3_ser_part_1": "BAT3"}) == 3
+
+
+def test_resolve_max_bat_does_not_assume_four(monkeypatch):
+    monkeypatch.setattr(ha_client_module, "MAX_BAT", "auto")
+    ha_client_module._MAX_BAT_CACHE.clear()
+
+    assert _resolve_max_bat("0PVPTEST") == 1
+    assert _resolve_max_bat("0PVPTEST", {"bat_cnt": 3}) == 3
+    assert _resolve_max_bat("0PVPTEST") == 3
+
+
+def test_instance_state_is_not_shared():
+    first = SimpleNamespace()
+    second = SimpleNamespace()
+    _initialize_instance_state(first)
+    _initialize_instance_state(second)
+
+    first._config_cache["a"] = 1
+    first._discovery_cache.append("a")
+    first._config_read_queues["a"] = [1]
+
+    assert second._config_cache == {}
+    assert second._discovery_cache == []
+    assert second._config_read_queues == {}
+    assert first._config_read_lock is not second._config_read_lock
 
 
 def test_configured_serial_prefers_config_and_keeps_device_id_fallback():
@@ -42,7 +73,10 @@ def test_cleanup_keeps_device_sn_entity_and_fixes_origin(monkeypatch):
     client = object.__new__(ha_client_module.Client)
     client._client = FakeMqtt()
     client._config_cache = {
-        "0PVPTEST": SimpleNamespace(serial_number="SERIAL-NEW", sw_version="19.19.14")
+        "0PVPTEST": SimpleNamespace(
+            serial_number="SERIAL-NEW",
+            sw_version="19.19.14",
+        )
     }
     client._discovery_payload_cache = {}
     client._discovery_cache = []
