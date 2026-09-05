@@ -23,7 +23,6 @@ def _detect_bat_count(payload: dict) -> int:
     bat_cnt = payload.get("bat_cnt")
     if isinstance(bat_cnt, int) and 1 <= bat_cnt <= 4:
         return bat_cnt
-
     count = 1
     for bat_num in range(2, 5):
         value = payload.get(f"bat{bat_num}_ser_part_1")
@@ -35,17 +34,15 @@ def _detect_bat_count(payload: dict) -> int:
 def _resolve_max_bat(device_id: str, payload: dict | None = None) -> int:
     if isinstance(ha_client_module.MAX_BAT, int):
         return max(1, min(4, ha_client_module.MAX_BAT))
-
     if payload is not None:
         count = _detect_bat_count(payload)
         ha_client_module._MAX_BAT_CACHE[device_id] = count
         return count
-
     return ha_client_module._MAX_BAT_CACHE.get(device_id, 1)
 
 
 def _configured_serial(client, device_id: str) -> str:
-    config = client._config_cache.get(device_id)
+    config = getattr(client, "_config_cache", {}).get(device_id)
     serial = getattr(config, "serial_number", None) if config else None
     if serial and str(serial).strip():
         return str(serial).strip()
@@ -77,7 +74,6 @@ def _restore_config_cache_by_filename(client) -> None:
         filenames = os.listdir(".")
     except OSError:
         return
-
     for filename in filenames:
         if not (filename.startswith(prefix) and filename.endswith(suffix)):
             continue
@@ -100,6 +96,14 @@ def _cancel_runtime_timers(client) -> None:
         timer_map.clear()
 
 
+def _migration_set(client) -> set:
+    migrations = getattr(client, "_migration_done", None)
+    if migrations is None:
+        migrations = set()
+        client._migration_done = migrations
+    return migrations
+
+
 def install_ha_cleanup_hook() -> None:
     global _INSTALLED
     if _INSTALLED:
@@ -107,7 +111,6 @@ def install_ha_cleanup_hook() -> None:
 
     ha_client_module._detect_bat_count = _detect_bat_count
     ha_client_module._resolve_max_bat = _resolve_max_bat
-
     client_cls = ha_client_module.Client
 
     original_init = client_cls.__init__
@@ -143,9 +146,7 @@ def install_ha_cleanup_hook() -> None:
         self._config_cache[device_id] = config
         if device_id in self._discovery_cache:
             self._discovery_cache.remove(device_id)
-        # A changed config may affect device metadata/discovery, so allow the
-        # one-time legacy migration to run again for this device only.
-        self._migration_done.discard(device_id)
+        _migration_set(self).discard(device_id)
         self._Client__publish_device_discovery(device_id)
 
     client_cls.set_config = set_config_clean
@@ -173,15 +174,14 @@ def install_ha_cleanup_hook() -> None:
 
     client_cls.stop = stop_clean
 
-    # Legacy entity migration only needs to be published once per device per
-    # process/config generation, not on every telemetry packet.
     original_migrate = client_cls._Client__migrate_entity_discovery
 
     def migrate_once(self, device_id, known_registers):
-        if device_id in self._migration_done:
+        migrations = _migration_set(self)
+        if device_id in migrations:
             return
         original_migrate(self, device_id, known_registers)
-        self._migration_done.add(device_id)
+        migrations.add(device_id)
 
     client_cls._Client__migrate_entity_discovery = migrate_once
 
@@ -192,8 +192,7 @@ def install_ha_cleanup_hook() -> None:
 
         def publish(topic, payload=None, *args, **kwargs):
             if (
-                topic
-                == f"{ha_client_module.HA_BASE_TOPIC}/device/{device_id}/config"
+                topic == f"{ha_client_module.HA_BASE_TOPIC}/device/{device_id}/config"
                 and payload
             ):
                 try:
@@ -203,28 +202,16 @@ def install_ha_cleanup_hook() -> None:
                         origin["url"] = FORK_URL
                     device_meta = data.get("dev")
                     if isinstance(device_meta, dict):
-                        # Keep identifiers unchanged so HA entity/device identity
-                        # remains stable; only correct the visible serial metadata.
-                        device_meta["serial_number"] = _configured_serial(
-                            self,
-                            device_id,
-                        )
-                    payload = json.dumps(
-                        data,
-                        sort_keys=True,
-                        separators=(",", ":"),
-                    )
+                        device_meta["serial_number"] = _configured_serial(self, device_id)
+                    payload = json.dumps(data, sort_keys=True, separators=(",", ":"))
                 except (TypeError, ValueError):
                     pass
 
             if topic == f"{ha_client_module.HA_BASE_TOPIC}/grobro/{device_id}/serial":
                 payload = _configured_serial(self, device_id)
 
-            if (
-                topic
-                == f"{ha_client_module.HA_BASE_TOPIC}/grobro/{device_id}/sw_version"
-            ):
-                config = self._config_cache.get(device_id)
+            if topic == f"{ha_client_module.HA_BASE_TOPIC}/grobro/{device_id}/sw_version":
+                config = getattr(self, "_config_cache", {}).get(device_id)
                 sw_version = getattr(config, "sw_version", None) if config else None
                 if not sw_version:
                     return None
@@ -234,11 +221,7 @@ def install_ha_cleanup_hook() -> None:
 
         self._client.publish = publish
         try:
-            return original_publish_discovery(
-                self,
-                device_id,
-                effective_max_bat,
-            )
+            return original_publish_discovery(self, device_id, effective_max_bat)
         finally:
             self._client.publish = original_publish
 
