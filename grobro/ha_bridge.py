@@ -5,12 +5,13 @@ Reads Growatt MQTT packets, decodes them, maps registers
 and republishes values for Home Assistant auto-discovery.
 """
 
+import logging
 import os
 import signal
-import logging
 import time
 
-from grobro import model, ha, grobro
+from grobro import ha, model, grobro
+from grobro.grobro.cleanup import install_grobro_cleanup_hook
 from grobro.grobro.register_debug import install_register_debug_hook
 from grobro.ha.cleanup import install_ha_cleanup_hook
 
@@ -21,17 +22,17 @@ try:
         level=LOG_LEVEL,
         format="%(asctime)s [%(levelname)s] %(message)s",
     )
-# pylint: disable-next=broad-exception-caught
-except Exception as e:
+except Exception as exc:  # pylint: disable=broad-exception-caught
     logging.basicConfig(
         level=logging.ERROR,
         format="%(asctime)s [%(levelname)s] %(message)s",
     )
-    print(f"Failed to setup logger {e} USING DEFAULT LOG Level(Error)")
+    print(f"Failed to setup logger {exc} USING DEFAULT LOG Level(Error)")
 LOG = logging.getLogger(__name__)
 
-# Install compatibility cleanup and optional passive register logger before
+# Install compatibility cleanups and optional passive register logger before
 # clients start processing messages.
+install_grobro_cleanup_hook()
 install_ha_cleanup_hook()
 install_register_debug_hook()
 
@@ -49,10 +50,7 @@ FORWARD_MQTT_CONFIG = model.MQTTConfig.from_env(
     defaults=model.MQTTConfig(host="mqtt.growatt.com", port=7006),
 )
 
-RUNNING = True
 
-
-# pylint: disable-next=too-few-public-methods
 class SignalHandler:
     """Catch SIGINT/SIGTERM and trigger graceful shutdown."""
 
