@@ -49,7 +49,7 @@ class TestModule:
     def test_get_property_found(self):
         msg = _msg("c/foo", b"")
         result = get_property(msg, "forwarded-for")
-        assert result is None  # no UserProperty
+        assert result is None
 
     def test_get_property_missing(self):
         msg = _msg("c/foo", b"", [("other", "val")])
@@ -67,12 +67,10 @@ class TestModule:
     def test_dump_message_binary_error(self):
         with patch("grobro.grobro.client.os.makedirs", side_effect=OSError("denied")):
             dump_message_binary("s/33/test", b"data")
-            # should not raise
 
     def test_dump_message_binary_write_error(self):
         with patch("builtins.open", side_effect=OSError("denied")):
             dump_message_binary("s/33/test", b"data")
-            # should not raise
 
     def test_growatt_cloud_disabled_by_default(self):
         assert grobro_client.GROWATT_CLOUD_ENABLED is False
@@ -173,17 +171,17 @@ class TestClientOnMessage:
         client._client.on_message(None, None, msg)
         client.on_config.assert_called_once()
 
-    def test_config_read_response_281(self, client):
+    def test_compound_config_read_fixture_is_not_published_as_single_register(self, client):
         data = (Path(DATA_DIR) / "NeoConfigReadResponse_337.bin").read_bytes()
         msg = _msg("c/33/QMN000ABC1D2E3FG", data)
         client._client.on_message(None, None, msg)
-        client._client.publish.assert_called()  # publishes back to HA topic
+        client._client.publish.assert_not_called()
+        client.on_config_read_response.assert_not_called()
 
     def test_config_write_ack_280(self, client):
         data = (Path(DATA_DIR) / "NeoConfigWriteAck_DataInterval.bin").read_bytes()
         msg = _msg("c/33/QMN000ABC1D2E3FG", data)
         client._client.on_message(None, None, msg)
-        # no error, returns cleanly
 
     def test_modbus_input_register_neo(self, client):
         data = (Path(DATA_DIR) / "NeoReadInputRegisters.bin").read_bytes()
@@ -201,7 +199,6 @@ class TestClientOnMessage:
         data = (Path(DATA_DIR) / "NoahPresetSingle_OutputLimit.bin").read_bytes()
         msg = _msg("c/33/0PVP0000TEST0001", data)
         client._client.on_message(None, None, msg)
-        # PRESET_SINGLE_REGISTER response is not routed to handlers
 
     def test_modbus_input_noah(self, client):
         data = (Path(DATA_DIR) / "NoahReadInputRegisters_0-124.bin").read_bytes()
@@ -228,19 +225,16 @@ class TestClientOnMessage:
         data = (Path(DATA_DIR) / "NoahType0103_HoldingRegs.bin").read_bytes()
         msg = _msg("c/33/0PVP0000TEST0001", data)
         client._client.on_message(None, None, msg)
-        # NOAH type 259 is not handled by client, no callback called
 
     def test_noah_type0110(self, client):
         data = (Path(DATA_DIR) / "NoahType0110_PresetMResp.bin").read_bytes()
         msg = _msg("c/33/0PVP0000TEST0001", data)
         client._client.on_message(None, None, msg)
-        # This is a preset response, handled gracefully
 
     def test_noah_type0125(self, client):
         data = (Path(DATA_DIR) / "NoahType0125_SerialResp.bin").read_bytes()
         msg = _msg("c/33/0PVP0000TEST0001", data)
         client._client.on_message(None, None, msg)
-        # Serial response, handled gracefully
 
     def test_noah_type_fe19_config(self, client):
         data = (Path(DATA_DIR) / "NoahTypeFE19_Config.bin").read_bytes()
@@ -264,13 +258,11 @@ class TestClientOnMessage:
         data = (Path(DATA_DIR) / "NoahTypeFE19_DevStatus.bin").read_bytes()
         msg = _msg("c/33/0PVP0000TEST0001", data)
         client._client.on_message(None, None, msg)
-        # DevStatus (msg_type=53) not handled as config, just no crash
 
     def test_noah_type_fe25(self, client):
         data = (Path(DATA_DIR) / "NoahTypeFE25_Empty.bin").read_bytes()
         msg = _msg("c/33/0PVP0000TEST0001", data)
         client._client.on_message(None, None, msg)
-        # keepalive, no callbacks
 
     def test_shinewelink_fe19_fullconfig(self, client):
         data = (Path(DATA_DIR) / "ShineWeLinkFE19_FullConfig.bin").read_bytes()
@@ -325,14 +317,12 @@ class TestClientOnMessage:
     def test_shinewelink_holding_register(self, client):
         data = (Path(DATA_DIR) / "ShineWeLinkReadHoldingRegisters.bin").read_bytes()
         msg = _msg("c/33/RAQ0E8H042", data)
-        # Function 3 is parsed by parse_grobro but not routed to a callback
         client._client.on_message(None, None, msg)
 
     def test_shinewelink_fe25_keepalive(self, client):
         data = (Path(DATA_DIR) / "ShineWeLinkFE25_Keepalive.bin").read_bytes()
         msg = _msg("c/33/RAQ0E8H042", data)
         client._client.on_message(None, None, msg)
-        # keepalive, no callbacks
 
     def test_dump_messages_in_on_message(self, client):
         with patch("grobro.grobro.client.DUMP_MESSAGES", True):
@@ -348,17 +338,17 @@ class TestClientOnMessage:
         client._client.on_message(None, None, msg)
         client.on_input_register.assert_not_called()
 
-    def test_modbus_input_nexa(self, client):
+    def test_neo_fixture_is_not_treated_as_nexa_telemetry(self, client):
         data = (Path(DATA_DIR) / "NeoReadInputRegisters.bin").read_bytes()
         msg = _msg("c/33/0HVR000TEST0001", data)
         client._client.on_message(None, None, msg)
-        client.on_input_register.assert_called_once()
+        client.on_input_register.assert_not_called()
 
-    def test_modbus_input_spf(self, client):
+    def test_neo_fixture_is_not_treated_as_spf_telemetry(self, client):
         data = (Path(DATA_DIR) / "NeoReadInputRegisters.bin").read_bytes()
         msg = _msg("c/33/HAQ000TEST0001", data)
         client._client.on_message(None, None, msg)
-        client.on_input_register.assert_called_once()
+        client.on_input_register.assert_not_called()
 
     def test_invalid_payload_processing(self, client):
         msg = _msg("c/33/QMN000ABC1D2E3FG", b"garbage")
@@ -429,7 +419,6 @@ class TestClientForward:
             fc.connect.assert_called_once()
             fc.subscribe.assert_called_once_with("+/test-dev")
             fc.loop_start.assert_called_once()
-            # second call returns cached
             result2 = client._Client__connect_to_growatt_server("test-dev")
             assert result2 is fc
             assert mc.call_count == 1
@@ -475,8 +464,6 @@ class TestClientForward:
 
 
 class TestExtractDeviceId:
-    """Tests for _extract_device_id, which sanitizes the device serial from MQTT topics."""
-
     def test_clean_neo_serial(self):
         from grobro.grobro.client import _extract_device_id
         assert _extract_device_id("c/33/QMN000ABC123") == "QMN000ABC123"
@@ -486,15 +473,10 @@ class TestExtractDeviceId:
         assert _extract_device_id("c/0PVP000ABC123") == "0PVP000ABC123"
 
     def test_strips_trailing_control_char(self):
-        """ShineWiFi-X2 (XH/XH2 dongle) appends 0x18 after the serial in
-        SUBSCRIBE topics. Must be stripped to produce a clean device_id."""
         from grobro.grobro.client import _extract_device_id
         assert _extract_device_id("s/33/ZGQ0F5601J\x18") == "ZGQ0F5601J"
 
     def test_strips_question_mark(self):
-        """The same XH dongle quirk also produces topics like
-        `s/33/ZGQ0F5601J?\\x18` — the `?` is printable but not a valid
-        serial character, must be stripped."""
         from grobro.grobro.client import _extract_device_id
         assert _extract_device_id("s/33/ZGQ0F5601J?\x18") == "ZGQ0F5601J"
 
