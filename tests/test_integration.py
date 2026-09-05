@@ -165,7 +165,7 @@ class TestNOAHIntegration:
 
 class TestNEXAIntegration:
 
-    def test_nexa_input_registers_publish_state(self):
+    def test_neo_fixture_is_not_accepted_as_nexa_telemetry(self):
         hc, gc, ha_mqtt = helper.setup()
         old = os.getcwd()
         with tempfile.TemporaryDirectory(prefix="grobrot_") as tmp:
@@ -173,8 +173,7 @@ class TestNEXAIntegration:
             try:
                 helper.send(gc, "c/33/0HVR000TEST0001", "NeoReadInputRegisters.bin")
                 topics = _extract_ha_publishes(ha_mqtt)
-                assert "homeassistant/grobro/0HVR000TEST0001/state" in topics
-                assert "NEXA" == topics["homeassistant/grobro/0HVR000TEST0001/type"]
+                assert "homeassistant/grobro/0HVR000TEST0001/state" not in topics
             finally:
                 os.chdir(old)
 
@@ -193,7 +192,7 @@ class TestNEXAIntegration:
 
 class TestSPFIntegration:
 
-    def test_spf_input_registers_publish_state(self):
+    def test_neo_fixture_is_not_accepted_as_spf_telemetry(self):
         hc, gc, ha_mqtt = helper.setup()
         old = os.getcwd()
         with tempfile.TemporaryDirectory(prefix="grobrot_") as tmp:
@@ -201,8 +200,7 @@ class TestSPFIntegration:
             try:
                 helper.send(gc, "c/33/HAQ000TEST0001", "NeoReadInputRegisters.bin")
                 topics = _extract_ha_publishes(ha_mqtt)
-                assert "homeassistant/grobro/HAQ000TEST0001/state" in topics
-                assert "SPF" == topics["homeassistant/grobro/HAQ000TEST0001/type"]
+                assert "homeassistant/grobro/HAQ000TEST0001/state" not in topics
             finally:
                 os.chdir(old)
 
@@ -308,7 +306,6 @@ class TestShineWeLinkIntegration:
                 assert "homeassistant/grobro/RAQ0TEST01/state" in phase1
 
                 helper.send(gc, "c/33/RAQ0TEST01\x10", "ShineWeLinkConfigDump.bin")
-                # After config, PTQ inverter appears as separate device
                 ptq_dev_topic = "homeassistant/device/PTQ0TEST01/config"
                 ptq_calls = [c for c in ha_mqtt.publish.call_args_list
                              if c[0][0] == ptq_dev_topic and c[0][1]]
