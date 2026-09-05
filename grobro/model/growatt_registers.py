@@ -59,9 +59,6 @@ class GrowattRegisterDataType(BaseModel):
 
         unpack_type = _UNSIGNED_UNPACK_TYPES.get(len(raw))
         if unpack_type is None:
-            # Numeric Growatt register values supported by the model are 8, 16,
-            # or 32 bit. Reject malformed/unsupported lengths instead of leaking
-            # a KeyError into the MQTT callback and dropping the whole packet.
             return None
 
         if self.data_type in _SIGNED_DATA_TYPES:
@@ -95,7 +92,7 @@ class GrowattRegisterDataType(BaseModel):
             if not opts:
                 return None
             if opts.enum_type == GrowattRegisterEnumTypes.BITFIELD:
-                return None  # TODO: implement
+                return None
             if opts.enum_type == GrowattRegisterEnumTypes.INT_MAP:
                 return opts.values.get(int(value), "unknown")
         return None
@@ -173,7 +170,7 @@ class GroBroConfigRegister(BaseModel):
 class HomeAssistantConfigRegister(BaseModel):
     publish: bool
     name: str
-    type: str  # sensor | number | button | text | select
+    type: str
     min: Optional[int] = None
     max: Optional[int] = None
     step: Optional[int] = None
@@ -202,28 +199,24 @@ with resources.files(__package__).joinpath("growatt_noah_registers.json").open("
 with resources.files(__package__).joinpath("growatt_nexa_registers.json").open("rb") as f:
     KNOWN_NEXA_REGISTERS = GroBroRegisters.model_validate(json.load(f))
 
-# NOAH firmware 19.19.14 exposes the same verified telemetry fields as NEXA at
-# these addresses. Reuse the canonical NEXA definitions instead of duplicating
-# them in a second large JSON map. Deep copies keep later mutations isolated.
-for _shared_name in ("pv1Temp", "pv2Temp", "systemTemp", "batterySoh"):
-    if _shared_name not in KNOWN_NOAH_REGISTERS.input_registers:
-        KNOWN_NOAH_REGISTERS.input_registers[_shared_name] = (
-            KNOWN_NEXA_REGISTERS.input_registers[_shared_name].model_copy(deep=True)
-        )
+# Keep only the NOAH field that remains intentionally published from the shared
+# NEXA telemetry definitions. The three temperature fields are deliberately not
+# exposed for NOAH anymore.
+if "batterySoh" not in KNOWN_NOAH_REGISTERS.input_registers:
+    KNOWN_NOAH_REGISTERS.input_registers["batterySoh"] = (
+        KNOWN_NEXA_REGISTERS.input_registers["batterySoh"].model_copy(deep=True)
+    )
+
+# These NOAH entities were experimental/debug additions and are intentionally
+# removed from the effective runtime map. Keeping the removal here also protects
+# against them being reintroduced accidentally by the JSON map or shared fields.
+KNOWN_NOAH_REGISTERS.config_registers.pop("mqtt_ip", None)
+for _removed_noah_input in ("pv1Temp", "pv2Temp", "systemTemp"):
+    KNOWN_NOAH_REGISTERS.input_registers.pop(_removed_noah_input, None)
 
 with resources.files(__package__).joinpath("growatt_spf_registers.json").open("rb") as f:
     KNOWN_SPF_REGISTERS = GroBroRegisters.model_validate(json.load(f))
-# MIN TL-XH2 hybrid inverter family (ShineWiFi-X2 dongle, ZGQ serial prefix).
-# This is gen-2 specifically — XH gen 1 (ShineWiFi-X) uses the legacy port-5279
-# protocol handled by Grott, not GroBro. Starts as a copy of NEO with the same
-# register layout for the inverter core (block 3000-3499); battery/BMS/EPS/BDC
-# register positions are unverified pending an XH2 owner with a battery installed.
 with resources.files(__package__).joinpath("growatt_xh2_registers.json").open("rb") as f:
     KNOWN_XH2_REGISTERS = GroBroRegisters.model_validate(json.load(f))
-# MOD 3-phase inverter family (ShineWiFi-X dongle).
-# Similar register block layout (3000-3499) to NEO but with key differences:
-# - Phase powers are u16*0.1 instead of u32*0.1
-# - Pac total at reg 3020 (u16) instead of 3019 (u32)
-# - Pac1 at 3025, Pac2 at 3029, Pac3 at 3033
 with resources.files(__package__).joinpath("growatt_mod_registers.json").open("rb") as f:
     KNOWN_MOD_REGISTERS = GroBroRegisters.model_validate(json.load(f))
