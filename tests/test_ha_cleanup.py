@@ -190,6 +190,23 @@ def test_repeated_availability_state_is_not_republished(monkeypatch):
     assert len(published) > first_count
 
 
+def test_mqtt_reconnect_invalidates_publish_caches():
+    install_ha_cleanup_hook()
+
+    client = object.__new__(ha_client_module.Client)
+    client._last_availability = {"0PVPTEST": True}
+    client._discovery_signature = {"0PVPTEST": (3, None)}
+    client._discovery_payload_cache = {"0PVPTEST": "cached"}
+    client._discovery_cache = ["0PVPTEST"]
+
+    client._Client__on_connect(None, None, None, 0, None)
+
+    assert client._last_availability == {}
+    assert client._discovery_signature == {}
+    assert client._discovery_payload_cache == {}
+    assert client._discovery_cache == []
+
+
 def test_cleanup_keeps_device_sn_entity_and_fixes_origin(monkeypatch):
     install_ha_cleanup_hook()
 
