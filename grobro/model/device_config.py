@@ -52,13 +52,30 @@ class DeviceConfig(BaseModel):
             exclude_none=True,
             exclude={"password", "raw"},
         )
-        with open(file_path, "w", encoding="utf-8") as handle:
-            handle.write(persisted)
+
+        directory = os.path.dirname(os.path.abspath(file_path)) or "."
+        os.makedirs(directory, exist_ok=True)
+        temp_path = f"{file_path}.tmp"
+
         try:
-            os.chmod(file_path, 0o600)
-        except OSError:
-            # Some container/filesystem combinations may not support chmod.
-            pass
+            with open(temp_path, "w", encoding="utf-8") as handle:
+                handle.write(persisted)
+                handle.flush()
+                os.fsync(handle.fileno())
+            try:
+                os.chmod(temp_path, 0o600)
+            except OSError:
+                # Some container/filesystem combinations may not support chmod.
+                pass
+            # Atomic replacement prevents a restart/power-loss during a write
+            # from leaving a truncated config_<device>.json behind.
+            os.replace(temp_path, file_path)
+        finally:
+            try:
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+            except OSError:
+                pass
 
     @staticmethod
     def from_file(file_path: str) -> Optional["DeviceConfig"]:
