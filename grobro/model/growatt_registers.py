@@ -5,6 +5,7 @@ import importlib.resources as resources
 import json
 import struct
 
+
 class GrowattRegisterDataTypes(str, Enum):
     ENUM = "ENUM"
     STRING = "STRING"
@@ -42,10 +43,16 @@ class GrowattRegisterDataType(BaseModel):
         if self.data_type == GrowattRegisterDataTypes.STRING:
             return data_raw.decode("ascii", errors="ignore").strip("\x00")
         unpack_type = {1: "!B", 2: "!H", 4: "!I"}[len(data_raw)]
-        is_signed = self.data_type in [GrowattRegisterDataTypes.SIGNED_INT, GrowattRegisterDataTypes.SIGNED_FLOAT]
+        is_signed = self.data_type in [
+            GrowattRegisterDataTypes.SIGNED_INT,
+            GrowattRegisterDataTypes.SIGNED_FLOAT,
+        ]
         if is_signed:
             unpack_type = unpack_type.lower()
-        if self.data_type in [GrowattRegisterDataTypes.FLOAT, GrowattRegisterDataTypes.SIGNED_FLOAT]:
+        if self.data_type in [
+            GrowattRegisterDataTypes.FLOAT,
+            GrowattRegisterDataTypes.SIGNED_FLOAT,
+        ]:
             value = struct.unpack(unpack_type, data_raw)[0]
             if self.mult is not None:
                 value *= self.mult
@@ -53,23 +60,26 @@ class GrowattRegisterDataType(BaseModel):
                 value *= self.float_options.multiplier
                 value += self.float_options.delta
             return round(value, 3)
-        elif self.data_type == GrowattRegisterDataTypes.TIME_HHMM:
+        if self.data_type == GrowattRegisterDataTypes.TIME_HHMM:
             value = struct.unpack(unpack_type, data_raw)[0]
             hour = (value >> 8) & 0xFF
             minute = value & 0xFF
             return f"{hour:02d}:{minute:02d}"
-        elif self.data_type in [GrowattRegisterDataTypes.INT, GrowattRegisterDataTypes.SIGNED_INT]:
-            value = struct.unpack(unpack_type, data_raw)[0]
-            return value
-        elif self.data_type == GrowattRegisterDataTypes.ENUM:
+        if self.data_type in [
+            GrowattRegisterDataTypes.INT,
+            GrowattRegisterDataTypes.SIGNED_INT,
+        ]:
+            return struct.unpack(unpack_type, data_raw)[0]
+        if self.data_type == GrowattRegisterDataTypes.ENUM:
             opts = self.enum_options
             value = struct.unpack(unpack_type, data_raw)[0]
-
+            if not opts:
+                return None
             if opts.enum_type == GrowattRegisterEnumTypes.BITFIELD:
                 return None  # TODO: implement
-
-            elif opts.enum_type == GrowattRegisterEnumTypes.INT_MAP:
+            if opts.enum_type == GrowattRegisterEnumTypes.INT_MAP:
                 return opts.values.get(int(value), "unknown")
+        return None
 
 
 class GrowattRegisterPosition(BaseModel):
@@ -95,7 +105,7 @@ class HomeAssistantHoldingRegister(BaseModel):
     unit_of_measurement: Optional[str] = None
     icon: Optional[str] = None
     options: Optional[dict[str, str]] = None
-    
+
     model_config = ConfigDict(extra="forbid")
 
 
@@ -118,12 +128,12 @@ class HomeAssistantHoldingRegisterValue(BaseModel):
 
 class HomeAssistantHoldingRegisterInput(BaseModel):
     device_id: str
-    payload: list[HomeAssistantHoldingRegisterValue] = []
+    payload: list[HomeAssistantHoldingRegisterValue] = Field(default_factory=list)
 
 
 class HomeAssistantInputRegister(BaseModel):
     device_id: str
-    payload: dict[str, Union[str, float, int]] = {}
+    payload: dict[str, Union[str, float, int]] = Field(default_factory=dict)
 
 
 class GroBroInputRegister(BaseModel):
@@ -135,9 +145,11 @@ class GroBroHoldingRegister(BaseModel):
     growatt: Optional[GrowattInputRegister] = None
     homeassistant: HomeAssistantHoldingRegister
 
+
 class GroBroConfigRegister(BaseModel):
     register_no: int
     data: GrowattRegisterDataType
+
 
 class HomeAssistantConfigRegister(BaseModel):
     publish: bool
@@ -149,14 +161,17 @@ class HomeAssistantConfigRegister(BaseModel):
     unit_of_measurement: Optional[str] = None
     icon: Optional[str] = None
 
+
 class GroBroConfigRegisterDef(BaseModel):
     growatt: GroBroConfigRegister
     homeassistant: HomeAssistantConfigRegister
 
+
 class GroBroRegisters(BaseModel):
     input_registers: dict[str, GroBroInputRegister]
     holding_registers: dict[str, GroBroHoldingRegister]
-    config_registers: dict[str, GroBroConfigRegisterDef] = {}
+    config_registers: dict[str, GroBroConfigRegisterDef] = Field(default_factory=dict)
+
 
 with resources.files(__package__).joinpath("growatt_neo_registers.json").open("rb") as f:
     KNOWN_NEO_REGISTERS = GroBroRegisters.model_validate(json.load(f))
@@ -164,6 +179,16 @@ with resources.files(__package__).joinpath("growatt_noah_registers.json").open("
     KNOWN_NOAH_REGISTERS = GroBroRegisters.model_validate(json.load(f))
 with resources.files(__package__).joinpath("growatt_nexa_registers.json").open("rb") as f:
     KNOWN_NEXA_REGISTERS = GroBroRegisters.model_validate(json.load(f))
+
+# NOAH firmware 19.19.14 exposes the same verified telemetry fields as NEXA at
+# these addresses. Reuse the canonical NEXA definitions instead of duplicating
+# them in a second large JSON map. Deep copies keep later mutations isolated.
+for _shared_name in ("pv1Temp", "pv2Temp", "systemTemp", "batterySoh"):
+    if _shared_name not in KNOWN_NOAH_REGISTERS.input_registers:
+        KNOWN_NOAH_REGISTERS.input_registers[_shared_name] = (
+            KNOWN_NEXA_REGISTERS.input_registers[_shared_name].model_copy(deep=True)
+        )
+
 with resources.files(__package__).joinpath("growatt_spf_registers.json").open("rb") as f:
     KNOWN_SPF_REGISTERS = GroBroRegisters.model_validate(json.load(f))
 # MIN TL-XH2 hybrid inverter family (ShineWiFi-X2 dongle, ZGQ serial prefix).
