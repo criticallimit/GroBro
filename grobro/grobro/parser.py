@@ -3,24 +3,24 @@
 
 import logging
 import struct
-from itertools import cycle
 
 import grobro.model as model
 
 LOG = logging.getLogger(__name__)
+_SCRAMBLE_MASK = b"Growatt"
+_SCRAMBLE_MASK_LEN = len(_SCRAMBLE_MASK)
 
 
 def unscramble(decdata: bytes):
     """Unscramble Growatt payload bytes using the repeating ``Growatt`` mask."""
-    ndecdata = len(decdata)
-    mask = "Growatt"
-    hex_mask = ["{:02x}".format(ord(x)) for x in mask]
-    nmask = len(hex_mask)
-
-    unscrambled = bytes(decdata[0:8])
-    for i, j in zip(range(0, ndecdata - 8), cycle(range(0, nmask))):
-        unscrambled += bytes([decdata[i + 8] ^ int(hex_mask[j], 16)])
-    return unscrambled
+    # Growatt leaves the first eight protocol bytes unchanged and XORs every
+    # following byte with the repeating ASCII mask. Mutating one bytearray avoids
+    # the quadratic bytes concatenation and repeated hex/int conversions used by
+    # the legacy implementation while remaining bit-for-bit identical.
+    result = bytearray(decdata)
+    for index in range(8, len(result)):
+        result[index] ^= _SCRAMBLE_MASK[(index - 8) % _SCRAMBLE_MASK_LEN]
+    return bytes(result)
 
 
 def parse_config_type(data, offset) -> model.DeviceConfig:
