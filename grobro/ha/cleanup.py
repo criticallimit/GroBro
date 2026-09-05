@@ -151,13 +151,7 @@ def _clean_discovery_payload(client, device_id: str, data: dict) -> dict:
 
     device_meta = data.get("dev")
     if isinstance(device_meta, dict):
-        # Keep identifiers unchanged so Home Assistant's device identity remains
-        # stable. Correct only visible metadata.
         device_meta["serial_number"] = _configured_serial(client, device_id)
-
-        # Home Assistant MQTT discovery has no arbitrary ip_address field in its
-        # device metadata. configuration_url is the supported way to expose a
-        # device-local management address in the device information card.
         local_ip = _configured_local_ip(client, device_id)
         if local_ip:
             device_meta["configuration_url"] = _configuration_url_for_ip(local_ip)
@@ -169,13 +163,8 @@ def _clean_discovery_payload(client, device_id: str, data: dict) -> dict:
         for component in components.values():
             if not isinstance(component, dict):
                 continue
-
-            # These are GroBro model/control fields, not MQTT discovery keys.
             component.pop("publish", None)
             component.pop("type", None)
-
-            # Config entries with platform=sensor are read-only. A command topic
-            # makes no sense for an MQTT sensor and can cause HA validation noise.
             if component.get("platform") == "sensor":
                 component.pop("command_topic", None)
 
@@ -200,6 +189,22 @@ def install_ha_cleanup_hook() -> None:
         return result
 
     client_cls.__init__ = init_clean
+
+    original_on_connect = client_cls._Client__on_connect
+
+    def on_connect_clean(self, client, userdata, flags, reason_code, properties):
+        # A broker restart can lose retained discovery/availability while the
+        # process-local caches survive. Invalidate only publish caches so the next
+        # telemetry packet recreates retained state without disturbing device data.
+        getattr(self, "_last_availability", {}).clear()
+        getattr(self, "_discovery_signature", {}).clear()
+        getattr(self, "_discovery_payload_cache", {}).clear()
+        discovery_cache = getattr(self, "_discovery_cache", None)
+        if discovery_cache is not None:
+            discovery_cache.clear()
+        return original_on_connect(self, client, userdata, flags, reason_code, properties)
+
+    client_cls._Client__on_connect = on_connect_clean
 
     def set_config_clean(self, device_id, config):
         config_path = f"config_{device_id}.json"
@@ -231,8 +236,6 @@ def install_ha_cleanup_hook() -> None:
     client_cls.set_config = set_config_clean
 
     def publish_availability_clean(self, device_id: str, online: bool):
-        # Telemetry calls this for every packet. Retained MQTT availability only
-        # needs publishing when the state actually changes.
         availability = getattr(self, "_last_availability", None)
         if availability is None:
             availability = {}
@@ -257,8 +260,6 @@ def install_ha_cleanup_hook() -> None:
 
     if ha_client_module.DEVICE_TIMEOUT > 0:
         def reset_device_timer_clean(self, device_id: str):
-            # Keep one timer per device. Every telemetry packet only updates the
-            # monotonic last-seen deadline; the timer reschedules itself if needed.
             now = time.monotonic()
             lock = getattr(self, "_device_timer_lock", None)
             if lock is None:
