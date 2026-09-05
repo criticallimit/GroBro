@@ -18,4 +18,4 @@ def test_real_noah_0103_contains_holding_register_block_250_374():
     assert len(block.values) == 125
     registers = block.registers
     assert registers[250] == 100
-    assert registers[251] == 5
+    assert registers[251] == 20
