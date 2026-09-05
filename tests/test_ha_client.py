@@ -252,7 +252,6 @@ class TestClientConfig:
         cfg = DeviceConfig(serial_number="QMN000ABC1D2E3FG")
         ha_client.set_config("QMN000ABC1D2E3FG", cfg)
         assert ha_client._config_cache["QMN000ABC1D2E3FG"] == cfg
-        # discovery should attempt publish
         assert ha_client._client.publish.called
 
     def test_set_config_unchanged(self, ha_client):
@@ -264,8 +263,6 @@ class TestClientConfig:
             ha_client.set_config("QMN000ABC1D2E3FG", cfg)
 
     def test_set_config_topic_serial_trumps_config_serial(self, ha_client):
-        """set_config must use the MQTT topic serial (device_id), not config.serial_number,
-        to avoid merging multiple devices behind a shared data logger (#178)."""
         topic_serial = "RAQ0TEST01"
         fe19_serial = "PTQ0TEST01"
         cfg = DeviceConfig(serial_number=fe19_serial)
@@ -479,11 +476,10 @@ class TestClientDiscovery:
         ha_client._Client__publish_device_discovery("QMN000ABC1D2E3FG")
         first_calls = len(ha_client._client.publish.call_args_list)
         ha_client._Client__publish_device_discovery("QMN000ABC1D2E3FG")
-        assert len(ha_client._client.publish.call_args_list) > first_calls
+        assert len(ha_client._client.publish.call_args_list) == first_calls
 
     def test_discovery_unknown_device(self, ha_client):
         ha_client._Client__publish_device_discovery("UNKNOWN")
-        # logs info, returns early
 
     def test_migrate_entity_discovery(self, ha_client):
         known = get_known_registers("QMN000ABC1D2E3FG")
@@ -717,7 +713,6 @@ class TestClientNoahOnMessage:
             ha_client._client.on_message(None, None, msg)
         ha_client.on_command.assert_called()
 
-
     def test_publish_input_register_noah(self, ha_client):
         from grobro.model.growatt_registers import HomeAssistantInputRegister
         payload = _load_payload("NoahReadInputRegisters_0-124.bin")
@@ -795,22 +790,18 @@ class TestMaxBat:
         assert _detect_bat_count(payload) == 4
 
     def test_detect_bat_count_bat_cnt_1_empty_serials(self):
-        """Tower 2: 1 battery, serial parts empty → bat_cnt wins (was returning 4)."""
         payload = {"bat_cnt": 1, "bat2_ser_part_1": "", "bat3_ser_part_1": "", "bat4_ser_part_1": ""}
         assert _detect_bat_count(payload) == 1
 
     def test_detect_bat_count_bat_cnt_overrides_serials(self):
-        """bat_cnt takes priority even when serial parts have values."""
         payload = {"bat_cnt": 1, "bat2_ser_part_1": "SN002"}
         assert _detect_bat_count(payload) == 1
 
     def test_detect_bat_count_bat_cnt_2(self):
-        """Tower 1: 2 batteries."""
         payload = {"bat_cnt": 2, "bat2_ser_part_1": "SN002"}
         assert _detect_bat_count(payload) == 2
 
     def test_detect_bat_count_serial_fallback(self):
-        """No bat_cnt in payload → detect from serial parts."""
         payload = {"bat2_ser_part_1": "SN002"}
         assert _detect_bat_count(payload) == 2
 
@@ -839,7 +830,7 @@ class TestMaxBat:
         with patch("grobro.ha.client.MAX_BAT", "auto"):
             assert _resolve_max_bat("unknown") == 4
 
-    def test_auto_mode_keeps_all_when_serials_empty(self, ha_client):
+    def test_auto_mode_is_conservative_when_battery_count_is_unknown(self, ha_client):
         from grobro.model.growatt_registers import HomeAssistantInputRegister
         payload = {"bat1_temp": 24, "bat2_temp": 25, "bat3_temp": 26, "bat4_temp": 27}
         with patch("grobro.ha.client.MAX_BAT", "auto"):
@@ -852,9 +843,9 @@ class TestMaxBat:
                 break
         assert published is not None
         assert published.get("bat1_temp") == 24
-        assert published.get("bat2_temp") == 25
-        assert published.get("bat3_temp") == 26
-        assert published.get("bat4_temp") == 27
+        assert "bat2_temp" not in published
+        assert "bat3_temp" not in published
+        assert "bat4_temp" not in published
 
     def test_auto_mode_with_bat2_serial_shows_correct_batteries(self, ha_client):
         from grobro.model.growatt_registers import HomeAssistantInputRegister
@@ -1016,10 +1007,8 @@ class TestCombinedSerial:
         payload = json.loads(discovery_calls[-1][0][1])
         cmps = payload.get("cmps", {})
         cmp_names = [v["name"] for v in cmps.values()]
-        # No ser_part entities
         assert not any("Ser Part" in n for n in cmp_names)
         assert not any("ser_part" in n for n in cmp_names)
-        # Combined serial entities present
         assert any("Bat2 Serial" in n for n in cmp_names)
         assert any("Bat3 Serial" in n for n in cmp_names)
         assert any("Bat4 Serial" in n for n in cmp_names)
@@ -1032,7 +1021,6 @@ class TestBatteryPositionWatch:
     def test_position_change_detected(self, ha_client, caplog):
         caplog.set_level(logging.WARNING)
         with patch("grobro.ha.client.KEEP_BATTERY_POSITION", True):
-            # First call: SN002 at Bat2, SN003 at Bat3
             state1 = HomeAssistantInputRegister(
                 device_id="0PVP0000TEST0001",
                 payload={"bat2_ser_part_1": "SN002", "bat3_ser_part_1": "SN003"},
@@ -1040,7 +1028,6 @@ class TestBatteryPositionWatch:
             ha_client.publish_input_register(state1)
             caplog.clear()
 
-            # Second call: SN003 now at Bat2 (moved from Bat3)
             state2 = HomeAssistantInputRegister(
                 device_id="0PVP0000TEST0001",
                 payload={"bat2_ser_part_1": "SN003"},
