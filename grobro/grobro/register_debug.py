@@ -15,6 +15,7 @@ import threading
 from datetime import datetime, timezone
 
 from grobro.grobro import parser as growatt_parser
+from grobro.grobro.noah_0103 import find_embedded_register_block
 from grobro.model.modbus_message import GrowattModbusMessage
 
 LOG = logging.getLogger(__name__)
@@ -110,17 +111,13 @@ def _write_modbus_message(message: GrowattModbusMessage) -> None:
 
 
 def _write_noah_0103(result: dict) -> None:
-    """Record NOAH 0x0103 holding-register dump values by payload index.
-
-    The current GroBro decoder exposes a sequential list of 16-bit values but no
-    confirmed Modbus start address. Therefore these values are deliberately NOT
-    labelled as real register numbers. They are logged as ``value_index`` until a
-    start-address field is confirmed from protocol evidence.
-    """
+    """Record both opaque 0x0103 values and any confirmed embedded Modbus block."""
     now = datetime.now(timezone.utc).isoformat()
     device_id = result.get("device_id", "")
     records: list[dict] = []
 
+    # Preserve the historical/raw view by value index because the prefix portion
+    # of 0x0103 remains only partially understood.
     for value_index, value in enumerate(result.get("registers", [])):
         key = (device_id, 0x0103, value_index)
         previous = _LAST_VALUES.get(key)
@@ -152,6 +149,47 @@ def _write_noah_0103(result: dict) -> None:
             }
         )
 
+    embedded = result.get("embedded_register_block")
+    if isinstance(embedded, dict):
+        start = embedded.get("start")
+        end = embedded.get("end")
+        values = embedded.get("values", [])
+        block_offset = embedded.get("offset")
+        if isinstance(start, int) and isinstance(end, int):
+            for index, value in enumerate(values):
+                register_no = start + index
+                if register_no > end or register_no > REGISTER_DEBUG_MAX_REGISTER:
+                    break
+                # Separate cache namespace from raw-index records and ordinary
+                # Modbus callbacks while still exposing function=3 in the JSON.
+                key = (device_id, 0x010303, register_no)
+                previous = _LAST_VALUES.get(key)
+                changed = previous is None or previous != value
+                _LAST_VALUES[key] = value
+                if REGISTER_DEBUG_CHANGES_ONLY and not changed:
+                    continue
+                records.append(
+                    {
+                        "captured_at": now,
+                        "device_timestamp": None,
+                        "device_id": device_id,
+                        "source": "noah_0103_modbus",
+                        "message_type": "0x0103",
+                        "function": 3,
+                        "block_offset": block_offset,
+                        "block_start": start,
+                        "block_end": end,
+                        "register": register_no,
+                        "uint16": value,
+                        "int16": _signed_16(value),
+                        "hex": f"0x{value:04X}",
+                        "high_byte": (value >> 8) & 0xFF,
+                        "low_byte": value & 0xFF,
+                        "previous": previous,
+                        "changed": changed,
+                    }
+                )
+
     _append_records(records)
 
 
@@ -181,6 +219,14 @@ def install_register_debug_hook() -> None:
         def parse_noah_0103_and_dump(data):
             result = _ORIGINAL_NOAH_0103(data)
             try:
+                block = find_embedded_register_block(data)
+                if block is not None:
+                    result["embedded_register_block"] = {
+                        "offset": block.offset,
+                        "start": block.start,
+                        "end": block.end,
+                        "values": list(block.values),
+                    }
                 _write_noah_0103(result)
             except Exception as exc:
                 LOG.warning("NOAH 0x0103 debug dump failed: %s", exc)
