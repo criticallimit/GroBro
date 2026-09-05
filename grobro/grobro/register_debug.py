@@ -26,10 +26,12 @@ REGISTER_DEBUG_CHANGES_ONLY = (
 )
 
 try:
-    REGISTER_DEBUG_MAX_REGISTER = int(os.getenv("REGISTER_DEBUG_MAX_REGISTER", "3000"))
+    REGISTER_DEBUG_MAX_REGISTER = int(
+        os.getenv("REGISTER_DEBUG_MAX_REGISTER", "65535")
+    )
 except (TypeError, ValueError):
-    REGISTER_DEBUG_MAX_REGISTER = 3000
-    LOG.warning("Invalid REGISTER_DEBUG_MAX_REGISTER; falling back to 3000")
+    REGISTER_DEBUG_MAX_REGISTER = 65535
+    LOG.warning("Invalid REGISTER_DEBUG_MAX_REGISTER; falling back to 65535")
 
 REGISTER_DEBUG_MAX_REGISTER = max(0, min(65535, REGISTER_DEBUG_MAX_REGISTER))
 
@@ -136,7 +138,10 @@ def _write_noah_0103(result: dict) -> None:
                 "message_type": "0x0103",
                 "addressing": "unknown",
                 "value_index": value_index,
-                "value_count": result.get("register_count", len(result.get("registers", []))),
+                "value_count": result.get(
+                    "register_count",
+                    len(result.get("registers", [])),
+                ),
                 "uint16": value,
                 "int16": _signed_16(value),
                 "hex": f"0x{value:04X}",
