@@ -113,13 +113,13 @@ docker run --detach \
 | `MQTT_CLIENT_SUFFIX` | ❌ No    | Optional suffix appended to all MQTT client IDs (grobro-ha and grobro-grobro). Allows running multiple GroBro instances in parallel against the same MQTT broker (e.g. prod, test). |
 | `HA_BASE_TOPIC`      | ❌ No    | Base MQTT topic used for Home Assistant auto-discovery and sensor states   |
 | `GROWATT_CLOUD`      | ❌ No    | Set to `true` to redirect messages to and from the Growatt Cloud. This is turned off by default. Supports a comma-separated list of device serials (e.g. `123456789,987654321`) for selective forwarding. |
-| `GROWATT_CLOUD_CONFIG_FILTER`  | ❌ No | Set to `true` to prevent forwarding config messages. This protects the datalogger from remote setting changes initiated by the Growatt Cloud. |
+| `GROWATT_CLOUD_CONFIG_FILTER`  | ❌ No | Set to `true` to block configuration/control messages coming **from the Growatt Cloud to the local device**. Normal device telemetry can still be forwarded to the cloud. |
 | `LOG_LEVEL`          | ❌ No    | Sets the logging level to either `ERROR`, `DEBUG`, or `INFO`. If not set `ERROR` is used. |
-| `DUMP_MESSAGES`      | ❌ No    | Dumps every received messages into `/dump` for later in-depth inspection. |
+| `DUMP_MESSAGES`      | ❌ No    | Dumps every received raw MQTT message for later inspection. In this debug fork all messages are appended to `DUMP_DIR/messages.jsonl`; the original payload bytes are preserved as Base64 instead of creating one `.bin` file per message. |
 | `DEVICE_TIMEOUT` | ❌ No | Set the timeout in seconds for device communication. Default is `0` (disabled). Note: This must be greater than 0 for any availability/online tracking to work. Recommended: `300`+ seconds. After this time without data, the device is considered "offline." |
-| `AVAILABILITY_SENSOR` | ❌ No | Requires `DEVICE_TIMEOUT > 0`. Set to `true` to expose availability as a dedicated `online` binary sensor. If `false` (default), the device and all its entities will be marked as "unavailable" (grayed out) in Home Assistant when the timeout is reached. |
-| `MAX_SLOTS`     | ❌ No    | Set max available Slots for Battery configuration (Noah = max 9) |
-| `MAX_BAT`       | ❌ No    | Battery pack count in Home Assistant. Default `"auto"` detects from serial number presence. Set to a number (e.g. `1`) to override. |
+| `AVAILABILITY_SENSOR` | ❌ No | Requires `DEVICE_TIMEOUT > 0`. Set to `true` to expose availability as a dedicated `online` binary sensor in addition to the main MQTT availability state. |
+| `MAX_SLOTS`     | ❌ No    | Set max available Slots for Battery configuration (NOAH = max 9). |
+| `MAX_BAT`       | ❌ No    | Battery pack count in Home Assistant. Default `"auto"` prefers the NOAH `bat_cnt` telemetry value when available and falls back conservatively to detected battery serials. Set a number (e.g. `3`) to override. |
 | `PUBLISH_SENSORS_RETAINED`     | ❌ No    | Set to `true` to publish sensor states with the MQTT retain flag enabled. Default is `false`.  |
 | `KEEP_BATTERY_POSITION` | ❌ No | Set to `true` to enable NOAH battery position change detection. When the inverter re-enumerates its battery stack and a battery moves to a different slot, a warning is logged. Default is `false`. |
 
@@ -169,8 +169,8 @@ Both the Nexa 2000 and NOAH 2000 utilize a highly optimized **"Shadow RAM / Lazy
 To ensure a reliable and clean local control loop without relying on cloud APIs, the following setup is highly recommended by Growatt engineers for HA users:
 
 **The Fail-Safe Baseline (Do this once):**
-*   Set `default_power` (Reg 322) to a conservative, fixed value (e.g., 100W or 150W). 
-*   *Why?* Because dynamic values are only stored in RAM, a sudden power loss will wipe them. If the device reboots and Home Assistant is offline, the inverter will safely fall back to this basic household load baseline stored in the EEPROM.
+* Set `default_power` to a conservative, fixed value (e.g. 100 W or 150 W). The register differs by product: **NOAH uses Reg 252; NEXA uses Reg 322**.
+* *Why?* Because dynamic values are only stored in RAM, a sudden power loss will wipe them. If the device reboots and Home Assistant is offline, the inverter will safely fall back to this basic household load baseline stored in the EEPROM.
 
 **Configure Static Slot Parameters (Do this once):**
 To keep Modbus traffic clean and reduce unnecessary bus load, configure the static parameters on Slot 1 just once:
