@@ -9,6 +9,7 @@ import os
 import re
 import ssl
 import struct
+from functools import lru_cache
 from typing import Callable
 
 import paho.mqtt.client as mqtt
@@ -37,15 +38,16 @@ _DEVICE_ID_RE = re.compile(r"[^A-Za-z0-9]")
 _FALSE_VALUES = {"", "false", "0", "no", "off"}
 
 
+@lru_cache(maxsize=256)
 def _extract_device_id(topic: str) -> str:
-    """Extract the device serial from the last segment of an MQTT topic.
+    """Extract and cache the device serial from the last MQTT topic segment.
 
     Growatt device serials are alphanumeric (A-Z, 0-9). Some dongles
     (e.g. ShineWiFi-X2 / XH family) include stray trailing bytes in the
     SUBSCRIBE topic, such as `s/33/ZGQ0F5601J?\\x18`. Strip everything
     that isn't a valid serial character.
     """
-    return _DEVICE_ID_RE.sub("", str(topic).split("/")[-1])
+    return _DEVICE_ID_RE.sub("", str(topic).rsplit("/", 1)[-1])
 
 
 def _known_registers_for_device(device_id: str):
@@ -107,7 +109,7 @@ DUMP_DIR = os.getenv("DUMP_DIR", "/dump")
 MQTT_PROP_FORWARD_GROWATT = mqtt.Properties(mqtt.PacketTypes.PUBLISH)
 MQTT_PROP_FORWARD_GROWATT.UserProperty = [("forwarded-for", "growatt")]
 
-# Property to flag messages forwarded from ha
+# Property to flag messages as forwarded from ha
 MQTT_PROP_FORWARD_HA = mqtt.Properties(mqtt.PacketTypes.PUBLISH)
 MQTT_PROP_FORWARD_HA.UserProperty = [("forwarded-for", "ha")]
 
@@ -254,8 +256,9 @@ class Client:
             LOG.debug("Message forwarded from %s. Skipping...", forwarded_for)
             return
 
-        file_name = get_property(msg, "file")
-        LOG.debug("Received message (%s): %s: %s", file_name, msg.topic, msg.payload)
+        if LOG.isEnabledFor(logging.DEBUG):
+            file_name = get_property(msg, "file")
+            LOG.debug("Received message (%s): %s: %s", file_name, msg.topic, msg.payload)
         if DUMP_MESSAGES:
             dump_message_binary(msg.topic, msg.payload)
         try:
