@@ -1,3 +1,15 @@
+## v2.8.4
+
+### Runtime performance and lower diagnostic overhead
++ Reduced hot-path work for normal `LOG_LEVEL=ERROR` operation by avoiding eager hex-string formatting of decrypted MQTT payloads unless DEBUG logging is actually enabled.
++ Cached MQTT topic-to-device-id parsing and stable Home Assistant battery-key parsing to avoid repeating regex/string work for every telemetry packet.
++ Avoided debug-only MQTT property lookups when DEBUG logging is disabled and added a direct MQTT v5 `UserProperty` fast path before the compatibility JSON fallback.
++ Converted runtime timeout/config timers to daemon timers and retained explicit shutdown cancellation so timers no longer keep processes/tests alive unnecessarily.
++ Optimized passive register debugging in `REGISTER_DEBUG_CHANGES_ONLY` mode so an unchanged Modbus block is skipped before per-register unpacking and JSON record construction.
++ Added regression coverage for the unchanged-register-block fast path.
++ Changed the add-on default `REGISTER_DEBUG` from `true` to `false`. `DUMP_MESSAGES` remains disabled by default and the normal log level remains `ERROR`, so diagnostic parsing/file I/O is off during normal operation unless explicitly enabled.
++ No Home Assistant entity IDs, MQTT state topics, register meanings, device-family mappings, control semantics or protocol write limits were changed by these optimizations.
+
 ## v2.8.3
 
 ### CI, release pipeline and identity hardening
