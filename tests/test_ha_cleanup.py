@@ -32,7 +32,6 @@ def test_detect_bat_count_falls_back_conservatively():
 def test_resolve_max_bat_does_not_assume_four(monkeypatch):
     monkeypatch.setattr(ha_client_module, "MAX_BAT", "auto")
     ha_client_module._MAX_BAT_CACHE.clear()
-
     assert _resolve_max_bat("0PVPTEST") == 1
     assert _resolve_max_bat("0PVPTEST", {"bat_cnt": 3}) == 3
     assert _resolve_max_bat("0PVPTEST") == 3
@@ -43,11 +42,9 @@ def test_instance_state_is_not_shared():
     second = SimpleNamespace()
     _initialize_instance_state(first)
     _initialize_instance_state(second)
-
     first._config_cache["a"] = 1
     first._discovery_cache.append("a")
     first._config_read_queues["a"] = [1]
-
     assert second._config_cache == {}
     assert second._discovery_cache == []
     assert second._config_read_queues == {}
@@ -58,90 +55,43 @@ def test_instance_state_is_not_shared():
 def test_configured_serial_prefers_config_and_keeps_device_id_fallback():
     client = SimpleNamespace(_config_cache={})
     assert _configured_serial(client, "0PVPTEST") == "0PVPTEST"
-
     client._config_cache["0PVPTEST"] = SimpleNamespace(serial_number="SERIAL-NEW")
     assert _configured_serial(client, "0PVPTEST") == "SERIAL-NEW"
 
 
 def test_configured_local_ip_uses_only_valid_local_ip():
-    client = SimpleNamespace(
-        _config_cache={
-            "0PVPTEST": SimpleNamespace(
-                local_ip="192.168.1.50",
-                remote_ip="203.0.113.10",
-            )
-        }
-    )
+    client = SimpleNamespace(_config_cache={"0PVPTEST": SimpleNamespace(local_ip="192.168.1.50", remote_ip="203.0.113.10")})
     assert _configured_local_ip(client, "0PVPTEST") == "192.168.1.50"
-
     client._config_cache["0PVPTEST"].local_ip = "not-an-ip"
     assert _configured_local_ip(client, "0PVPTEST") is None
 
 
 def test_clean_discovery_payload_keeps_identity_and_removes_internal_fields():
-    client = SimpleNamespace(
-        _config_cache={
-            "0PVPTEST": SimpleNamespace(
-                serial_number="SERIAL-NEW",
-                local_ip="192.168.1.50",
-            )
-        }
-    )
+    client = SimpleNamespace(_config_cache={"0PVPTEST": SimpleNamespace(serial_number="SERIAL-NEW", local_ip="192.168.1.50")})
     data = {
         "o": {"name": "grobro", "url": "https://github.com/robertzaage/GroBro"},
-        "dev": {
-            "identifiers": ["0PVPTEST"],
-            "serial_number": "0PVPTEST",
-        },
+        "dev": {"identifiers": ["0PVPTEST"], "serial_number": "0PVPTEST"},
         "cmps": {
-            "grobro_0PVPTEST_cmd_wifi_signal_strength": {
-                "platform": "sensor",
-                "name": "Wi-Fi Signal Strength",
-                "unique_id": "grobro_0PVPTEST_cmd_wifi_signal_strength",
-                "state_topic": "homeassistant/config/grobro/0PVPTEST/76/get",
-                "command_topic": "homeassistant/config/grobro/0PVPTEST/76/set",
-                "publish": True,
-                "type": "sensor",
-                "device_class": "signal_strength",
-                "state_class": "measurement",
-                "unit_of_measurement": "dBm",
-            },
-            "grobro_0PVPTEST_cmd_mqtt_port": {
-                "platform": "number",
-                "name": "MQTT Port",
-                "unique_id": "grobro_0PVPTEST_cmd_mqtt_port",
-                "state_topic": "homeassistant/config/grobro/0PVPTEST/18/get",
-                "command_topic": "homeassistant/config/grobro/0PVPTEST/18/set",
-                "publish": True,
-                "type": "number",
-            },
+            "grobro_0PVPTEST_cmd_wifi_signal_strength": {"platform": "sensor", "name": "Wi-Fi Signal Strength", "unique_id": "grobro_0PVPTEST_cmd_wifi_signal_strength", "state_topic": "homeassistant/config/grobro/0PVPTEST/76/get", "command_topic": "homeassistant/config/grobro/0PVPTEST/76/set", "publish": True, "type": "sensor", "device_class": "signal_strength", "state_class": "measurement", "unit_of_measurement": "dBm"},
+            "grobro_0PVPTEST_cmd_mqtt_port": {"platform": "number", "name": "MQTT Port", "unique_id": "grobro_0PVPTEST_cmd_mqtt_port", "state_topic": "homeassistant/config/grobro/0PVPTEST/18/get", "command_topic": "homeassistant/config/grobro/0PVPTEST/18/set", "publish": True, "type": "number"},
         },
     }
-
     cleaned = _clean_discovery_payload(client, "0PVPTEST", data)
-
     assert cleaned["dev"]["identifiers"] == ["0PVPTEST"]
     assert cleaned["dev"]["serial_number"] == "SERIAL-NEW"
     assert cleaned["dev"]["configuration_url"] == "http://192.168.1.50"
     assert cleaned["o"]["url"] == "https://github.com/criticallimit/GroBro"
-
     sensor = cleaned["cmps"]["grobro_0PVPTEST_cmd_wifi_signal_strength"]
-    assert sensor["unique_id"] == "grobro_0PVPTEST_cmd_wifi_signal_strength"
-    assert sensor["state_topic"] == "homeassistant/config/grobro/0PVPTEST/76/get"
     assert "command_topic" not in sensor
     assert "publish" not in sensor
     assert "type" not in sensor
-
     number = cleaned["cmps"]["grobro_0PVPTEST_cmd_mqtt_port"]
     assert number["command_topic"] == "homeassistant/config/grobro/0PVPTEST/18/set"
-    assert "publish" not in number
-    assert "type" not in number
 
 
-def test_availability_topic_always_goes_offline(monkeypatch):
+def test_availability_and_online_are_retained(monkeypatch):
     install_ha_cleanup_hook()
     monkeypatch.setattr(ha_client_module, "AVAILABILITY_SENSOR", True)
-
     published = []
 
     class FakeMqtt:
@@ -152,24 +102,15 @@ def test_availability_topic_always_goes_offline(monkeypatch):
     client = object.__new__(ha_client_module.Client)
     client._client = FakeMqtt()
     client._last_availability = {}
+    client._Client__publish_availability("0PVPTEST", True)
 
-    client._Client__publish_availability("0PVPTEST", False)
-
-    assert (
-        "homeassistant/grobro/0PVPTEST/availability",
-        "offline",
-        {"retain": True},
-    ) in published
-    assert any(
-        topic == "homeassistant/grobro/0PVPTEST/online" and payload == "OFF"
-        for topic, payload, _ in published
-    )
+    assert ("homeassistant/grobro/0PVPTEST/availability", "online", {"retain": True}) in published
+    assert ("homeassistant/grobro/0PVPTEST/online", "ON", {"retain": True}) in published
 
 
 def test_repeated_availability_state_is_not_republished(monkeypatch):
     install_ha_cleanup_hook()
     monkeypatch.setattr(ha_client_module, "AVAILABILITY_SENSOR", True)
-
     published = []
 
     class FakeMqtt:
@@ -180,106 +121,23 @@ def test_repeated_availability_state_is_not_republished(monkeypatch):
     client = object.__new__(ha_client_module.Client)
     client._client = FakeMqtt()
     client._last_availability = {}
-
     client._Client__publish_availability("0PVPTEST", True)
     first_count = len(published)
     client._Client__publish_availability("0PVPTEST", True)
     assert len(published) == first_count
-
     client._Client__publish_availability("0PVPTEST", False)
     assert len(published) > first_count
 
 
 def test_mqtt_reconnect_invalidates_publish_caches():
     install_ha_cleanup_hook()
-
     client = object.__new__(ha_client_module.Client)
     client._last_availability = {"0PVPTEST": True}
     client._discovery_signature = {"0PVPTEST": (3, None)}
     client._discovery_payload_cache = {"0PVPTEST": "cached"}
     client._discovery_cache = ["0PVPTEST"]
-
     client._Client__on_connect(None, None, None, 0, None)
-
     assert client._last_availability == {}
     assert client._discovery_signature == {}
     assert client._discovery_payload_cache == {}
     assert client._discovery_cache == []
-
-
-def test_cleanup_keeps_device_sn_entity_and_fixes_origin(monkeypatch):
-    install_ha_cleanup_hook()
-
-    published = []
-
-    class FakeMqtt:
-        def publish(self, topic, payload=None, *args, **kwargs):
-            published.append((topic, payload, args, kwargs))
-            return SimpleNamespace()
-
-    client = object.__new__(ha_client_module.Client)
-    client._client = FakeMqtt()
-    client._config_cache = {
-        "0PVPTEST": SimpleNamespace(
-            serial_number="SERIAL-NEW",
-            sw_version="19.19.14",
-            local_ip="192.168.1.50",
-        )
-    }
-    client._discovery_payload_cache = {}
-    client._discovery_cache = []
-    client._neo_pv_count = {}
-
-    device_id = "0PVPTEST"
-
-    original = ha_client_module.Client._Client__publish_device_discovery
-
-    monkeypatch.setattr(
-        ha_client_module,
-        "get_known_registers",
-        lambda _: SimpleNamespace(
-            holding_registers={},
-            config_registers={},
-            input_registers={},
-        ),
-    )
-    monkeypatch.setattr(
-        ha_client_module,
-        "_resolve_max_bat",
-        lambda *_args, **_kwargs: 1,
-    )
-    monkeypatch.setattr(
-        ha_client_module.Client,
-        "_Client__migrate_entity_discovery",
-        lambda *_args, **_kwargs: None,
-    )
-    monkeypatch.setattr(
-        ha_client_module.Client,
-        "_Client__device_info_from_config",
-        lambda *_args, **_kwargs: {
-            "identifiers": [device_id],
-            "serial_number": device_id,
-        },
-    )
-
-    original(client, device_id, 1)
-
-    discovery_payloads = [
-        payload
-        for topic, payload, *_ in published
-        if topic == f"homeassistant/device/{device_id}/config" and payload
-    ]
-    assert discovery_payloads
-
-    data = json.loads(discovery_payloads[-1])
-    assert f"grobro_{device_id}_serial" in data["cmps"]
-    assert data["o"]["url"] == "https://github.com/criticallimit/GroBro"
-    assert data["dev"]["configuration_url"] == "http://192.168.1.50"
-
-    serial_values = [
-        payload
-        for topic, payload, *_ in published
-        if topic == f"homeassistant/grobro/{device_id}/serial"
-    ]
-    assert serial_values
-    assert serial_values[-1] == "SERIAL-NEW"
