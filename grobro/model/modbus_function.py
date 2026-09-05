@@ -3,7 +3,7 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from grobro.model.modbus_message import GrowattModbusFunction
+from grobro.model.modbus_message import GrowattModbusFunction, MODBUS_FUNCTION_VALUES
 
 MODBUS_COMMAND_STRUCT = ">HHHBB30sHH"
 MODBUS_COMMAND_SIZE = struct.calcsize(MODBUS_COMMAND_STRUCT)
@@ -15,14 +15,14 @@ def _unpack_command_header(buffer: bytes):
     if len(buffer) < MODBUS_COMMAND_SIZE:
         return None
     try:
-        values = struct.unpack(MODBUS_COMMAND_STRUCT, buffer[:MODBUS_COMMAND_SIZE])
+        values = struct.unpack_from(MODBUS_COMMAND_STRUCT, buffer, 0)
     except struct.error:
         return None
 
     header_id, constant_7, msg_len, device_address, function, *_ = values
     if header_id != 1 or constant_7 != 7 or device_address != 1:
         return None
-    if function not in [entry.value for entry in GrowattModbusFunction]:
+    if function not in MODBUS_FUNCTION_VALUES:
         return None
 
     # msg_len describes the packet through the final command/value byte while
