@@ -18,6 +18,7 @@ def test_changes_only_keeps_initial_state_and_then_only_changes(tmp_path, monkey
     monkeypatch.setattr(register_debug, "REGISTER_DEBUG_CHANGES_ONLY", True)
     monkeypatch.setattr(register_debug, "REGISTER_DEBUG_MAX_REGISTER", 3000)
     register_debug._LAST_VALUES.clear()
+    register_debug._LAST_BLOCK_VALUES.clear()
 
     block = GrowattModbusBlock(
         start=94,
@@ -50,10 +51,44 @@ def test_changes_only_keeps_initial_state_and_then_only_changes(tmp_path, monkey
     assert records[-1]["uint16"] == 3112
 
 
+def test_unchanged_block_skips_per_register_unpack(tmp_path, monkeypatch):
+    monkeypatch.setattr(register_debug, "REGISTER_DEBUG_DIR", str(tmp_path))
+    monkeypatch.setattr(register_debug, "REGISTER_DEBUG_CHANGES_ONLY", True)
+    register_debug._LAST_VALUES.clear()
+    register_debug._LAST_BLOCK_VALUES.clear()
+
+    message = GrowattModbusMessage(
+        unknown=0,
+        device_id="QMNTEST",
+        function=GrowattModbusFunction.READ_INPUT_REGISTER,
+        register_blocks=[
+            GrowattModbusBlock(
+                start=0,
+                end=3,
+                values=struct.pack(">HHHH", 1, 2, 3, 4),
+            )
+        ],
+    )
+    register_debug._write_modbus_message(message)
+
+    original_unpack_from = register_debug.struct.unpack_from
+    calls = 0
+
+    def counted_unpack_from(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return original_unpack_from(*args, **kwargs)
+
+    monkeypatch.setattr(register_debug.struct, "unpack_from", counted_unpack_from)
+    register_debug._write_modbus_message(message)
+    assert calls == 0
+
+
 def test_noah_0103_is_logged_as_index_not_confirmed_register(tmp_path, monkeypatch):
     monkeypatch.setattr(register_debug, "REGISTER_DEBUG_DIR", str(tmp_path))
     monkeypatch.setattr(register_debug, "REGISTER_DEBUG_CHANGES_ONLY", True)
     register_debug._LAST_VALUES.clear()
+    register_debug._LAST_BLOCK_VALUES.clear()
 
     register_debug._write_noah_0103(
         {
@@ -75,6 +110,7 @@ def test_noah_0103_watch_registers_are_flagged_and_changes_retained(tmp_path, mo
     monkeypatch.setattr(register_debug, "REGISTER_DEBUG_CHANGES_ONLY", True)
     monkeypatch.setattr(register_debug, "REGISTER_DEBUG_MAX_REGISTER", 65535)
     register_debug._LAST_VALUES.clear()
+    register_debug._LAST_BLOCK_VALUES.clear()
 
     first_values = [0] * 55
     # Embedded block starts at R250, so indexes 49..54 are R299..R304.
