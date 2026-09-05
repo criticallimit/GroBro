@@ -1,6 +1,6 @@
 name: "GroBro Register Debug"
 description: "Growatt MQTT Message Broker with passive Modbus register logging"
-version: "2.7.9"
+version: "2.8.0"
 slug: "grobro_register_debug"
 init: false
 url: https://github.com/criticallimit/GroBro
