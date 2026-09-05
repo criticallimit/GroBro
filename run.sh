@@ -11,6 +11,32 @@ if [ -f "$JSON_FILE" ]; then
     eval "$(jq -r 'to_entries[] | "export \(.key)=\(.value|tostring|@sh)"' "$JSON_FILE")"
 fi
 
+# If the user did not explicitly set TZ, inherit Home Assistant's configured
+# timezone from Supervisor. This matters for automatic device clock sync and
+# keeps the add-on correct across DST changes and non-European installations.
+if [ -z "${TZ:-}" ] && [ -n "${SUPERVISOR_TOKEN:-}" ]; then
+    HA_TZ="$(python - <<'PY'
+import json
+import os
+import urllib.request
+
+try:
+    request = urllib.request.Request(
+        "http://supervisor/info",
+        headers={"Authorization": f"Bearer {os.environ['SUPERVISOR_TOKEN']}"},
+    )
+    with urllib.request.urlopen(request, timeout=3) as response:
+        payload = json.load(response)
+    print(payload.get("data", {}).get("timezone", ""), end="")
+except Exception:
+    pass
+PY
+)"
+    if [ -n "$HA_TZ" ]; then
+        export TZ="$HA_TZ"
+    fi
+fi
+
 # Keep GroBro's relative config_*.json files persistent across add-on rebuilds.
 # The application code remains under /app and is added explicitly to PYTHONPATH.
 RUNTIME_DIR="/data/GroBro"
