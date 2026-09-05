@@ -4,12 +4,35 @@ import json
 import pytest
 
 from grobro.grobro import cleanup
+from grobro.grobro.builder import scramble
 from grobro.grobro.cleanup import (
     _build_config_read_message,
     _build_config_write_message,
+    _noah_heater_state_from_packet,
     _validate_device_id,
     _validate_register_no,
 )
+
+
+def _noah_status_packet(heater_value: int, message_type: int = 0x0104) -> bytes:
+    plain = bytearray(109)
+    plain[6:8] = message_type.to_bytes(2, "big")
+    plain[108] = heater_value
+    return scramble(bytes(plain))
+
+
+def test_noah_heater_uses_validated_status_frame_byte():
+    assert _noah_heater_state_from_packet(_noah_status_packet(0), "0PVPTEST") == "Off"
+    assert _noah_heater_state_from_packet(_noah_status_packet(1), "0PVPTEST") == "1 On"
+    assert _noah_heater_state_from_packet(_noah_status_packet(7), "0PVPTEST") == "1&2&3 On"
+    assert _noah_heater_state_from_packet(_noah_status_packet(15), "0PVPTEST") == "All On"
+
+
+def test_noah_heater_does_not_guess_unsupported_packets():
+    assert _noah_heater_state_from_packet(_noah_status_packet(1), "QMNTEST") is None
+    assert _noah_heater_state_from_packet(_noah_status_packet(1, 0x0103), "0PVPTEST") is None
+    assert _noah_heater_state_from_packet(_noah_status_packet(16), "0PVPTEST") is None
+    assert _noah_heater_state_from_packet(b"short", "0PVPTEST") is None
 
 
 def test_raw_dump_appends_all_messages_to_one_jsonl_file(tmp_path, monkeypatch):
