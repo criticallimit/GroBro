@@ -6,6 +6,7 @@ correcting legacy runtime behavior in this debug fork.
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import logging
 import os
@@ -47,6 +48,32 @@ def _configured_serial(client, device_id: str) -> str:
     if serial and str(serial).strip():
         return str(serial).strip()
     return device_id
+
+
+def _configured_local_ip(client, device_id: str) -> str | None:
+    """Return the validated local IP of the device/master, never the broker IP."""
+    config = getattr(client, "_config_cache", {}).get(device_id)
+    value = getattr(config, "local_ip", None) if config else None
+    if not value:
+        return None
+
+    text = str(value).strip().strip("\x00")
+    try:
+        address = ipaddress.ip_address(text)
+    except ValueError:
+        return None
+
+    if address.is_unspecified:
+        return None
+    return str(address)
+
+
+def _configuration_url_for_ip(ip_value: str) -> str:
+    """Build a valid HTTP configuration URL for IPv4 or IPv6."""
+    address = ipaddress.ip_address(ip_value)
+    if address.version == 6:
+        return f"http://[{address}]"
+    return f"http://{address}"
 
 
 def _persisted_config_data(config) -> dict:
@@ -113,8 +140,17 @@ def _clean_discovery_payload(client, device_id: str, data: dict) -> dict:
     device_meta = data.get("dev")
     if isinstance(device_meta, dict):
         # Keep identifiers unchanged so Home Assistant's device identity remains
-        # stable. Only correct the visible serial-number metadata.
+        # stable. Correct only visible metadata.
         device_meta["serial_number"] = _configured_serial(client, device_id)
+
+        # Home Assistant MQTT discovery has no arbitrary ip_address field in its
+        # device metadata. configuration_url is the supported way to expose a
+        # device-local management address in the device information card.
+        local_ip = _configured_local_ip(client, device_id)
+        if local_ip:
+            device_meta["configuration_url"] = _configuration_url_for_ip(local_ip)
+        else:
+            device_meta.pop("configuration_url", None)
 
     components = data.get("cmps")
     if isinstance(components, dict):
