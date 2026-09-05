@@ -1,9 +1,9 @@
-name: "GroBro"
-description: "Growatt MQTT Message Broker"
-version: "2.7.5"
-slug: "grobro"
+name: "GroBro Register Debug"
+description: "Growatt MQTT Message Broker with passive Modbus register logging"
+version: "2.7.5-debug1"
+slug: "grobro_register_debug"
 init: false
-url: https://github.com/robertzaage/GroBro
+url: https://github.com/criticallimit/GroBro
 arch:
   - armhf
   - armv7
@@ -36,6 +36,10 @@ options:
   LOG_LEVEL: ERROR
   DUMP_MESSAGES: false
   DUMP_DIR: "/share/GroBro/dump"
+  REGISTER_DEBUG: true
+  REGISTER_DEBUG_DIR: "/share/GroBro/register_debug"
+  REGISTER_DEBUG_MAX_REGISTER: 3000
+  REGISTER_DEBUG_CHANGES_ONLY: false
   MAX_SLOTS: 1
   MAX_BAT: "auto"
   AVAILABILITY_SENSOR: false
@@ -61,6 +65,10 @@ schema:
   LOG_LEVEL: list(INFO|ERROR|DEBUG)?
   DUMP_MESSAGES: bool
   DUMP_DIR: "str?"
+  REGISTER_DEBUG: bool
+  REGISTER_DEBUG_DIR: "str?"
+  REGISTER_DEBUG_MAX_REGISTER: int
+  REGISTER_DEBUG_CHANGES_ONLY: bool
   DEVICE_TIMEOUT: "int?"
   MAX_SLOTS: "int?"
   MAX_BAT: "str?"
