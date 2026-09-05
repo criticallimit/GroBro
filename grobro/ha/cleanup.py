@@ -5,6 +5,8 @@ correcting legacy runtime behavior in this debug fork:
 - battery count prefers the explicit ``bat_cnt`` register and uses a conservative
   one-battery fallback before telemetry is available;
 - mutable HA client caches, timers and read queues are initialized per instance;
+- persisted config files are also indexed by the MQTT device id encoded in their
+  filename so a differing internal serial number does not orphan the cache;
 - the existing Device SN entity keeps the same name/topic/unique id but publishes
   the configured serial number when available;
 - a legacy ``sw_version`` publish that accidentally used the device id is fixed;
@@ -20,6 +22,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from threading import Lock
 
 from grobro.ha import client as ha_client_module
@@ -79,6 +82,26 @@ def _initialize_instance_state(client) -> None:
     client._config_read_lock = Lock()
 
 
+def _restore_config_cache_by_filename(client) -> None:
+    """Index persisted config files by their stable MQTT device-id filename."""
+    prefix = "config_"
+    suffix = ".json"
+    try:
+        filenames = os.listdir(".")
+    except OSError:
+        return
+
+    for filename in filenames:
+        if not (filename.startswith(prefix) and filename.endswith(suffix)):
+            continue
+        mqtt_device_id = filename[len(prefix) : -len(suffix)]
+        if not mqtt_device_id:
+            continue
+        config = ha_client_module.model.DeviceConfig.from_file(filename)
+        if config is not None:
+            client._config_cache[mqtt_device_id] = config
+
+
 def _cancel_runtime_timers(client) -> None:
     """Cancel pending timeout/config-read timers before disconnecting."""
     for timer_map_name in ("_device_timers", "_config_read_timers"):
@@ -108,7 +131,9 @@ def install_ha_cleanup_hook() -> None:
 
     def init_clean(self, *args, **kwargs):
         _initialize_instance_state(self)
-        return original_init(self, *args, **kwargs)
+        result = original_init(self, *args, **kwargs)
+        _restore_config_cache_by_filename(self)
+        return result
 
     client_cls.__init__ = init_clean
 
