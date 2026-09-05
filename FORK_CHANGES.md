@@ -6,7 +6,7 @@ Reference baseline for this release:
 
 - Upstream repository: `robertzaage/GroBro`
 - Upstream `main`: `4797f8419bd574bcebd32d1a859569f97b58b774` (2026-08-08)
-- Fork release: `2.8.0`
+- Fork release: `2.8.3`
 - Comparison date: 2026-09-05
 
 The goal of this fork is to keep GroBro's normal MQTT/Home Assistant behavior compatible while improving robustness, runtime efficiency and diagnostics, and while validating additional NOAH 2000 behavior from real captures.
@@ -47,15 +47,16 @@ Notable changes include:
 - graceful timer cleanup during shutdown,
 - persisted device config is restored by MQTT device ID,
 - device serial identity remains stable while using the configured serial as device metadata when available,
+- placeholder serial values consisting only of `X` characters are discarded instead of replacing the stable MQTT device identity,
 - invalid or missing local IP values are no longer used as Home Assistant configuration URLs,
 - internal GroBro-only discovery fields are cleaned before publishing,
 - stale/invalid software-version publication is suppressed when no actual version is known.
 
 ## 3. Automatic clock synchronization
 
-The manual Home Assistant `Sync Time` button is no longer exposed.
+The manual Home Assistant `Sync Time` button and the Home Assistant `System Time` config entity are no longer exposed.
 
-For supported device families, GroBro now synchronizes config register `31` (`system_time`, STRING) automatically twice per local day:
+For supported device families, GroBro synchronizes config register `31` (`system_time`, STRING) automatically twice per local day:
 
 - 00:00
 - 12:00
@@ -93,7 +94,9 @@ Additional NOAH-specific presentation/cleanup decisions in this fork:
 - `MQTT IP` was removed from the effective NOAH config map,
 - passive watch logging remains for unknown `R299-R304` values without issuing active writes or scans.
 
-These NOAH-specific removals do not change the corresponding definitions for other device families.
+The existing Home Assistant `Heater` entity is preserved. For NOAH `0PVP` status messages of type `0x0104` (decimal 260), the fork reads the observed heater-status byte at payload offset 84 after the 24-byte header (absolute offset 108). Values `0..15` override the older register-17-derived heater value while reusing the existing enum/bitmask representation. Unsupported packets or invalid values leave the old register-based value as fallback. This is an empirical NOAH status-frame mapping and is not presented as official Growatt Modbus documentation.
+
+These NOAH-specific removals and overrides do not change the corresponding definitions for other device families.
 
 ## 5. Passive register diagnostics
 
@@ -173,7 +176,7 @@ The fork includes several low-risk hot-path optimizations that apply across devi
 - device timeout timer churn is reduced,
 - device-family lookup uses a prepared prefix table and caches resolved serial IDs.
 
-The larger architectural optimization of removing Pydantic object construction from telemetry hot paths has intentionally not been done yet because it is more invasive and should be benchmarked and covered by active CI first.
+The larger architectural optimization of removing Pydantic object construction from telemetry hot paths has intentionally not been done yet because it is more invasive and should be benchmarked before adoption.
 
 ## 10. Add-on/runtime behavior
 
@@ -186,7 +189,7 @@ The Home Assistant add-on launcher now:
 
 Default debug options were adjusted for the current fork. The effective `REGISTER_DEBUG_MAX_REGISTER` default is `65535`; this is only a passive capture filter and does not make GroBro scan that register range.
 
-## 11. Tests and validation added in this fork
+## 11. Tests, CI and release pipeline
 
 Additional tests cover areas including:
 
@@ -201,10 +204,13 @@ Additional tests cover areas including:
 - central device-family resolution,
 - time-sync capability consistency,
 - NOAH removed entities,
+- NOAH Heater status-frame override,
 - NOAH embedded `0x0103` parsing,
 - passive register debug behavior.
 
-Important limitation: GitHub Actions currently shows no workflow runs in this fork, so the presence of these tests must not be interpreted as a confirmed successful CI run. Runtime testing remains important.
+GitHub Actions is enabled for this fork. The 2.8.3 code path has been validated with Ruff and the full pytest suite on Python 3.11, 3.12 and 3.13, with coverage above the configured 85% threshold. The Docker workflow then successfully built the image for `linux/amd64`, `linux/arm64` and `linux/arm/v7` and pushed it to the fork-owned `ghcr.io/criticallimit/grobro` namespace. Superseded CI runs on the same branch are cancelled automatically to reduce runner churn.
+
+Runtime/hardware testing remains important because CI cannot validate every physical Growatt model or firmware revision.
 
 ## 12. What intentionally remains upstream-compatible
 
@@ -222,7 +228,9 @@ Existing Home Assistant entity IDs, unique IDs, state topics and device identifi
 This document distinguishes implementation from hardware validation:
 
 - NOAH 2000 items described as validated were checked against captured traffic from the available three-module system.
+- The NOAH Heater override is based on observed status-frame behavior and community reverse engineering, not an official Growatt register specification.
 - NEO behavior has additional repository fixtures including a real `NeoSetDateTime.bin` packet.
 - NEXA, SPF, MIN-XH2 and MOD family-wide improvements are based on their existing GroBro register maps and shared runtime paths unless separately stated; they have not all been hardware-tested in this fork.
+- Passing CI confirms software behavior against the repository tests; it does not upgrade unsupported family fixtures into hardware evidence.
 
 For raw reverse-engineering evidence and register-specific NOAH findings, see `NOAH_VALIDATION.md` and `REGISTER_DEBUG.md`.
