@@ -207,9 +207,17 @@ if "batterySoh" not in KNOWN_NOAH_REGISTERS.input_registers:
         KNOWN_NEXA_REGISTERS.input_registers["batterySoh"].model_copy(deep=True)
     )
 
+# NOAH R102 is a whole-percent SOH value. NEXA defines the shared field as a
+# FLOAT with multiplier 1.0, which only changes presentation (100 -> 100.0).
+# Use INT for NOAH so Home Assistant receives an actual integer percentage.
+_noah_soh = KNOWN_NOAH_REGISTERS.input_registers.get("batterySoh")
+if _noah_soh is not None:
+    _noah_soh.growatt.data.data_type = GrowattRegisterDataTypes.INT
+    _noah_soh.growatt.data.float_options = None
+    _noah_soh.growatt.data.mult = None
+
 # These NOAH entities were experimental/debug additions and are intentionally
-# removed from the effective runtime map. Keeping the removal here also protects
-# against them being reintroduced accidentally by the JSON map or shared fields.
+# removed from the effective runtime map.
 KNOWN_NOAH_REGISTERS.config_registers.pop("mqtt_ip", None)
 for _removed_noah_input in ("pv1Temp", "pv2Temp", "systemTemp"):
     KNOWN_NOAH_REGISTERS.input_registers.pop(_removed_noah_input, None)
