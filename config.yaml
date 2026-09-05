@@ -37,7 +37,7 @@ options:
   LOG_LEVEL: ERROR
   DUMP_MESSAGES: false
   DUMP_DIR: "/share/GroBro/dump"
-  REGISTER_DEBUG: true
+  REGISTER_DEBUG: false
   REGISTER_DEBUG_DIR: "/share/GroBro/register_debug"
   REGISTER_DEBUG_MAX_REGISTER: 65535
   REGISTER_DEBUG_CHANGES_ONLY: true
