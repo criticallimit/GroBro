@@ -1,8 +1,9 @@
-"""Small compatibility layer for debug-fork-only runtime helpers.
+"""Debug-fork-only Growatt runtime helpers.
 
-Most historic fixes now live directly in the GroBro core. This module keeps only
-safe diagnostic output, strict config-message validation, and backwards-compatible
-helper names used by tests and older callers.
+Core protocol handling, cloud filtering, MQTT property parsing and shutdown logic
+now live in the hardened core. This module intentionally contains only features
+that are specific to this fork: the single-file raw dump, strict config-message
+wire validation, and activation of the central device-family registry.
 """
 
 from __future__ import annotations
@@ -11,39 +12,17 @@ import base64
 import json
 import logging
 import os
-import re
 import struct
 import threading
 import time
 
 from grobro.grobro import client as grobro_client_module
-from grobro.grobro import parser
 from grobro.grobro.builder import append_crc, scramble
+from grobro.model.device_family import get_known_registers
 
 LOG = logging.getLogger(__name__)
 _INSTALLED = False
 _DUMP_LOCK = threading.Lock()
-
-_BLOCKED_CLOUD_MESSAGE_TYPES = {0x0118, 0x0110}
-_SAFE_TOPIC_SEGMENT_RE = re.compile(r"[^A-Za-z0-9._-]+")
-_CONFIG_VALUE_LOG_RE = re.compile(r"(\bvalue=)(.*)$", re.IGNORECASE)
-
-
-def _is_blocked_cloud_config_message(payload: bytes) -> bool:
-    """Return True for Growatt Cloud configuration/control payloads."""
-    try:
-        decoded = parser.unscramble(payload)
-        if len(decoded) < 8:
-            return False
-        return struct.unpack_from(">H", decoded, 6)[0] in _BLOCKED_CLOUD_MESSAGE_TYPES
-    except (struct.error, TypeError, ValueError):
-        return False
-
-
-def _safe_topic_segment(segment: str) -> str:
-    """Convert one MQTT topic level to a harmless filesystem component."""
-    cleaned = _SAFE_TOPIC_SEGMENT_RE.sub("_", str(segment)).strip(".")
-    return (cleaned or "_")[:128]
 
 
 def _dump_message_binary_safe(topic, payload) -> None:
@@ -75,11 +54,6 @@ def _dump_message_binary_safe(topic, payload) -> None:
         LOG.error("Failed to dump message for topic %s: %s", topic, exc)
 
 
-def _get_property_safe(msg, prop) -> str | None:
-    """Backwards-compatible alias for the core's defensive property reader."""
-    return grobro_client_module.get_property(msg, prop)
-
-
 def _validate_device_id(device_id: str) -> bytes:
     if not isinstance(device_id, str) or not device_id:
         raise ValueError("device_id must be a non-empty string")
@@ -101,13 +75,12 @@ def _validate_register_no(register_no: int) -> int:
 
 
 def _publish_checked(client, topic: str, payload, **kwargs):
-    """Delegate to the core publish checker."""
     return grobro_client_module._publish_checked(client, topic, payload, **kwargs)
 
 
 def _build_config_packet(device_id: str, register_no: int, msg_type: int, body: bytes) -> bytes:
     dev = _validate_device_id(device_id)
-    register_no = _validate_register_no(register_no)
+    _validate_register_no(register_no)
     payload = b"\x00" * 14 + body
     msg_len = len(payload) + 18
     raw = (
@@ -147,31 +120,18 @@ def _build_config_write_message(device_id: str, register_no: int, value: str) ->
     return _build_config_packet(device_id, register_no, 0x0118, tlv)
 
 
-class _ConfigValueRedactionFilter(logging.Filter):
-    """Compatibility filter for legacy log records that may include config values."""
-
-    def filter(self, record: logging.LogRecord) -> bool:
-        try:
-            template = str(record.msg)
-            if "config read response" in template.lower() and isinstance(record.args, tuple):
-                if len(record.args) >= 3:
-                    record.args = (*record.args[:-1], "<redacted>")
-            elif "sending config message" in template.lower():
-                rendered = record.getMessage()
-                record.msg = _CONFIG_VALUE_LOG_RE.sub(r"\1<redacted>", rendered)
-                record.args = ()
-        except Exception:
-            return True
-        return True
-
-
 def install_grobro_cleanup_hook() -> None:
-    """Install only debug-fork features not already present in the hardened core."""
+    """Install only fork-specific runtime features before clients are created."""
     global _INSTALLED
     if _INSTALLED:
         return
 
     client_cls = grobro_client_module.Client
+
+    # Central family registry is the active register-map source for every family.
+    grobro_client_module._known_registers_for_device = get_known_registers
+
+    # Raw diagnostics use one append-only file instead of thousands of .bin files.
     grobro_client_module.dump_message_binary = _dump_message_binary_safe
 
     def send_config_read_clean(self, device_id: str, register_no: int):
@@ -199,4 +159,4 @@ def install_grobro_cleanup_hook() -> None:
     client_cls.send_config_read_message = send_config_read_clean
     client_cls.send_config_message = send_config_clean
     _INSTALLED = True
-    LOG.info("Installed GroBro debug compatibility layer")
+    LOG.info("Installed GroBro fork runtime layer")
