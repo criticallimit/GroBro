@@ -5,7 +5,8 @@ Keeps upstream GroBro behavior intact while correcting a few legacy behaviors:
   assumes four batteries when no evidence is present;
 - the redundant Device SN entity is removed from MQTT discovery because the same
   serial is already part of the Home Assistant device metadata;
-- a legacy sw_version publish that accidentally used the device id is corrected.
+- a legacy sw_version publish that accidentally used the device id is corrected;
+- MQTT discovery origin metadata points to this debug fork.
 
 The MQTT device id itself remains unchanged so existing Home Assistant device and
 entity identifiers stay stable.
@@ -20,6 +21,7 @@ from grobro.ha import client as ha_client_module
 
 LOG = logging.getLogger(__name__)
 _INSTALLED = False
+FORK_URL = "https://github.com/criticallimit/GroBro"
 
 
 def _detect_bat_count(payload: dict) -> int:
@@ -57,22 +59,38 @@ def install_ha_cleanup_hook() -> None:
         def publish(topic, payload=None, *args, **kwargs):
             # Remove the duplicate Device SN entity from device discovery. The
             # serial number remains present in the device metadata itself.
-            if topic == f"{ha_client_module.HA_BASE_TOPIC}/device/{device_id}/config" and payload:
+            if (
+                topic
+                == f"{ha_client_module.HA_BASE_TOPIC}/device/{device_id}/config"
+                and payload
+            ):
                 try:
                     data = json.loads(payload)
                     components = data.get("cmps")
                     if isinstance(components, dict):
                         components.pop(f"grobro_{device_id}_serial", None)
-                    payload = json.dumps(data, sort_keys=True, separators=(",", ":"))
-                except (TypeError, ValueError, json.JSONDecodeError):
+                    origin = data.get("o")
+                    if isinstance(origin, dict):
+                        origin["url"] = FORK_URL
+                    payload = json.dumps(
+                        data,
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    )
+                except (TypeError, ValueError):
                     pass
 
             # Older GroBro code publishes device_id to the sw_version state
             # topic when discovery is unchanged. Replace it with the actual
             # configured software version, or suppress the bogus value.
-            if topic == f"{ha_client_module.HA_BASE_TOPIC}/grobro/{device_id}/sw_version":
+            if (
+                topic
+                == f"{ha_client_module.HA_BASE_TOPIC}/grobro/{device_id}/sw_version"
+            ):
                 config = self._config_cache.get(device_id)
-                sw_version = getattr(config, "sw_version", None) if config else None
+                sw_version = (
+                    getattr(config, "sw_version", None) if config else None
+                )
                 if not sw_version:
                     return None
                 payload = sw_version
@@ -81,7 +99,11 @@ def install_ha_cleanup_hook() -> None:
 
         self._client.publish = publish
         try:
-            return original_publish_discovery(self, device_id, effective_max_bat)
+            return original_publish_discovery(
+                self,
+                device_id,
+                effective_max_bat,
+            )
         finally:
             self._client.publish = original_publish
 
