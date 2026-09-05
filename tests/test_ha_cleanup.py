@@ -1,7 +1,7 @@
 import json
 from types import SimpleNamespace
 
-from grobro.ha.cleanup import _detect_bat_count, install_ha_cleanup_hook
+from grobro.ha.cleanup import _configured_serial, _detect_bat_count, install_ha_cleanup_hook
 from grobro.ha import client as ha_client_module
 
 
@@ -21,7 +21,15 @@ def test_detect_bat_count_falls_back_conservatively():
     assert _detect_bat_count({"bat3_ser_part_1": "BAT3"}) == 3
 
 
-def test_cleanup_removes_duplicate_device_sn_and_fixes_origin(monkeypatch):
+def test_configured_serial_prefers_config_and_keeps_device_id_fallback():
+    client = SimpleNamespace(_config_cache={})
+    assert _configured_serial(client, "0PVPTEST") == "0PVPTEST"
+
+    client._config_cache["0PVPTEST"] = SimpleNamespace(serial_number="SERIAL-NEW")
+    assert _configured_serial(client, "0PVPTEST") == "SERIAL-NEW"
+
+
+def test_cleanup_keeps_device_sn_entity_and_fixes_origin(monkeypatch):
     install_ha_cleanup_hook()
 
     published = []
@@ -33,19 +41,17 @@ def test_cleanup_removes_duplicate_device_sn_and_fixes_origin(monkeypatch):
 
     client = object.__new__(ha_client_module.Client)
     client._client = FakeMqtt()
-    client._config_cache = {}
+    client._config_cache = {
+        "0PVPTEST": SimpleNamespace(serial_number="SERIAL-NEW", sw_version="19.19.14")
+    }
     client._discovery_payload_cache = {}
     client._discovery_cache = []
     client._neo_pv_count = {}
 
     device_id = "0PVPTEST"
 
-    # Exercise only the wrapper behavior by replacing the cached original method
-    # through a minimal discovery call environment.
     original = ha_client_module.Client._Client__publish_device_discovery
 
-    # The installed wrapper delegates to the original upstream method, which
-    # expects register/config state. Patch those dependencies minimally.
     monkeypatch.setattr(
         ha_client_module,
         "get_known_registers",
@@ -84,5 +90,13 @@ def test_cleanup_removes_duplicate_device_sn_and_fixes_origin(monkeypatch):
     assert discovery_payloads
 
     data = json.loads(discovery_payloads[-1])
-    assert f"grobro_{device_id}_serial" not in data["cmps"]
+    assert f"grobro_{device_id}_serial" in data["cmps"]
     assert data["o"]["url"] == "https://github.com/criticallimit/GroBro"
+
+    serial_values = [
+        payload
+        for topic, payload, *_ in published
+        if topic == f"homeassistant/grobro/{device_id}/serial"
+    ]
+    assert serial_values
+    assert serial_values[-1] == "SERIAL-NEW"
