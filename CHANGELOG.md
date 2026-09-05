@@ -1,3 +1,51 @@
+## v2.8.0
+
+### Consolidated fork release
+
+This release consolidates the material changes in `criticallimit/GroBro` compared with the current upstream `robertzaage/GroBro` baseline (`4797f8419bd574bcebd32d1a859569f97b58b774`, 2026-08-08).
+
+### Architecture and runtime
++ Added a central device-family registry for NOAH, NEXA, NEO/PTQ, ShineWeLink/RAQ, SPF, MIN-XH2 and MOD so Home Assistant and Growatt MQTT use one active source of truth for family/register-map detection.
++ Added cached device-family lookups and low-risk parser/runtime optimizations across all supported families.
++ Reduced Growatt scramble/unscramble allocations and repeated Modbus/register decoding work.
++ Removed obsolete fork compatibility helpers that duplicated behavior already hardened in the core.
+
+### Home Assistant
++ Added discovery-signature caching so full device discovery is not rebuilt on every telemetry packet.
++ Added availability-state caching and lower-churn device timeout handling.
++ Fixed the optional Online binary sensor to publish retained `ON/OFF` state so it survives Home Assistant/MQTT reconnect timing.
++ Invalidates discovery/availability caches on MQTT reconnect so retained state is recreated after broker restarts.
++ Improved device metadata handling, config persistence and local-IP/configuration-URL validation without changing existing entity identities/topics unnecessarily.
++ Removed the manual Sync Time button from discovery.
+
+### Automatic clock synchronization
++ Added automatic `system_time` synchronization at 00:00 and 12:00 local time for families whose active register map exposes config register 31 as STRING: NOAH, NEXA, NEO/PTQ, SPF, MIN-XH2 and MOD.
++ RAQ/ShineWeLink gateways are not written directly; a detected PTQ inverter behind the gateway is handled as NEO.
++ When the add-on `TZ` option is empty, the launcher attempts to use the Home Assistant Supervisor timezone.
+
+### NOAH 2000 validation and cleanup
++ Added validation documentation based on real captures from a three-module NOAH 2000 stack running firmware 19.19.14.
++ Added passive parsing/diagnostics for the embedded NOAH `0x0103` holding-register block (`R250-R374`) and passive watch logging for unknown `R299-R304` values.
++ Kept NOAH SOH (`R102`) as a whole-number percentage in Home Assistant.
++ Removed experimental NOAH Home Assistant entities `Temperature PV1`, `Temperature PV2`, `System Temperature` and `MQTT IP` from the effective NOAH map.
+
+### Parser, safety and persistence
++ Hardened malformed/truncated Modbus and config-message handling, register bounds, numeric lengths and `TIME_HHMM` validation.
++ Added strict config message device/register/value validation and avoids logging config values.
++ Made persisted device config atomic and excludes sensitive password/raw fields.
++ Clarified and hardened Growatt Cloud forwarding/filter behavior and publish-result checking.
+
+### Diagnostics
++ Added passive register JSONL logging to `/share/GroBro/register_debug/registers.jsonl`.
++ Raw message dumps are stored as exact Base64 payloads in one `/share/GroBro/dump/messages.jsonl` file instead of creating thousands of individual `.bin` files in this fork.
++ Debug capture remains passive and does not actively scan the configured register range.
+
+### Documentation and tests
++ Added `FORK_CHANGES.md` with the detailed upstream comparison and evidence levels.
++ Added `NOAH_VALIDATION.md` and `REGISTER_DEBUG.md`.
++ Added regression tests for parser validation, config persistence/security, discovery/availability caching, reconnect behavior, family resolution, time sync, NOAH `0x0103` handling and passive diagnostics.
++ GitHub Actions currently shows no workflow runs in this fork; tests are present but are not claimed as CI-passed.
+
 ## v2.7.5
 
 ### Bug Fixes
