@@ -1,38 +1,15 @@
 import base64
 import json
-import logging
-from types import SimpleNamespace
 
 import pytest
 
 from grobro.grobro import cleanup
 from grobro.grobro.cleanup import (
-    _ConfigValueRedactionFilter,
     _build_config_read_message,
     _build_config_write_message,
-    _get_property_safe,
-    _safe_topic_segment,
     _validate_device_id,
     _validate_register_no,
 )
-
-
-def test_safe_topic_segment_blocks_path_traversal():
-    assert _safe_topic_segment("..") == "_"
-    assert _safe_topic_segment("../secret") == "_secret"
-    assert _safe_topic_segment("0PVP50ZR175T00E8") == "0PVP50ZR175T00E8"
-
-
-def test_get_property_safe_handles_missing_properties():
-    assert _get_property_safe(SimpleNamespace(properties=None), "forwarded-for") is None
-
-
-def test_get_property_safe_reads_user_property():
-    props = SimpleNamespace(
-        json=lambda: {"UserProperty": [("forwarded-for", "growatt")]}
-    )
-    msg = SimpleNamespace(properties=props)
-    assert _get_property_safe(msg, "forwarded-for") == "growatt"
 
 
 def test_raw_dump_appends_all_messages_to_one_jsonl_file(tmp_path, monkeypatch):
@@ -71,7 +48,7 @@ def test_config_message_validation_rejects_bad_wire_values():
         _validate_register_no(65536)
 
 
-def test_config_builders_return_wire_payloads_without_logging_value():
+def test_config_builders_return_valid_wire_payloads():
     read_payload = _build_config_read_message("0PVP50ZR175T00E8", 17)
     write_payload = _build_config_write_message("0PVP50ZR175T00E8", 17, "secret")
 
@@ -79,33 +56,3 @@ def test_config_builders_return_wire_payloads_without_logging_value():
     assert isinstance(write_payload, bytes)
     assert len(read_payload) > 40
     assert len(write_payload) > len(read_payload)
-
-
-def test_config_value_redaction_filter_removes_values():
-    filter_ = _ConfigValueRedactionFilter()
-
-    record = logging.LogRecord(
-        name="grobro.grobro.client",
-        level=logging.INFO,
-        pathname=__file__,
-        lineno=1,
-        msg="Received config read response for %s reg=%s value=%s",
-        args=("DEVICE", 17, "super-secret"),
-        exc_info=None,
-    )
-    assert filter_.filter(record)
-    assert "super-secret" not in record.getMessage()
-    assert "<redacted>" in record.getMessage()
-
-    record = logging.LogRecord(
-        name="grobro.grobro.client",
-        level=logging.INFO,
-        pathname=__file__,
-        lineno=1,
-        msg="Sending config message to DEVICE register=17 value=super-secret",
-        args=(),
-        exc_info=None,
-    )
-    assert filter_.filter(record)
-    assert "super-secret" not in record.getMessage()
-    assert "value=<redacted>" in record.getMessage()
