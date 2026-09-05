@@ -11,6 +11,7 @@ import json
 import logging
 import os
 import time
+from datetime import datetime, timedelta
 from threading import Lock, Timer
 
 from grobro.ha import client as ha_client_module
@@ -19,6 +20,8 @@ LOG = logging.getLogger(__name__)
 _INSTALLED = False
 FORK_URL = "https://github.com/criticallimit/GroBro"
 _PERSIST_EXCLUDE = {"password", "raw"}
+_TIME_SYNC_REGISTER = 31
+_TIME_SYNC_HOURS = (0, 12)
 
 
 def _detect_bat_count(payload: dict) -> int:
@@ -97,6 +100,7 @@ def _initialize_instance_state(client) -> None:
     client._config_read_timers = {}
     client._config_read_lock = Lock()
     client._migration_done = set()
+    client._time_sync_timer = None
 
 
 def _restore_config_cache_by_filename(client) -> None:
@@ -128,6 +132,14 @@ def _cancel_runtime_timers(client) -> None:
         timer_map.clear()
     getattr(client, "_device_last_seen", {}).clear()
 
+    time_sync_timer = getattr(client, "_time_sync_timer", None)
+    if time_sync_timer is not None:
+        try:
+            time_sync_timer.cancel()
+        except Exception:  # pragma: no cover
+            pass
+        client._time_sync_timer = None
+
 
 def _migration_set(client) -> set:
     migrations = getattr(client, "_migration_done", None)
@@ -141,6 +153,60 @@ def _discovery_signature(client, device_id: str, effective_max_bat: int) -> tupl
     """Return the small subset of runtime state that changes discovery contents."""
     pv_count = getattr(client, "_neo_pv_count", {}).get(device_id)
     return effective_max_bat, pv_count
+
+
+def _seconds_until_next_time_sync(now: datetime | None = None) -> float:
+    """Return seconds until the next local 00:00 or 12:00 synchronization."""
+    current = now or datetime.now()
+    candidates = []
+    for hour in _TIME_SYNC_HOURS:
+        candidate = current.replace(hour=hour, minute=0, second=0, microsecond=0)
+        if candidate <= current:
+            candidate += timedelta(days=1)
+        candidates.append(candidate)
+    return max(1.0, (min(candidates) - current).total_seconds())
+
+
+def _sync_noah_clocks(client, now: datetime | None = None) -> int:
+    """Write the local wall clock to NOAH register 31 for known NOAH devices."""
+    callback = getattr(client, "on_config_command", None)
+    if not callable(callback):
+        return 0
+
+    current = now or datetime.now()
+    value = current.strftime("%Y-%m-%d %H:%M:%S")
+    synced = 0
+    for device_id in tuple(getattr(client, "_config_cache", {})):
+        if not str(device_id).startswith("0PVP"):
+            continue
+        try:
+            callback(device_id, _TIME_SYNC_REGISTER, value)
+            synced += 1
+        except Exception as exc:  # one device must not block the others
+            LOG.warning("Automatic time sync failed for %s: %s", device_id, exc)
+    if synced:
+        LOG.info("Automatically synchronized time for %s NOAH device(s)", synced)
+    return synced
+
+
+def _schedule_next_time_sync(client) -> None:
+    """Schedule one NOAH clock sync and re-arm for the following fixed time."""
+    previous = getattr(client, "_time_sync_timer", None)
+    if previous is not None:
+        try:
+            previous.cancel()
+        except Exception:  # pragma: no cover
+            pass
+
+    def run_and_reschedule():
+        client._time_sync_timer = None
+        _sync_noah_clocks(client)
+        _schedule_next_time_sync(client)
+
+    timer = Timer(_seconds_until_next_time_sync(), run_and_reschedule)
+    timer.daemon = True
+    client._time_sync_timer = timer
+    timer.start()
 
 
 def _clean_discovery_payload(client, device_id: str, data: dict) -> dict:
@@ -160,6 +226,10 @@ def _clean_discovery_payload(client, device_id: str, data: dict) -> dict:
 
     components = data.get("cmps")
     if isinstance(components, dict):
+        # Time synchronization is automatic twice daily; do not expose the old
+        # manual button in Home Assistant anymore.
+        components.pop(f"grobro_{device_id}_sync_time", None)
+
         for component in components.values():
             if not isinstance(component, dict):
                 continue
@@ -189,6 +259,15 @@ def install_ha_cleanup_hook() -> None:
         return result
 
     client_cls.__init__ = init_clean
+
+    original_start = client_cls.start
+
+    def start_clean(self):
+        result = original_start(self)
+        _schedule_next_time_sync(self)
+        return result
+
+    client_cls.start = start_clean
 
     original_on_connect = client_cls._Client__on_connect
 
