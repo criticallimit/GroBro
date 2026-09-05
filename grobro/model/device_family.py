@@ -11,6 +11,7 @@ from dataclasses import dataclass
 
 from grobro.model.growatt_registers import (
     GroBroRegisters,
+    GrowattRegisterDataTypes,
     KNOWN_MOD_REGISTERS,
     KNOWN_NEO_REGISTERS,
     KNOWN_NEXA_REGISTERS,
@@ -19,6 +20,8 @@ from grobro.model.growatt_registers import (
     KNOWN_XH2_REGISTERS,
 )
 
+_TIME_SYNC_REGISTER = 31
+
 
 @dataclass(frozen=True, slots=True)
 class DeviceFamily:
@@ -26,8 +29,8 @@ class DeviceFamily:
     display_name: str
     prefixes: tuple[str, ...]
     registers: GroBroRegisters
-    supports_time_sync: bool = False
     dynamic_pv_count: bool = False
+    is_gateway: bool = False
 
 
 DEVICE_FAMILIES: tuple[DeviceFamily, ...] = (
@@ -36,52 +39,47 @@ DEVICE_FAMILIES: tuple[DeviceFamily, ...] = (
         display_name="NOAH",
         prefixes=("0PVP",),
         registers=KNOWN_NOAH_REGISTERS,
-        supports_time_sync=True,
     ),
     DeviceFamily(
         key="nexa",
         display_name="NEXA",
         prefixes=("0HVR",),
         registers=KNOWN_NEXA_REGISTERS,
-        supports_time_sync=True,
     ),
     DeviceFamily(
         key="neo",
         display_name="NEO",
         prefixes=("QMN", "PTQ"),
         registers=KNOWN_NEO_REGISTERS,
-        supports_time_sync=True,
         dynamic_pv_count=True,
     ),
     # RAQ identifies the ShineWeLink gateway. Its parsed inverter/config payload
-    # currently uses the NEO register model, but writes such as clock sync must
-    # target the PTQ inverter behind it rather than the RAQ gateway itself.
+    # currently uses the NEO register model, but writes must target the PTQ
+    # inverter behind it rather than the RAQ gateway itself.
     DeviceFamily(
         key="shinewelink",
         display_name="ShineWeLink",
         prefixes=("RAQ",),
         registers=KNOWN_NEO_REGISTERS,
+        is_gateway=True,
     ),
     DeviceFamily(
         key="spf",
         display_name="SPF",
         prefixes=("HAQ",),
         registers=KNOWN_SPF_REGISTERS,
-        supports_time_sync=True,
     ),
     DeviceFamily(
         key="min_xh2",
         display_name="MIN-XH2",
         prefixes=("ZGQ",),
         registers=KNOWN_XH2_REGISTERS,
-        supports_time_sync=True,
     ),
     DeviceFamily(
         key="mod",
         display_name="MOD",
         prefixes=("VWQ",),
         registers=KNOWN_MOD_REGISTERS,
-        supports_time_sync=True,
         dynamic_pv_count=True,
     ),
 )
@@ -105,9 +103,29 @@ def get_device_type_name(device_id: str) -> str:
     return family.display_name if family else "UNKNOWN"
 
 
+def _register_map_supports_time_sync(registers: GroBroRegisters) -> bool:
+    system_time = registers.config_registers.get("system_time")
+    if system_time is None:
+        return False
+    return (
+        system_time.growatt.register_no == _TIME_SYNC_REGISTER
+        and system_time.growatt.data.data_type == GrowattRegisterDataTypes.STRING
+    )
+
+
 def supports_time_sync(device_id: str) -> bool:
+    """Return whether this device can safely receive the shared clock write.
+
+    Capability is derived from the active register map rather than duplicated in
+    family metadata. Gateways are always excluded because writes must target the
+    inverter/device behind them.
+    """
     family = get_device_family(device_id)
-    return bool(family and family.supports_time_sync)
+    return bool(
+        family
+        and not family.is_gateway
+        and _register_map_supports_time_sync(family.registers)
+    )
 
 
 def uses_dynamic_pv_count(device_id: str) -> bool:
