@@ -1,6 +1,6 @@
 name: "GroBro Register Debug"
 description: "Growatt MQTT Message Broker with passive Modbus register logging"
-version: "2.7.5-debug5"
+version: "2.7.5-debug6"
 slug: "grobro_register_debug"
 init: false
 url: https://github.com/criticallimit/GroBro
@@ -30,6 +30,7 @@ options:
   TARGET_MQTT_TLS: false
   TARGET_MQTT_USER: ""
   TARGET_MQTT_PASS: ""
+  MQTT_CLIENT_SUFFIX: ""
   HA_BASE_TOPIC: "homeassistant"
   GROWATT_CLOUD: false
   GROWATT_CLOUD_CONFIG_FILTER: false
@@ -38,8 +39,9 @@ options:
   DUMP_DIR: "/share/GroBro/dump"
   REGISTER_DEBUG: true
   REGISTER_DEBUG_DIR: "/share/GroBro/register_debug"
-  REGISTER_DEBUG_MAX_REGISTER: 3000
+  REGISTER_DEBUG_MAX_REGISTER: 65535
   REGISTER_DEBUG_CHANGES_ONLY: true
+  PUBLISH_SENSORS_RETAINED: false
   MAX_SLOTS: 1
   MAX_BAT: "auto"
   AVAILABILITY_SENSOR: false
@@ -58,6 +60,7 @@ schema:
   TARGET_MQTT_TLS: bool
   TARGET_MQTT_USER: "str?"
   TARGET_MQTT_PASS: "str?"
+  MQTT_CLIENT_SUFFIX: "str?"
   HA_BASE_TOPIC: "str?"
   REGISTER_FILTER: "str?"
   GROWATT_CLOUD: bool
@@ -69,6 +72,7 @@ schema:
   REGISTER_DEBUG_DIR: "str?"
   REGISTER_DEBUG_MAX_REGISTER: int
   REGISTER_DEBUG_CHANGES_ONLY: bool
+  PUBLISH_SENSORS_RETAINED: bool
   DEVICE_TIMEOUT: "int?"
   MAX_SLOTS: "int?"
   MAX_BAT: "str?"
