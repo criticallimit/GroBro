@@ -1,4 +1,5 @@
 import json
+from datetime import datetime
 from types import SimpleNamespace
 
 from grobro.ha.cleanup import (
@@ -8,6 +9,8 @@ from grobro.ha.cleanup import (
     _detect_bat_count,
     _initialize_instance_state,
     _resolve_max_bat,
+    _seconds_until_next_time_sync,
+    _sync_supported_clocks,
     install_ha_cleanup_hook,
 )
 from grobro.ha import client as ha_client_module
@@ -60,20 +63,57 @@ def test_configured_serial_prefers_config_and_keeps_device_id_fallback():
 
 
 def test_configured_local_ip_uses_only_valid_local_ip():
-    client = SimpleNamespace(_config_cache={"0PVPTEST": SimpleNamespace(local_ip="192.168.1.50", remote_ip="203.0.113.10")})
+    client = SimpleNamespace(
+        _config_cache={
+            "0PVPTEST": SimpleNamespace(
+                local_ip="192.168.1.50",
+                remote_ip="203.0.113.10",
+            )
+        }
+    )
     assert _configured_local_ip(client, "0PVPTEST") == "192.168.1.50"
     client._config_cache["0PVPTEST"].local_ip = "not-an-ip"
     assert _configured_local_ip(client, "0PVPTEST") is None
 
 
 def test_clean_discovery_payload_keeps_identity_and_removes_internal_fields():
-    client = SimpleNamespace(_config_cache={"0PVPTEST": SimpleNamespace(serial_number="SERIAL-NEW", local_ip="192.168.1.50")})
+    client = SimpleNamespace(
+        _config_cache={
+            "0PVPTEST": SimpleNamespace(
+                serial_number="SERIAL-NEW",
+                local_ip="192.168.1.50",
+            )
+        }
+    )
     data = {
         "o": {"name": "grobro", "url": "https://github.com/robertzaage/GroBro"},
         "dev": {"identifiers": ["0PVPTEST"], "serial_number": "0PVPTEST"},
         "cmps": {
-            "grobro_0PVPTEST_cmd_wifi_signal_strength": {"platform": "sensor", "name": "Wi-Fi Signal Strength", "unique_id": "grobro_0PVPTEST_cmd_wifi_signal_strength", "state_topic": "homeassistant/config/grobro/0PVPTEST/76/get", "command_topic": "homeassistant/config/grobro/0PVPTEST/76/set", "publish": True, "type": "sensor", "device_class": "signal_strength", "state_class": "measurement", "unit_of_measurement": "dBm"},
-            "grobro_0PVPTEST_cmd_mqtt_port": {"platform": "number", "name": "MQTT Port", "unique_id": "grobro_0PVPTEST_cmd_mqtt_port", "state_topic": "homeassistant/config/grobro/0PVPTEST/18/get", "command_topic": "homeassistant/config/grobro/0PVPTEST/18/set", "publish": True, "type": "number"},
+            "grobro_0PVPTEST_sync_time": {
+                "platform": "button",
+                "name": "Sync Time",
+            },
+            "grobro_0PVPTEST_cmd_wifi_signal_strength": {
+                "platform": "sensor",
+                "name": "Wi-Fi Signal Strength",
+                "unique_id": "grobro_0PVPTEST_cmd_wifi_signal_strength",
+                "state_topic": "homeassistant/config/grobro/0PVPTEST/76/get",
+                "command_topic": "homeassistant/config/grobro/0PVPTEST/76/set",
+                "publish": True,
+                "type": "sensor",
+                "device_class": "signal_strength",
+                "state_class": "measurement",
+                "unit_of_measurement": "dBm",
+            },
+            "grobro_0PVPTEST_cmd_mqtt_port": {
+                "platform": "number",
+                "name": "MQTT Port",
+                "unique_id": "grobro_0PVPTEST_cmd_mqtt_port",
+                "state_topic": "homeassistant/config/grobro/0PVPTEST/18/get",
+                "command_topic": "homeassistant/config/grobro/0PVPTEST/18/set",
+                "publish": True,
+                "type": "number",
+            },
         },
     }
     cleaned = _clean_discovery_payload(client, "0PVPTEST", data)
@@ -81,6 +121,8 @@ def test_clean_discovery_payload_keeps_identity_and_removes_internal_fields():
     assert cleaned["dev"]["serial_number"] == "SERIAL-NEW"
     assert cleaned["dev"]["configuration_url"] == "http://192.168.1.50"
     assert cleaned["o"]["url"] == "https://github.com/criticallimit/GroBro"
+    assert "grobro_0PVPTEST_sync_time" not in cleaned["cmps"]
+
     sensor = cleaned["cmps"]["grobro_0PVPTEST_cmd_wifi_signal_strength"]
     assert "command_topic" not in sensor
     assert "publish" not in sensor
@@ -141,3 +183,40 @@ def test_mqtt_reconnect_invalidates_publish_caches():
     assert client._discovery_signature == {}
     assert client._discovery_payload_cache == {}
     assert client._discovery_cache == []
+
+
+def test_time_sync_runs_at_noon_and_midnight():
+    assert _seconds_until_next_time_sync(datetime(2026, 9, 5, 11, 0, 0)) == 3600
+    assert _seconds_until_next_time_sync(datetime(2026, 9, 5, 12, 0, 0)) == 43200
+    assert _seconds_until_next_time_sync(datetime(2026, 9, 5, 23, 0, 0)) == 3600
+
+
+def test_time_sync_targets_every_supported_family_but_not_raq_gateway():
+    calls = []
+    client = SimpleNamespace(
+        _config_cache={
+            "0PVPTEST": object(),
+            "0HVRTEST": object(),
+            "QMNTEST": object(),
+            "PTQTEST": object(),
+            "HAQTEST": object(),
+            "ZGQTEST": object(),
+            "VWQTEST": object(),
+            "RAQTEST": object(),
+        },
+        on_config_command=lambda dev, reg, value: calls.append((dev, reg, value)),
+    )
+
+    count = _sync_supported_clocks(client, datetime(2026, 9, 5, 12, 0, 0))
+    assert count == 7
+    assert {dev for dev, _, _ in calls} == {
+        "0PVPTEST",
+        "0HVRTEST",
+        "QMNTEST",
+        "PTQTEST",
+        "HAQTEST",
+        "ZGQTEST",
+        "VWQTEST",
+    }
+    assert all(reg == 31 for _, reg, _ in calls)
+    assert all(value == "2026-09-05 12:00:00" for _, _, value in calls)
