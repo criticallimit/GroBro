@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import json
 import logging
-from collections import deque
 from threading import Lock
 
 from grobro.ha import client as ha_client_module
