@@ -44,6 +44,11 @@ NOAH_0103_WATCH_GROUP = "noah_r299_r304_unknown_descriptor"
 
 _LOCK = threading.Lock()
 _LAST_VALUES: dict[tuple[str, int, int], int] = {}
+# Fast path for change-only mode: most telemetry frames reuse the same register
+# block layout, and many blocks are byte-for-byte identical to the previous one.
+# Comparing the whole bytes object in C is much cheaper than walking every
+# register in Python just to discover that none changed.
+_LAST_BLOCK_VALUES: dict[tuple[str, int, int, int], bytes] = {}
 _INSTALLED = False
 _ORIGINAL_PARSE = None
 _ORIGINAL_NOAH_0103 = None
@@ -72,10 +77,19 @@ def _write_modbus_message(message: GrowattModbusMessage) -> None:
 
     now = datetime.now(timezone.utc).isoformat()
     records: list[dict] = []
+    function = int(message.function)
 
     for block in message.register_blocks:
         if block is None:
             continue
+
+        if REGISTER_DEBUG_CHANGES_ONLY:
+            block_key = (message.device_id, function, block.start, block.end)
+            previous_block = _LAST_BLOCK_VALUES.get(block_key)
+            if previous_block == block.values:
+                continue
+            _LAST_BLOCK_VALUES[block_key] = block.values
+
         for register_no in range(block.start, block.end + 1):
             if register_no < 0 or register_no > REGISTER_DEBUG_MAX_REGISTER:
                 continue
@@ -85,7 +99,7 @@ def _write_modbus_message(message: GrowattModbusMessage) -> None:
                 continue
 
             value = struct.unpack_from(">H", block.values, offset)[0]
-            key = (message.device_id, int(message.function), register_no)
+            key = (message.device_id, function, register_no)
             previous = _LAST_VALUES.get(key)
             changed = previous is None or previous != value
             _LAST_VALUES[key] = value
@@ -99,7 +113,7 @@ def _write_modbus_message(message: GrowattModbusMessage) -> None:
                     "device_timestamp": message_timestamp,
                     "device_id": message.device_id,
                     "source": "modbus",
-                    "function": int(message.function),
+                    "function": function,
                     "block_start": block.start,
                     "block_end": block.end,
                     "register": register_no,
