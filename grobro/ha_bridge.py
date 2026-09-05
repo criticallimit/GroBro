@@ -11,6 +11,7 @@ import logging
 import time
 
 from grobro import model, ha, grobro
+from grobro.grobro.register_debug import install_register_debug_hook
 
 # Setup Logger
 LOG_LEVEL = os.getenv("LOG_LEVEL", "ERROR").upper()
@@ -27,6 +28,9 @@ except Exception as e:
     )
     print(f"Failed to setup logger {e} USING DEFAULT LOG Level(Error)")
 LOG = logging.getLogger(__name__)
+
+# Install the optional passive register logger before clients start parsing messages.
+install_register_debug_hook()
 
 # Configuration from environment variables
 GROBRO_MQTT_CONFIG = model.MQTTConfig.from_env(
@@ -49,29 +53,23 @@ RUNNING = True
 class SignalHandler:
     """
     Catches SIGINT and SIGTERM in order to trigger
-    graceful shutdown.
+graceful shutdown.
     """
 
     _caught: bool
 
     def __init__(self):
         self._running = True
-        # Register signal handlers for graceful shutdown
         signal.signal(signal.SIGINT, self._handle)
         signal.signal(signal.SIGTERM, self._handle)
 
     def _handle(self, _, __):
-        """
-        Handles signal by setting RUNNING to false.
-        """
         LOG.info("Signal received, shutting down...")
         self._running = False
 
     @property
     def caught(self) -> bool:
-        """
-        Wether the signal was caught.
-        """
+        """Whether the signal was caught."""
         return self._running
 
 
@@ -93,7 +91,6 @@ if __name__ == "__main__":
     RUNNING = True
     signal_handler = SignalHandler()
 
-    # Assume client1 and client2 have .start() and .stop()
     ha_client.start()
     grobro_client.start()
 
