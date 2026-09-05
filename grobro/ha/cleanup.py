@@ -38,6 +38,13 @@ def _get_bat_number_cached(name: str):
     return _BASE_GET_BAT_NUMBER(name)
 
 
+def _daemon_timer(*args, **kwargs) -> Timer:
+    """Create a Timer that never keeps the add-on process alive by itself."""
+    timer = Timer(*args, **kwargs)
+    timer.daemon = True
+    return timer
+
+
 def _detect_bat_count(payload: dict) -> int:
     bat_cnt = payload.get("bat_cnt")
     if isinstance(bat_cnt, int) and 1 <= bat_cnt <= 4:
@@ -216,8 +223,7 @@ def _schedule_next_time_sync(client) -> None:
         _sync_supported_clocks(client)
         _schedule_next_time_sync(client)
 
-    timer = Timer(_seconds_until_next_time_sync(), run_and_reschedule)
-    timer.daemon = True
+    timer = _daemon_timer(_seconds_until_next_time_sync(), run_and_reschedule)
     client._time_sync_timer = timer
     timer.start()
 
@@ -262,6 +268,7 @@ def install_ha_cleanup_hook() -> None:
     ha_client_module._get_bat_number = _get_bat_number_cached
     ha_client_module._detect_bat_count = _detect_bat_count
     ha_client_module._resolve_max_bat = _resolve_max_bat
+    ha_client_module.Timer = _daemon_timer
     client_cls = ha_client_module.Client
 
     original_init = client_cls.__init__
@@ -373,8 +380,7 @@ def install_ha_cleanup_hook() -> None:
                         return
                     remaining = ha_client_module.DEVICE_TIMEOUT - (time.monotonic() - last_seen)
                     if remaining > 0:
-                        timer = Timer(remaining, check_timeout, args=(d_id,))
-                        timer.daemon = True
+                        timer = _daemon_timer(remaining, check_timeout, args=(d_id,))
                         self._device_timers[d_id] = timer
                         timer.start()
                         return
@@ -389,8 +395,7 @@ def install_ha_cleanup_hook() -> None:
                 timer = self._device_timers.get(device_id)
                 if timer is not None and timer.is_alive():
                     return
-                timer = Timer(ha_client_module.DEVICE_TIMEOUT, check_timeout, args=(device_id,))
-                timer.daemon = True
+                timer = _daemon_timer(ha_client_module.DEVICE_TIMEOUT, check_timeout, args=(device_id,))
                 self._device_timers[device_id] = timer
                 timer.start()
 
