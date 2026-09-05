@@ -85,6 +85,7 @@ def _persisted_config_data(config) -> dict:
 def _initialize_instance_state(client) -> None:
     client._config_cache = {}
     client._discovery_cache = []
+    client._discovery_signature = {}
     client._device_timers = {}
     client._last_energy_values = {}
     client._config_read_queues = {}
@@ -129,6 +130,12 @@ def _migration_set(client) -> set:
         migrations = set()
         client._migration_done = migrations
     return migrations
+
+
+def _discovery_signature(client, device_id: str, effective_max_bat: int) -> tuple[int, int | None]:
+    """Return the small subset of runtime state that changes discovery contents."""
+    pv_count = getattr(client, "_neo_pv_count", {}).get(device_id)
+    return effective_max_bat, pv_count
 
 
 def _clean_discovery_payload(client, device_id: str, data: dict) -> dict:
@@ -212,6 +219,7 @@ def install_ha_cleanup_hook() -> None:
         self._config_cache[device_id] = config
         if device_id in self._discovery_cache:
             self._discovery_cache.remove(device_id)
+        getattr(self, "_discovery_signature", {}).pop(device_id, None)
         _migration_set(self).discard(device_id)
         self._Client__publish_device_discovery(device_id)
 
@@ -254,6 +262,18 @@ def install_ha_cleanup_hook() -> None:
     original_publish_discovery = client_cls._Client__publish_device_discovery
 
     def publish_discovery_clean(self, device_id: str, effective_max_bat=None):
+        if effective_max_bat is None:
+            effective_max_bat = _resolve_max_bat(device_id)
+
+        signature = _discovery_signature(self, device_id, effective_max_bat)
+        signatures = getattr(self, "_discovery_signature", None)
+        if signatures is None:
+            signatures = {}
+            self._discovery_signature = signatures
+
+        if device_id in self._discovery_cache and signatures.get(device_id) == signature:
+            return None
+
         original_publish = self._client.publish
 
         def publish(topic, payload=None, *args, **kwargs):
@@ -282,7 +302,9 @@ def install_ha_cleanup_hook() -> None:
 
         self._client.publish = publish
         try:
-            return original_publish_discovery(self, device_id, effective_max_bat)
+            result = original_publish_discovery(self, device_id, effective_max_bat)
+            signatures[device_id] = signature
+            return result
         finally:
             self._client.publish = original_publish
 
