@@ -31,32 +31,34 @@ class GrowattModbusBlock(BaseModel):
     values: bytes
 
     @staticmethod
-    def parse_grobro(buffer) -> Optional["GrowattModbusBlock"]:
+    def parse_grobro(buffer, offset: int = 0) -> Optional["GrowattModbusBlock"]:
         try:
-            if len(buffer) < 4:
+            if offset < 0 or len(buffer) - offset < 4:
                 return None
 
-            start, end = struct.unpack(">HH", buffer[0:4])
+            start, end = struct.unpack_from(">HH", buffer, offset)
             if end < start:
                 LOG.warning("Invalid register block range: %s..%s", start, end)
                 return None
 
             register_count = end - start + 1
             expected_size = 4 + register_count * 2
-            if len(buffer) < expected_size:
+            if len(buffer) - offset < expected_size:
                 LOG.warning(
                     "Truncated register block %s..%s: need %s bytes, got %s",
                     start,
                     end,
                     expected_size,
-                    len(buffer),
+                    len(buffer) - offset,
                 )
                 return None
 
+            values_start = offset + 4
+            values_end = offset + expected_size
             return GrowattModbusBlock(
                 start=start,
                 end=end,
-                values=buffer[4:expected_size],
+                values=buffer[values_start:values_end],
             )
         except (struct.error, ValueError) as exc:
             LOG.warning("Parsing GrowattModbusBlock: %s", exc)
@@ -78,6 +80,9 @@ class GrowattModbusFunction(int, Enum):
     VENDOR_100 = 100
 
 
+MODBUS_FUNCTION_VALUES = frozenset(entry.value for entry in GrowattModbusFunction)
+
+
 class GrowattMetadata(BaseModel):
     """
     Represents metadata within a READ_INPUT_REGISTER message.
@@ -94,15 +99,15 @@ class GrowattMetadata(BaseModel):
         return 37
 
     @staticmethod
-    def parse_grobro(buffer) -> Optional["GrowattMetadata"]:
-        if len(buffer) < 37:
+    def parse_grobro(buffer, offset: int = 0) -> Optional["GrowattMetadata"]:
+        if offset < 0 or len(buffer) - offset < 37:
             return None
 
         try:
-            device_serial_raw = struct.unpack(">30s", buffer[0:30])[0]
+            device_serial_raw = struct.unpack_from(">30s", buffer, offset)[0]
             device_serial = device_serial_raw.decode("ascii", errors="ignore").strip("\x00")
-            year, month, day, hour, minute, second, millis = struct.unpack(
-                ">7B", buffer[30:37]
+            year, month, day, hour, minute, second, millis = struct.unpack_from(
+                ">7B", buffer, offset + 30
             )
         except struct.error:
             return None
@@ -188,19 +193,20 @@ class GrowattModbusMessage(BaseModel):
             if len(buffer) < HEADER_SIZE:
                 return None
 
-            unknown, constant_7, msg_len, constant_1, function, device_id_raw = struct.unpack(
+            unknown, constant_7, msg_len, _constant_1, function, device_id_raw = struct.unpack_from(
                 HEADER_STRUCT,
-                buffer[:HEADER_SIZE],
+                buffer,
+                0,
             )
 
             if constant_7 != 7:
                 LOG.debug("Unexpected Growatt header constant: %s", constant_7)
                 return None
-            if msg_len != len(buffer[8:]):
+            if msg_len != len(buffer) - 8:
                 return None
 
             device_id = device_id_raw.decode("ascii", errors="ignore").strip("\x00")
-            if function not in [entry.value for entry in GrowattModbusFunction]:
+            if function not in MODBUS_FUNCTION_VALUES:
                 LOG.debug("Unknown modbus function for %s: %s", device_id, function)
                 return None
 
@@ -209,7 +215,7 @@ class GrowattModbusMessage(BaseModel):
 
             metadata = None
             if function == GrowattModbusFunction.READ_INPUT_REGISTER:
-                metadata = GrowattMetadata.parse_grobro(buffer[offset:])
+                metadata = GrowattMetadata.parse_grobro(buffer, offset)
                 if metadata is None:
                     LOG.warning("Missing or truncated input-register metadata for %s", device_id)
                     return None
@@ -218,7 +224,7 @@ class GrowattModbusMessage(BaseModel):
             # A one-register block is exactly six bytes. Equality must be accepted
             # so a final single-register block is not skipped.
             while len(buffer) - offset >= MIN_BLOCK_SIZE:
-                block = GrowattModbusBlock.parse_grobro(buffer[offset:])
+                block = GrowattModbusBlock.parse_grobro(buffer, offset)
                 if block is None:
                     return None
                 register_blocks.append(block)
