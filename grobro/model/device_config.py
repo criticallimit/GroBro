@@ -3,7 +3,7 @@ import logging
 import os
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 LOG = logging.getLogger(__name__)
 
@@ -39,6 +39,18 @@ class DeviceConfig(BaseModel):
     datetime: Optional[str] = None
     wifi_signal: Optional[str] = None
     raw: Optional[str] = None
+
+    @field_validator("serial_number", mode="before")
+    @classmethod
+    def reject_placeholder_serial_number(cls, value):
+        if value is None:
+            return None
+        text = str(value).strip().strip("\x00")
+        if not text:
+            return None
+        if set(text.upper()) == {"X"}:
+            return None
+        return text
 
     @property
     def device_id(self) -> Optional[str]:
