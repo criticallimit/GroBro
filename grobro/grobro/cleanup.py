@@ -6,10 +6,13 @@ fixing legacy state sharing, cloud-filter direction, and defensive MQTT handling
 
 from __future__ import annotations
 
+import base64
+import json
 import logging
 import os
 import re
 import struct
+import threading
 import time
 
 from grobro.grobro import client as grobro_client_module
@@ -17,6 +20,7 @@ from grobro.grobro import parser
 
 LOG = logging.getLogger(__name__)
 _INSTALLED = False
+_DUMP_LOCK = threading.Lock()
 
 # Capture the user's configured intent before neutralizing the legacy check in
 # the wrong (device -> cloud) forwarding direction.
@@ -55,26 +59,32 @@ def _safe_topic_segment(segment: str) -> str:
 
 
 def _dump_message_binary_safe(topic, payload) -> None:
-    """Write a binary MQTT dump without allowing topic-based path traversal."""
+    """Append raw MQTT messages to one JSONL file while preserving payload bytes."""
     try:
-        topic_parts = [
-            _safe_topic_segment(part)
-            for part in str(topic).strip("/").split("/")
-            if part != ""
-        ]
-        if not topic_parts:
-            topic_parts = ["_"]
+        if not isinstance(payload, (bytes, bytearray, memoryview)):
+            raise TypeError("payload must be bytes-like")
 
+        raw = bytes(payload)
         root = os.path.abspath(grobro_client_module.DUMP_DIR)
-        dir_path = os.path.abspath(os.path.join(root, *topic_parts))
-        if os.path.commonpath([root, dir_path]) != root:
+        os.makedirs(root, exist_ok=True)
+        file_path = os.path.abspath(os.path.join(root, "messages.jsonl"))
+        if os.path.commonpath([root, file_path]) != root:
             raise ValueError("resolved dump path escaped DUMP_DIR")
 
-        os.makedirs(dir_path, exist_ok=True)
-        timestamp = int(time.time() * 1000)
-        file_path = os.path.join(dir_path, f"{timestamp}.bin")
-        with open(file_path, "wb") as handle:
-            handle.write(payload)
+        timestamp_ms = int(time.time() * 1000)
+        record = {
+            "captured_at_ms": timestamp_ms,
+            "topic": str(topic),
+            "payload_length": len(raw),
+            "payload_encoding": "base64",
+            "payload_base64": base64.b64encode(raw).decode("ascii"),
+        }
+
+        line = json.dumps(record, separators=(",", ":"))
+        with _DUMP_LOCK:
+            with open(file_path, "a", encoding="utf-8") as handle:
+                handle.write(line)
+                handle.write("\n")
     except (OSError, TypeError, ValueError) as exc:
         LOG.error("Failed to dump message for topic %s: %s", topic, exc)
 
