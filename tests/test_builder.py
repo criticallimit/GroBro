@@ -1,6 +1,9 @@
 import struct
+
 import crc
-from grobro.grobro.builder import scramble, append_crc, hexdump
+
+from grobro.grobro import parser
+from grobro.grobro.builder import append_crc, hexdump, scramble
 
 crc16 = crc.Calculator(crc.Crc16.MODBUS)
 
@@ -11,8 +14,16 @@ def test_scramble_roundtrip():
     assert scrambled != original
     assert len(scrambled) == len(original)
     assert scrambled[:8] == original[:8]
-    unscrambled = _unscramble(scrambled)
-    assert unscrambled == original
+    assert parser.unscramble(scrambled) == original
+
+
+def test_scramble_unscramble_roundtrip_across_packet_sizes():
+    for size in (0, 1, 7, 8, 9, 15, 64, 839, 2048):
+        original = bytes((index * 37 + 11) & 0xFF for index in range(size))
+        scrambled = scramble(original)
+        assert len(scrambled) == len(original)
+        assert scrambled[:8] == original[:8]
+        assert parser.unscramble(scrambled) == original
 
 
 def test_append_crc():
@@ -29,10 +40,3 @@ def test_hexdump(capsys):
     captured = capsys.readouterr()
     assert "48 65 6C 6C 6F" in captured.out
     assert "Hello.World" in captured.out or "Hello.World." in captured.out
-
-
-def _unscramble(pkt):
-    mask = b"Growatt"
-    out = bytearray(pkt[:8])
-    out += bytes(b ^ mask[i % len(mask)] for i, b in enumerate(pkt[8:]))
-    return bytes(out)
