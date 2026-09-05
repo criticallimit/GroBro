@@ -67,18 +67,21 @@ DEVICE_FAMILIES: tuple[DeviceFamily, ...] = (
         display_name="SPF",
         prefixes=("HAQ",),
         registers=KNOWN_SPF_REGISTERS,
+        supports_time_sync=True,
     ),
     DeviceFamily(
         key="min_xh2",
         display_name="MIN-XH2",
         prefixes=("ZGQ",),
         registers=KNOWN_XH2_REGISTERS,
+        supports_time_sync=True,
     ),
     DeviceFamily(
         key="mod",
         display_name="MOD",
         prefixes=("VWQ",),
         registers=KNOWN_MOD_REGISTERS,
+        supports_time_sync=True,
         dynamic_pv_count=True,
     ),
 )
