@@ -4,39 +4,37 @@ Client for the grobro mqtt side, handling messages from/to
 * growatt devices
 """
 
+import logging
 import os
 import re
-import struct
-import logging
 import ssl
+import struct
 from typing import Callable
-
 
 import paho.mqtt.client as mqtt
 from paho.mqtt.client import MQTTMessage
 
 from grobro import model
 from grobro.grobro import parser
-from grobro.grobro.builder import append_crc
-from grobro.grobro.builder import scramble
-from grobro.model.modbus_function import GrowattModbusFunctionSingle
-from grobro.model.modbus_message import GrowattModbusFunction
-from grobro.model.modbus_message import GrowattModbusMessage
-from grobro.model.mqtt_config import MQTTConfig
-from grobro.model.growatt_registers import HomeAssistantHoldingRegisterInput
-from grobro.model.growatt_registers import HomeAssistantHoldingRegisterValue
-from grobro.model.growatt_registers import HomeAssistantInputRegister
+from grobro.grobro.builder import append_crc, scramble
 from grobro.model.growatt_registers import (
+    KNOWN_MOD_REGISTERS,
     KNOWN_NEO_REGISTERS,
-    KNOWN_NOAH_REGISTERS,
     KNOWN_NEXA_REGISTERS,
+    KNOWN_NOAH_REGISTERS,
     KNOWN_SPF_REGISTERS,
     KNOWN_XH2_REGISTERS,
-    KNOWN_MOD_REGISTERS,
+    HomeAssistantHoldingRegisterInput,
+    HomeAssistantHoldingRegisterValue,
+    HomeAssistantInputRegister,
 )
+from grobro.model.modbus_function import GrowattModbusFunctionSingle
+from grobro.model.modbus_message import GrowattModbusFunction, GrowattModbusMessage
+from grobro.model.mqtt_config import MQTTConfig
 
 
 _DEVICE_ID_RE = re.compile(r"[^A-Za-z0-9]")
+_FALSE_VALUES = {"", "false", "0", "no", "off"}
 
 
 def _extract_device_id(topic: str) -> str:
@@ -47,25 +45,59 @@ def _extract_device_id(topic: str) -> str:
     SUBSCRIBE topic, such as `s/33/ZGQ0F5601J?\\x18`. Strip everything
     that isn't a valid serial character.
     """
-    return _DEVICE_ID_RE.sub("", topic.split("/")[-1])
+    return _DEVICE_ID_RE.sub("", str(topic).split("/")[-1])
+
+
+def _known_registers_for_device(device_id: str):
+    if device_id.startswith(("QMN", "RAQ", "PTQ")):
+        return KNOWN_NEO_REGISTERS
+    if device_id.startswith("0PVP"):
+        return KNOWN_NOAH_REGISTERS
+    if device_id.startswith("0HVR"):
+        return KNOWN_NEXA_REGISTERS
+    if device_id.startswith("HAQ"):
+        return KNOWN_SPF_REGISTERS
+    if device_id.startswith("ZGQ"):
+        return KNOWN_XH2_REGISTERS
+    if device_id.startswith("VWQ"):
+        return KNOWN_MOD_REGISTERS
+    return None
+
+
+def _publish_checked(client, topic: str, payload=None, **kwargs):
+    """Publish and warn when Paho rejects the request locally."""
+    result = client.publish(topic, payload, **kwargs)
+    status = getattr(result, "rc", None)
+    if status is None:
+        try:
+            status = result[0]
+        except (TypeError, IndexError, KeyError):
+            status = None
+    if status not in (None, 0):
+        LOG.warning("MQTT publish failed for topic %s: rc=%s", topic, status)
+    return result
 
 
 LOG = logging.getLogger(__name__)
 HA_BASE_TOPIC = os.getenv("HA_BASE_TOPIC", "homeassistant")
 
-# Updated growatt cloud forwarding config
-GROWATT_CLOUD = os.getenv("GROWATT_CLOUD", "false")
+# Updated growatt cloud forwarding config.
+# `false` must really mean disabled; any other non-boolean value is interpreted
+# as a comma-separated device allowlist for backwards compatibility.
+GROWATT_CLOUD = os.getenv("GROWATT_CLOUD", "false").strip()
 GROWATT_CLOUD_CONFIG_FILTER = os.getenv("GROWATT_CLOUD_CONFIG_FILTER", "false").lower()
-
-if GROWATT_CLOUD.lower() == "true":
-    GROWATT_CLOUD_ENABLED = True
-    GROWATT_CLOUD_FILTER = set()
-elif GROWATT_CLOUD:
-    GROWATT_CLOUD_ENABLED = True
-    GROWATT_CLOUD_FILTER = set(map(str.strip, GROWATT_CLOUD.split(",")))
-else:
+_cloud_lower = GROWATT_CLOUD.lower()
+if _cloud_lower in _FALSE_VALUES:
     GROWATT_CLOUD_ENABLED = False
     GROWATT_CLOUD_FILTER = set()
+elif _cloud_lower == "true":
+    GROWATT_CLOUD_ENABLED = True
+    GROWATT_CLOUD_FILTER = set()
+else:
+    GROWATT_CLOUD_ENABLED = True
+    GROWATT_CLOUD_FILTER = {
+        item.strip() for item in GROWATT_CLOUD.split(",") if item.strip()
+    }
 
 DUMP_MESSAGES = os.getenv("DUMP_MESSAGES", "false").lower() == "true"
 PUBLISH_SENSORS_RETAINED = os.getenv("PUBLISH_SENSORS_RETAINED", "False").lower() == "true"
@@ -91,11 +123,12 @@ class Client:
 
     _client: mqtt.Client
     _forward_mqtt_config: model.MQTTConfig
-    _forward_clients = {}
 
     def __init__(self, grobro_mqtt: MQTTConfig, forward_mqtt: MQTTConfig):
         LOG.info(
-            f"Connecting to GroBro broker at '{grobro_mqtt.host}:{grobro_mqtt.port}'"
+            "Connecting to GroBro broker at '%s:%s'",
+            grobro_mqtt.host,
+            grobro_mqtt.port,
         )
         client_id_suffix = os.getenv("MQTT_CLIENT_SUFFIX", "")
         client_id = f"grobro-grobro{('-' + client_id_suffix) if client_id_suffix else ''}"
@@ -115,6 +148,7 @@ class Client:
         self._client.on_message = self.__on_message
         self._client.on_connect = self.__on_connect
         self._forward_mqtt_config = forward_mqtt
+        self._forward_clients: dict[str, mqtt.Client] = {}
         self._ptq_for_raq: dict[str, str] = {}
 
     def start(self):
@@ -125,9 +159,12 @@ class Client:
         LOG.debug("GroBro: Stop")
         self._client.loop_stop()
         self._client.disconnect()
-        for key, client in self._forward_clients.items():
-            client.loop_stop()
-            client.disconnect()
+        for forward_client in list(self._forward_clients.values()):
+            try:
+                forward_client.loop_stop()
+            finally:
+                forward_client.disconnect()
+        self._forward_clients.clear()
 
     def send_command(self, cmd: GrowattModbusFunctionSingle):
         scrambled = scramble(cmd.build_grobro())
@@ -136,32 +173,26 @@ class Client:
         topic = f"s/33/{cmd.device_id}"
         LOG.debug("Send command: %s: %s: %s", type(cmd).__name__, topic, cmd)
 
-        result = self._client.publish(
+        return _publish_checked(
+            self._client,
             topic,
             final_payload,
             properties=MQTT_PROP_FORWARD_HA,
         )
-        status = result[0]
-        if status != 0:
-            LOG.warning("Sending failed: %s", result)
 
     def send_config_read_message(self, device_id: str, register_no: int):
-
-        HEADER = b"\x00\x01\x00\x07"
-        MSG_TYPE = 0x0119
+        header = b"\x00\x01\x00\x07"
+        msg_type = 0x0119
 
         dev = device_id.encode("ascii").ljust(16, b"\x00")
-        body = (
-            struct.pack(">H", 1)
-            + struct.pack(">H", register_no)
-        )
+        body = struct.pack(">HH", 1, register_no)
         payload = b"\x00" * 14 + body
-        msg_len = len(payload) + 2 + 16
+        msg_len = len(payload) + 18
 
         msg = (
-            HEADER
+            header
             + struct.pack(">H", msg_len)
-            + struct.pack(">H", MSG_TYPE)
+            + struct.pack(">H", msg_type)
             + dev
             + payload
         )
@@ -169,98 +200,89 @@ class Client:
         final_payload = append_crc(scramble(msg))
         topic = f"s/33/{device_id}"
 
-        LOG.info(f"Sending config read to {device_id} register={register_no}")
-        self._client.publish(topic, final_payload, properties=MQTT_PROP_FORWARD_HA)
-
+        LOG.info("Sending config read to %s register=%s", device_id, register_no)
+        return _publish_checked(
+            self._client,
+            topic,
+            final_payload,
+            properties=MQTT_PROP_FORWARD_HA,
+        )
 
     def send_config_message(self, device_id: str, register_no: int, value: str):
+        header = b"\x00\x01\x00\x07"
+        msg_type = 0x0118
+        dev = device_id.encode("ascii").ljust(16, b"\x00")
+        value_bytes = str(value).encode("ascii")
 
-        def build_config_message(device_id: str, register_no: int, value: str):
-            HEADER = b"\x00\x01\x00\x07"
-            MSG_TYPE = 0x0118
-            dev = device_id.encode("ascii").ljust(16, b"\x00")
-            value_bytes = value.encode("ascii")
+        tlv = (
+            struct.pack(">H", 1)
+            + struct.pack(">H", len(value_bytes) + 4)
+            + struct.pack(">H", register_no)
+            + struct.pack(">H", len(value_bytes))
+            + value_bytes
+        )
+        payload = b"\x00" * 14 + tlv
+        msg_len = len(payload) + 18
 
-            tlv = (
-                struct.pack(">H", 1)
-                + struct.pack(">H", len(value_bytes) + 4)
-                + struct.pack(">H", register_no)
-                + struct.pack(">H", len(value_bytes))
-                + value_bytes
-            )
-            payload = b"\x00" * 14 + tlv
-            msg_len = len(payload) + 2 + 16
-
-            msg = (
-                HEADER
-                + struct.pack(">H", msg_len)
-                + struct.pack(">H", MSG_TYPE)
-                + dev
-                + payload
-            )
-            return msg
-
-        raw = build_config_message(device_id, register_no, value)
-        scrambled = scramble(raw)
-        final_payload = append_crc(scrambled)
+        raw = (
+            header
+            + struct.pack(">H", msg_len)
+            + struct.pack(">H", msg_type)
+            + dev
+            + payload
+        )
+        final_payload = append_crc(scramble(raw))
 
         topic = f"s/33/{device_id}"
-        LOG.info(f"Sending config message to {device_id} register={register_no} value={value}")
-
-        self._client.publish(
+        # Never log the value: config registers can contain credentials.
+        LOG.info("Sending config message to %s register=%s", device_id, register_no)
+        return _publish_checked(
+            self._client,
             topic,
             final_payload,
             properties=MQTT_PROP_FORWARD_HA,
         )
 
     def __on_connect(self, client, userdata, flags, reason_code, properties):
-      LOG.debug(f"Connected to GroBro MQTT server with result code {reason_code}")
-      self._client.subscribe("c/#")      
+        LOG.debug("Connected to GroBro MQTT server with result code %s", reason_code)
+        client.subscribe("c/#")
 
     def __on_message(self, client, userdata, msg: MQTTMessage):
         # check for forwarded messages and ignore them
         forwarded_for = get_property(msg, "forwarded-for")
-        if forwarded_for and forwarded_for in ["ha", "growatt"]:
+        if forwarded_for in {"ha", "growatt"}:
             LOG.debug("Message forwarded from %s. Skipping...", forwarded_for)
             return
 
-        file = get_property(msg, "file")
-        LOG.debug("Received message (%s): %s: %s", file, msg.topic, msg.payload)
+        file_name = get_property(msg, "file")
+        LOG.debug("Received message (%s): %s: %s", file_name, msg.topic, msg.payload)
         if DUMP_MESSAGES:
             dump_message_binary(msg.topic, msg.payload)
         try:
             device_id = _extract_device_id(msg.topic)
-            if GROWATT_CLOUD_ENABLED:
-                if GROWATT_CLOUD == "true" or device_id in GROWATT_CLOUD_FILTER:
-                    try:
-                        if GROWATT_CLOUD_CONFIG_FILTER == "true":
-                            try:
-                                unscrambled = parser.unscramble(msg.payload)
-                                msg_type = struct.unpack_from(">H", unscrambled, 6)[0]
-                                if msg_type in (0x0118, 0x0110):
-                                    LOG.warning(
-                                        "Blocked config write from Growatt Cloud for %s",
-                                        device_id,
-                                    )
-                                    return
-                            except Exception as e:
-                                LOG.error(
-                                    "Failed to inspect message before forwarding: %s",
-                                    e,
-                                )
-                                return
+            if not device_id:
+                LOG.debug("Ignoring MQTT message without a usable device id: %s", msg.topic)
+                return
 
-                        forward_client = self.__connect_to_growatt_server(device_id)
-                        forward_client.publish(
-                            msg.topic,
-                            payload=msg.payload,
-                            qos=msg.qos,
-                            retain=msg.retain,
-                        )
-                    except Exception as e:
-                        LOG.error(f"Forwarding to Growatt Cloud failed: {e}")
+            if GROWATT_CLOUD_ENABLED and (
+                _cloud_lower == "true" or device_id in GROWATT_CLOUD_FILTER
+            ):
+                try:
+                    forward_client = self.__connect_to_growatt_server(device_id)
+                    _publish_checked(
+                        forward_client,
+                        msg.topic,
+                        payload=msg.payload,
+                        qos=msg.qos,
+                        retain=msg.retain,
+                    )
+                except Exception as exc:
+                    LOG.error("Forwarding to Growatt Cloud failed: %s", exc)
 
             unscrambled = parser.unscramble(msg.payload)
+            if len(unscrambled) < 8:
+                LOG.debug("Ignoring truncated Growatt message for %s", device_id)
+                return
             LOG.debug("Received: %s %s", msg.topic, unscrambled.hex(" "))
 
             # Read msg_type from both possible offsets
@@ -271,86 +293,75 @@ class Client:
             if msg_type_4 in (340, 341, 387) or msg_type == 0x0129:
                 config_offset = parser.find_config_offset(unscrambled)
                 config = parser.parse_config_type(unscrambled, config_offset)
-                if config and (msg_type_4 in (340, 341, 387) or msg_type == 0x0129 or config.serial_number):
+                if config and (
+                    msg_type_4 in (340, 341, 387)
+                    or msg_type == 0x0129
+                    or config.serial_number
+                ):
                     self.on_config(device_id, config)
                     LOG.info("Received config message for %s", device_id)
                     # Extract PTQ inverter serial from ShineWeLink dongle config
                     if msg_type == 0x0129 and len(unscrambled) >= 68:
-                        ptq_serial = unscrambled[38:68].rstrip(b"\x00").decode("ascii", errors="replace").strip()
+                        ptq_serial = (
+                            unscrambled[38:68]
+                            .rstrip(b"\x00")
+                            .decode("ascii", errors="replace")
+                            .strip()
+                        )
                         if ptq_serial.startswith("PTQ"):
                             self._ptq_for_raq[device_id] = ptq_serial
                             ptq_config = model.DeviceConfig(serial_number=ptq_serial)
                             ptq_config.device_type = "55"
-                            if getattr(config, 'model_id', None):
+                            if getattr(config, "model_id", None):
                                 ptq_config.model_id = config.model_id
-                            if getattr(config, 'sw_version', None):
+                            if getattr(config, "sw_version", None):
                                 ptq_config.sw_version = config.sw_version
                             self.on_config(ptq_serial, ptq_config)
-                            LOG.info("Registered PTQ inverter %s behind %s", ptq_serial, device_id)
+                            LOG.info(
+                                "Registered PTQ inverter %s behind %s",
+                                ptq_serial,
+                                device_id,
+                            )
                 return
 
             # Config READ response (281)
             if msg_type == 281:
                 cfg = parser.parse_config_message(unscrambled)
                 LOG.info(
-                    "Received config read response for %s reg=%s value=%s",
+                    "Received config read response for %s reg=%s",
                     cfg["device_id"],
                     cfg["register_no"],
-                    cfg["value"],
                 )
 
-                # Publish value back to HA (config/.../get)
                 topic = (
                     f"{HA_BASE_TOPIC}/config/grobro/"
                     f"{cfg['device_id']}/{cfg['register_no']}/get"
                 )
-
                 value = cfg["value"]
 
-                # Cast value for HA number entities (INT config registers)
-                try:
-                    known_registers = None
-                    if cfg["device_id"].startswith("QMN"):
-                        known_registers = KNOWN_NEO_REGISTERS
-                    elif cfg["device_id"].startswith("0PVP"):
-                        known_registers = KNOWN_NOAH_REGISTERS
-                    elif cfg["device_id"].startswith("0HVR"):
-                        known_registers = KNOWN_NEXA_REGISTERS
-                    elif cfg["device_id"].startswith("HAQ"):
-                        known_registers = KNOWN_SPF_REGISTERS
-                    # TODO: ShineWeLink Datalogger
-                    elif cfg["device_id"].startswith("RAQ"):
-                        known_registers = KNOWN_NEO_REGISTERS
-                    # NEO 1000M-X LoRa (encapsulated)
-                    elif cfg["device_id"].startswith("PTQ"):
-                        known_registers = KNOWN_NEO_REGISTERS
-                    # MIN TL-XH2 hybrid inverters (ShineWiFi-X2 dongle, ZGQ prefix)
-                    elif cfg["device_id"].startswith("ZGQ"):
-                        known_registers = KNOWN_XH2_REGISTERS
-                    # MOD-series 3-phase inverters
-                    elif cfg["device_id"].startswith("VWQ"):
-                        known_registers = KNOWN_MOD_REGISTERS
-                    if known_registers:
-                        for reg in known_registers.config_registers.values():
-                            if reg.growatt.register_no == cfg["register_no"]:
-                                if reg.growatt.data.data_type == "INT":
+                known_registers = _known_registers_for_device(cfg["device_id"])
+                if known_registers:
+                    for reg in known_registers.config_registers.values():
+                        if reg.growatt.register_no == cfg["register_no"]:
+                            if reg.growatt.data.data_type == "INT":
+                                try:
                                     value = int(value)
-                                break
-                except Exception as e:
-                    LOG.debug(
-                        "Failed to cast config value for %s reg=%s: %s",
-                        cfg["device_id"],
-                        cfg["register_no"],
-                        e,
-                    )
+                                except (TypeError, ValueError):
+                                    LOG.debug(
+                                        "Invalid integer config value for %s reg=%s",
+                                        cfg["device_id"],
+                                        cfg["register_no"],
+                                    )
+                                    return
+                            break
 
-                self._client.publish(topic, value, retain=True)
+                _publish_checked(self._client, topic, value, retain=True)
 
                 if self.on_config_read_response:
                     self.on_config_read_response(
                         cfg["device_id"],
                         cfg["register_no"],
-                )
+                    )
                 return
 
             # Config WRITE response (280)
@@ -366,18 +377,34 @@ class Client:
             # NOAH/NEXA Smart Meter (EcoTracker, Shelly etc.) JSON data (0x6F64)
             if msg_type == 0x6F64:
                 smart_meter = parser.parse_noah_6f64(unscrambled)
-                LOG.debug("Smart Meter data for %s: %s", smart_meter["device_id"], smart_meter["data"])
-                topic = f"{HA_BASE_TOPIC}/sensor/grobro/{smart_meter['device_id']}/smart_meter/state"
-                self._client.publish(topic, smart_meter["data"], retain=PUBLISH_SENSORS_RETAINED)
+                LOG.debug(
+                    "Smart Meter data for %s: %s",
+                    smart_meter["device_id"],
+                    smart_meter["data"],
+                )
+                topic = (
+                    f"{HA_BASE_TOPIC}/sensor/grobro/"
+                    f"{smart_meter['device_id']}/smart_meter/state"
+                )
+                _publish_checked(
+                    self._client,
+                    topic,
+                    smart_meter["data"],
+                    retain=PUBLISH_SENSORS_RETAINED,
+                )
                 return
 
             # NOAH/NEXA-specific message types (FE19 config, 0103 holding regs, etc.)
             noah_msg = parser.parse_noah_message(unscrambled)
             if noah_msg and noah_msg.get("message_type") == 0xFE19:
-                if device_id.startswith("0PVP") or device_id.startswith("0HVR"):
+                if device_id.startswith(("0PVP", "0HVR")):
                     config = noah_msg.get("config")
                     if config and config.serial_number:
-                        LOG.info("Received config for %s (sw_version=%s)", config.serial_number, config.sw_version or "?")
+                        LOG.info(
+                            "Received config for %s (sw_version=%s)",
+                            config.serial_number,
+                            config.sw_version or "?",
+                        )
                         self.on_config(device_id, config)
                         return
 
@@ -386,44 +413,24 @@ class Client:
             LOG.debug("Received modbus message: %s", modbus_message)
 
             if modbus_message:
-                known_registers = None
                 ptq_device_id = self._ptq_for_raq.get(device_id)
                 modbus_device_id = ptq_device_id or device_id
-                if modbus_device_id.startswith("QMN"):
-                    known_registers = KNOWN_NEO_REGISTERS
-                elif modbus_device_id.startswith("0PVP"):
-                    known_registers = KNOWN_NOAH_REGISTERS
-                elif modbus_device_id.startswith("0HVR"):
-                    known_registers = KNOWN_NEXA_REGISTERS
-                elif modbus_device_id.startswith("HAQ"):
-                    known_registers = KNOWN_SPF_REGISTERS
-                elif modbus_device_id.startswith("RAQ"):
-                    known_registers = KNOWN_NEO_REGISTERS
-                elif modbus_device_id.startswith("PTQ"):
-                    known_registers = KNOWN_NEO_REGISTERS
-                # MIN TL-XH2 hybrid inverters (ShineWiFi-X2 dongle, ZGQ prefix)
-                elif modbus_device_id.startswith("ZGQ"):
-                    known_registers = KNOWN_XH2_REGISTERS
-                # MOD-series 3-phase inverters
-                elif modbus_device_id.startswith("VWQ"):
-                    known_registers = KNOWN_MOD_REGISTERS
+                known_registers = _known_registers_for_device(modbus_device_id)
                 if not known_registers:
                     LOG.info("Modbus message from unknown device type: %s", device_id)
                     return
 
-                if (
-                    modbus_message.function
-                    == GrowattModbusFunction.READ_SINGLE_REGISTER
-                ):
+                if modbus_message.function == GrowattModbusFunction.READ_SINGLE_REGISTER:
                     state = HomeAssistantHoldingRegisterInput(device_id=modbus_device_id)
-                    
                     for name, register in known_registers.holding_registers.items():
+                        if register.growatt is None:
+                            continue
                         data_raw = modbus_message.get_data(register.growatt.position)
                         value = register.growatt.data.parse(data_raw)
                         if value is None:
                             continue
-                        if register.homeassistant.type=="switch":
-                            value = "ON" if value==1 else "OFF"
+                        if register.homeassistant.type == "switch":
+                            value = "ON" if value == 1 else "OFF"
                         state.payload.append(
                             HomeAssistantHoldingRegisterValue(
                                 name=name,
@@ -431,35 +438,37 @@ class Client:
                                 register=register.homeassistant,
                             )
                         )
-                    self.on_holding_register_input(state)
+                    if state.payload:
+                        self.on_holding_register_input(state)
+                    return
 
                 if modbus_message.function == GrowattModbusFunction.READ_INPUT_REGISTER:
                     state = HomeAssistantInputRegister(device_id=modbus_device_id)
-                    
                     for name, register in known_registers.input_registers.items():
                         data_raw = modbus_message.get_data(register.growatt.position)
                         value = register.growatt.data.parse(data_raw)
-                        # TODO: this is a workaround for broken messages sent by neo inverters at night.
-                        # They emmit state updates with incredible high wattage, which spoils HA statistics.
-                        # Assuming no one runs a balkony plant with more than a million peak wattage, we drop such messages.
-                        if name == "Ppv" and value > 1000000:
+                        if value is None:
+                            continue
+                        # Workaround for broken NEO night messages with impossible PV power.
+                        if (
+                            name == "Ppv"
+                            and isinstance(value, (int, float))
+                            and value > 1_000_000
+                        ):
                             LOG.debug("Dropping bad payload: %s", device_id)
                             return
                         state.payload[name] = value
-                    self.on_input_register(state)
+                    if state.payload:
+                        self.on_input_register(state)
                     return
 
                 return
 
-            # NOAH: MSG-TYPE 37 is response when setting a register was succeful
-            # TODO impmlement a proper response handling
-            #example hex: 00 01 00 07 00 25 01 06 30 50 56 50 46 24 6a 52 32 31 42 54 30 30 32 52 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 fc 00 00 14 8c af
-
-            # NOAH: MSG-TYPE 831 looks like published Holding Register??
-
             LOG.debug("Unknown msg_type %s: %s", msg_type, unscrambled.hex())
-        except Exception as e:
-            LOG.error(f"Processing message: {e}")
+        except (struct.error, TypeError, ValueError, KeyError) as exc:
+            LOG.error("Processing malformed message from %s: %s", msg.topic, exc)
+        except Exception as exc:
+            LOG.exception("Unexpected error processing message from %s: %s", msg.topic, exc)
 
     def __on_message_forward_client(self, client, userdata, msg: MQTTMessage):
         LOG.debug("Received Growatt forward message: %s: %s", msg.topic, msg.payload)
@@ -467,34 +476,53 @@ class Client:
             dump_message_binary(msg.topic, msg.payload)
         try:
             device_id = _extract_device_id(msg.topic)
+            if not device_id:
+                return
 
             unscrambled = parser.unscramble(msg.payload)
+            if len(unscrambled) < 8:
+                LOG.debug("Ignoring truncated Growatt cloud message for %s", device_id)
+                return
             LOG.debug("Received Growatt forward: %s %s", msg.topic, unscrambled.hex(" "))
 
             if not GROWATT_CLOUD_ENABLED:
                 return
-            if GROWATT_CLOUD != "true" and device_id not in GROWATT_CLOUD_FILTER:
+            if _cloud_lower != "true" and device_id not in GROWATT_CLOUD_FILTER:
                 LOG.debug(
                     "Dropping Growatt message for device %s not in GROWATT_CLOUD filter",
                     device_id,
                 )
                 return
+
+            # Cloud configuration filtering belongs in the Cloud -> device path.
+            if GROWATT_CLOUD_CONFIG_FILTER == "true":
+                cloud_msg_type = struct.unpack_from(">H", unscrambled, 6)[0]
+                if cloud_msg_type in (0x0118, 0x0110):
+                    LOG.warning(
+                        "Blocked configuration command from Growatt Cloud for %s",
+                        device_id,
+                    )
+                    return
+
             LOG.debug("Forwarding message from Growatt for client %s", device_id)
-            # We need to publish the messages from Growatt on the Topic
-            # s/33/{deviceid}. Growatt sends them on Topic s/{deviceid}
-            self._client.publish(
-                msg.topic.split("/")[0] + "/33/" + device_id,
+            topic = msg.topic.split("/")[0] + "/33/" + device_id
+            _publish_checked(
+                self._client,
+                topic,
                 payload=msg.payload,
                 qos=msg.qos,
                 retain=msg.retain,
                 properties=MQTT_PROP_FORWARD_GROWATT,
             )
-        except Exception as e:
-            LOG.error(f"Forwarding message: {e}")
+        except (struct.error, TypeError, ValueError) as exc:
+            LOG.error("Forwarding malformed Growatt message: %s", exc)
+        except Exception as exc:
+            LOG.exception("Unexpected Growatt forwarding error: %s", exc)
 
     # Setup Growatt MQTT broker for forwarding messages
     def __connect_to_growatt_server(self, client_id):
-        if f"forward_client_{client_id}" not in self._forward_clients:
+        key = f"forward_client_{client_id}"
+        if key not in self._forward_clients:
             LOG.info(
                 "Connecting to Growatt broker at '%s:%s', subscribed to '+/%s'",
                 self._forward_mqtt_config.host,
@@ -515,38 +543,49 @@ class Client:
             )
             client.subscribe(f"+/{client_id}")
             client.loop_start()
-            self._forward_clients[f"forward_client_{client_id}"] = client
-        return self._forward_clients[f"forward_client_{client_id}"]
+            self._forward_clients[key] = client
+        return self._forward_clients[key]
 
 
 # Ensure that the dump directory exists
 if DUMP_MESSAGES and not os.path.exists(DUMP_DIR):
     os.makedirs(DUMP_DIR, exist_ok=True)
-    LOG.info(f"Dump directory created: {DUMP_DIR}")
+    LOG.info("Dump directory created: %s", DUMP_DIR)
 
 
 def dump_message_binary(topic, payload):
+    """Legacy dump hook; replaced by cleanup hook in the HA bridge."""
     try:
-        # Build path following topic structure
-        topic_parts = topic.strip("/").split("/")
-        dir_path = os.path.join(DUMP_DIR, *topic_parts)
+        topic_parts = [part for part in str(topic).strip("/").split("/") if part]
+        if not topic_parts:
+            topic_parts = ["_"]
+        safe_parts = [re.sub(r"[^A-Za-z0-9._-]+", "_", part).strip(".") or "_" for part in topic_parts]
+        root = os.path.abspath(DUMP_DIR)
+        dir_path = os.path.abspath(os.path.join(root, *safe_parts))
+        if os.path.commonpath([root, dir_path]) != root:
+            raise ValueError("dump path escaped DUMP_DIR")
         os.makedirs(dir_path, exist_ok=True)
-
-        # Write each message to a new file with timestamp
-        import time
-
-        timestamp = int(time.time() * 1000)
-        file_path = os.path.join(dir_path, f"{timestamp}.bin")
-
-        with open(file_path, "wb") as f:
-            f.write(payload)
-    except Exception as e:
-        LOG.error(f"Failed to dump message for topic {topic}: {e}")
+        file_path = os.path.join(dir_path, f"{int(__import__('time').time() * 1000)}.bin")
+        with open(file_path, "wb") as handle:
+            handle.write(bytes(payload))
+    except (OSError, TypeError, ValueError) as exc:
+        LOG.error("Failed to dump message for topic %s: %s", topic, exc)
 
 
-def get_property(msg, prop) -> str:
-    props = msg.properties.json().get("UserProperty", [])
-    for key, value in props:
+def get_property(msg, prop) -> str | None:
+    properties = getattr(msg, "properties", None)
+    if properties is None:
+        return None
+    try:
+        data = properties.json()
+    except (AttributeError, TypeError, ValueError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    for entry in data.get("UserProperty", []) or []:
+        if not isinstance(entry, (list, tuple)) or len(entry) != 2:
+            continue
+        key, value = entry
         if key == prop:
             return value
     return None
