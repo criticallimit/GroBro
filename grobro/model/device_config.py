@@ -1,7 +1,8 @@
-import logging
 import json
-from typing import Optional
+import logging
 import os
+from typing import Optional
+
 from pydantic import BaseModel
 
 LOG = logging.getLogger(__name__)
@@ -40,22 +41,29 @@ class DeviceConfig(BaseModel):
     raw: Optional[str] = None
 
     @property
-    def device_id(self) -> str:
+    def device_id(self) -> Optional[str]:
         return self.serial_number
 
-    def to_file(self, file_path: str) -> str:
-        with open(file_path, "w") as f:
-            f.write(self.model_dump_json(exclude_none=True))
+    def to_file(self, file_path: str) -> None:
+        with open(file_path, "w", encoding="utf-8") as handle:
+            handle.write(self.model_dump_json(exclude_none=True))
+        try:
+            os.chmod(file_path, 0o600)
+        except OSError:
+            # Some container/filesystem combinations may not support chmod.
+            pass
 
     @staticmethod
     def from_file(file_path: str) -> Optional["DeviceConfig"]:
         if not os.path.exists(file_path):
             return None
         try:
-            with open(file_path, "r") as f:
-                data = json.load(f)
-                LOG.debug(f"Loaded {data}")
-                return DeviceConfig(**data)
-        except Exception as e:
-            LOG.error(f"Failed to load config {file_path}: {e}")
+            with open(file_path, "r", encoding="utf-8") as handle:
+                data = json.load(handle)
+            # Do not log the full config: it may contain passwords or other
+            # credentials. Log only the source path at DEBUG level.
+            LOG.debug("Loaded device config from %s", file_path)
+            return DeviceConfig(**data)
+        except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
+            LOG.error("Failed to load config %s: %s", file_path, exc)
             return None
