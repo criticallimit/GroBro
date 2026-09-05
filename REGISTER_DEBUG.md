@@ -12,7 +12,7 @@ The add-on exposes these options:
 
 - `REGISTER_DEBUG`: enable/disable passive register logging.
 - `REGISTER_DEBUG_DIR`: output directory. Default: `/share/GroBro/register_debug`.
-- `REGISTER_DEBUG_MAX_REGISTER`: highest confirmed Modbus register number written to the debug file. Default: `3000`.
+- `REGISTER_DEBUG_MAX_REGISTER`: highest confirmed Modbus register number written to the debug file. Default: `65535` (the full 16-bit Modbus address range).
 - `REGISTER_DEBUG_CHANGES_ONLY`: when `true`, unchanged values are skipped after their first observation. Default: `true`.
 
 The debug build uses the slug `grobro_register_debug` so it can be distinguished from the upstream add-on.
@@ -46,7 +46,7 @@ GroBro also receives a special NOAH/NEXA message type `0x0103`. The current deco
 
 ## Important limitation
 
-`REGISTER_DEBUG_MAX_REGISTER=3000` does **not** actively scan registers 0-3000. It means that any received, correctly addressed Modbus register up to 3000 is retained. If a device only transmits 0-120, GroBro cannot discover 121-3000 without active read requests. Active scanning is intentionally not part of this fork.
+`REGISTER_DEBUG_MAX_REGISTER=65535` does **not** actively scan registers. It only allows the logger to retain any correctly addressed register that the device actually transmits anywhere in the 16-bit Modbus address space. If a device only transmits 0-124, GroBro cannot discover higher addresses without additional read requests. Active scanning is intentionally not part of this fork.
 
 ## Recommended capture
 
