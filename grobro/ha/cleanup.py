@@ -104,6 +104,36 @@ def _migration_set(client) -> set:
     return migrations
 
 
+def _clean_discovery_payload(client, device_id: str, data: dict) -> dict:
+    """Remove GroBro-only fields while preserving HA entity identities/topics."""
+    origin = data.get("o")
+    if isinstance(origin, dict):
+        origin["url"] = FORK_URL
+
+    device_meta = data.get("dev")
+    if isinstance(device_meta, dict):
+        # Keep identifiers unchanged so Home Assistant's device identity remains
+        # stable. Only correct the visible serial-number metadata.
+        device_meta["serial_number"] = _configured_serial(client, device_id)
+
+    components = data.get("cmps")
+    if isinstance(components, dict):
+        for component in components.values():
+            if not isinstance(component, dict):
+                continue
+
+            # These are GroBro model/control fields, not MQTT discovery keys.
+            component.pop("publish", None)
+            component.pop("type", None)
+
+            # Config entries with platform=sensor are read-only. A command topic
+            # makes no sense for an MQTT sensor and can cause HA validation noise.
+            if component.get("platform") == "sensor":
+                component.pop("command_topic", None)
+
+    return data
+
+
 def install_ha_cleanup_hook() -> None:
     global _INSTALLED
     if _INSTALLED:
@@ -197,12 +227,7 @@ def install_ha_cleanup_hook() -> None:
             ):
                 try:
                     data = json.loads(payload)
-                    origin = data.get("o")
-                    if isinstance(origin, dict):
-                        origin["url"] = FORK_URL
-                    device_meta = data.get("dev")
-                    if isinstance(device_meta, dict):
-                        device_meta["serial_number"] = _configured_serial(self, device_id)
+                    data = _clean_discovery_payload(self, device_id, data)
                     payload = json.dumps(data, sort_keys=True, separators=(",", ":"))
                 except (TypeError, ValueError):
                     pass
