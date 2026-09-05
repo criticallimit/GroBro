@@ -16,6 +16,12 @@ from grobro.grobro import parser
 LOG = logging.getLogger(__name__)
 _INSTALLED = False
 
+# Capture the user's configured intent before neutralizing the legacy check in
+# the wrong (device -> cloud) forwarding direction.
+_CLOUD_CONFIG_FILTER_ENABLED = (
+    grobro_client_module.GROWATT_CLOUD_CONFIG_FILTER == "true"
+)
+
 # Growatt configuration/control message types that must not be delivered from the
 # cloud to a local device when GROWATT_CLOUD_CONFIG_FILTER is enabled.
 _BLOCKED_CLOUD_MESSAGE_TYPES = {
@@ -46,6 +52,12 @@ def install_grobro_cleanup_hook() -> None:
 
     client_cls = grobro_client_module.Client
 
+    # The upstream implementation applies GROWATT_CLOUD_CONFIG_FILTER while
+    # forwarding device-originated packets TO the cloud. That is the opposite of
+    # the documented protection goal. Disable only that legacy direction here;
+    # the wrapper below enforces the captured setting on Cloud -> device traffic.
+    grobro_client_module.GROWATT_CLOUD_CONFIG_FILTER = "false"
+
     # Upstream stores forward clients on the class, which shares connections
     # across instances/tests. Keep them per instance instead.
     original_init = client_cls.__init__
@@ -60,7 +72,7 @@ def install_grobro_cleanup_hook() -> None:
 
     def forward_handler_clean(self, client, userdata, msg):
         if (
-            grobro_client_module.GROWATT_CLOUD_CONFIG_FILTER == "true"
+            _CLOUD_CONFIG_FILTER_ENABLED
             and _is_blocked_cloud_config_message(msg.payload)
         ):
             device_id = grobro_client_module._extract_device_id(msg.topic)
