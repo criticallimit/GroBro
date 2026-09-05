@@ -3,11 +3,13 @@
 Keeps upstream GroBro behavior intact while correcting a few legacy behaviors:
 - battery count fallback prefers the explicit bat_cnt input register and never
   assumes four batteries when no evidence is present;
+- the existing Device SN entity keeps the same name/unique id but publishes the
+  configured serial number when available instead of blindly mirroring device_id;
 - a legacy sw_version publish that accidentally used the device id is corrected;
 - MQTT discovery origin metadata points to this debug fork.
 
-Existing Home Assistant entity names, unique IDs and device identifiers are kept
-unchanged so existing dashboards and automations continue to work.
+Stable Home Assistant entity names, unique ids and device identifiers are
+preserved so existing automations and dashboards continue to work.
 """
 
 from __future__ import annotations
@@ -28,8 +30,6 @@ def _detect_bat_count(payload: dict) -> int:
     if isinstance(bat_cnt, int) and 1 <= bat_cnt <= 4:
         return bat_cnt
 
-    # NOAH battery 1 is represented by the MQTT/device id. Additional battery
-    # serials start at bat2_* in the current register map.
     count = 1
     for bat_num in range(2, 5):
         key = f"bat{bat_num}_ser_part_1"
@@ -39,13 +39,21 @@ def _detect_bat_count(payload: dict) -> int:
     return count
 
 
+def _configured_serial(client, device_id: str) -> str:
+    """Return the best available serial while keeping device_id as fallback."""
+    config = client._config_cache.get(device_id)
+    serial = getattr(config, "serial_number", None) if config else None
+    if serial and str(serial).strip():
+        return str(serial).strip()
+    return device_id
+
+
 def install_ha_cleanup_hook() -> None:
     """Install narrowly scoped fixes without changing HA entity identities."""
     global _INSTALLED
     if _INSTALLED:
         return
 
-    # Replace only the helper used by _resolve_max_bat.
     ha_client_module._detect_bat_count = _detect_bat_count
 
     client_cls = ha_client_module.Client
@@ -55,8 +63,6 @@ def install_ha_cleanup_hook() -> None:
         original_publish = self._client.publish
 
         def publish(topic, payload=None, *args, **kwargs):
-            # Keep all existing entities and unique IDs unchanged. Only update
-            # the discovery origin URL so Home Assistant points to this fork.
             if (
                 topic
                 == f"{ha_client_module.HA_BASE_TOPIC}/device/{device_id}/config"
@@ -75,17 +81,17 @@ def install_ha_cleanup_hook() -> None:
                 except (TypeError, ValueError):
                     pass
 
-            # Older GroBro code publishes device_id to the sw_version state
-            # topic when discovery is unchanged. Replace it with the actual
-            # configured software version, or suppress the bogus value.
+            # Keep the existing Device SN entity/topic/unique id exactly as-is,
+            # but feed it from the configured serial number when available.
+            if topic == f"{ha_client_module.HA_BASE_TOPIC}/grobro/{device_id}/serial":
+                payload = _configured_serial(self, device_id)
+
             if (
                 topic
                 == f"{ha_client_module.HA_BASE_TOPIC}/grobro/{device_id}/sw_version"
             ):
                 config = self._config_cache.get(device_id)
-                sw_version = (
-                    getattr(config, "sw_version", None) if config else None
-                )
+                sw_version = getattr(config, "sw_version", None) if config else None
                 if not sw_version:
                     return None
                 payload = sw_version
