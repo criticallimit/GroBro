@@ -17,7 +17,12 @@ from paho.mqtt.client import MQTTMessage
 
 from grobro import model
 from grobro.grobro import parser
-from grobro.grobro.builder import append_crc, scramble
+from grobro.grobro.builder import (
+    append_crc,
+    build_config_read_packet,
+    build_config_write_packet,
+    scramble,
+)
 from grobro.grobro.cloud_policy import CloudForwardingPolicy
 from grobro.model.growatt_registers import (
     HomeAssistantHoldingRegisterInput,
@@ -181,23 +186,7 @@ class Client:
         )
 
     def send_config_read_message(self, device_id: str, register_no: int):
-        header = b"\x00\x01\x00\x07"
-        msg_type = 0x0119
-
-        dev = device_id.encode("ascii").ljust(16, b"\x00")
-        body = struct.pack(">HH", 1, register_no)
-        payload = b"\x00" * 14 + body
-        msg_len = len(payload) + 18
-
-        msg = (
-            header
-            + struct.pack(">H", msg_len)
-            + struct.pack(">H", msg_type)
-            + dev
-            + payload
-        )
-
-        final_payload = append_crc(scramble(msg))
+        final_payload = build_config_read_packet(device_id, register_no)
         topic = f"s/33/{device_id}"
 
         LOG.info("Sending config read to %s register=%s", device_id, register_no)
@@ -209,31 +198,9 @@ class Client:
         )
 
     def send_config_message(self, device_id: str, register_no: int, value: str):
-        header = b"\x00\x01\x00\x07"
-        msg_type = 0x0118
-        dev = device_id.encode("ascii").ljust(16, b"\x00")
-        value_bytes = str(value).encode("ascii")
-
-        tlv = (
-            struct.pack(">H", 1)
-            + struct.pack(">H", len(value_bytes) + 4)
-            + struct.pack(">H", register_no)
-            + struct.pack(">H", len(value_bytes))
-            + value_bytes
-        )
-        payload = b"\x00" * 14 + tlv
-        msg_len = len(payload) + 18
-
-        raw = (
-            header
-            + struct.pack(">H", msg_len)
-            + struct.pack(">H", msg_type)
-            + dev
-            + payload
-        )
-        final_payload = append_crc(scramble(raw))
-
+        final_payload = build_config_write_packet(device_id, register_no, value)
         topic = f"s/33/{device_id}"
+
         # Never log the value: config registers can contain credentials.
         LOG.info("Sending config message to %s register=%s", device_id, register_no)
         return _publish_checked(
