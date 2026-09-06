@@ -67,11 +67,11 @@ def _noah_heater_state_from_packet(payload, device_id: str) -> str | None:
         return None
     if not isinstance(payload, (bytes, bytearray, memoryview)):
         return None
+    if len(payload) <= _NOAH_HEATER_ABSOLUTE_OFFSET:
+        return None
 
     try:
         plain = parser.unscramble(bytes(payload))
-        if len(plain) <= _NOAH_HEATER_ABSOLUTE_OFFSET:
-            return None
         msg_type = struct.unpack_from(">H", plain, 6)[0]
         if msg_type != _NOAH_STATUS_MESSAGE_TYPE:
             return None
