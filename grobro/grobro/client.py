@@ -76,6 +76,28 @@ _CLOUD_POLICY = CloudForwardingPolicy.parse(
 )
 GROWATT_CLOUD_ENABLED = _CLOUD_POLICY.enabled
 GROWATT_CLOUD_FILTER = set(_CLOUD_POLICY.allowlist)
+# Kept as a compatibility alias for older tests/extensions that patched this
+# internal value. Runtime decisions still go through CloudForwardingPolicy.
+_cloud_lower = GROWATT_CLOUD.lower()
+
+
+def _current_cloud_policy() -> CloudForwardingPolicy:
+    """Resolve cloud policy from compatibility module variables.
+
+    The public/legacy module variables remain patchable for tests and external
+    integrations, while all actual allow/block decisions are centralized in
+    CloudForwardingPolicy.
+    """
+    if not GROWATT_CLOUD_ENABLED:
+        cloud_value = "false"
+    elif _cloud_lower == "true":
+        cloud_value = "true"
+    elif GROWATT_CLOUD_FILTER:
+        cloud_value = ",".join(sorted(GROWATT_CLOUD_FILTER))
+    else:
+        cloud_value = GROWATT_CLOUD or "true"
+    return CloudForwardingPolicy.parse(cloud_value, GROWATT_CLOUD_CONFIG_FILTER)
+
 
 DUMP_MESSAGES = os.getenv("DUMP_MESSAGES", "false").lower() == "true"
 PUBLISH_SENSORS_RETAINED = os.getenv("PUBLISH_SENSORS_RETAINED", "False").lower() == "true"
@@ -243,7 +265,8 @@ class Client:
                 LOG.debug("Ignoring MQTT message without a usable device id: %s", msg.topic)
                 return
 
-            if _CLOUD_POLICY.allows_device(device_id):
+            cloud_policy = _current_cloud_policy()
+            if cloud_policy.allows_device(device_id):
                 try:
                     forward_client = self.__connect_to_growatt_server(device_id)
                     _publish_checked(
@@ -465,7 +488,8 @@ class Client:
             if LOG.isEnabledFor(logging.DEBUG):
                 LOG.debug("Received Growatt forward: %s %s", msg.topic, unscrambled.hex(" "))
 
-            if not _CLOUD_POLICY.allows_device(device_id):
+            cloud_policy = _current_cloud_policy()
+            if not cloud_policy.allows_device(device_id):
                 LOG.debug(
                     "Dropping Growatt message for device %s not allowed by cloud policy",
                     device_id,
@@ -474,7 +498,7 @@ class Client:
 
             # Cloud configuration filtering belongs in the Cloud -> device path.
             cloud_msg_type = struct.unpack_from(">H", unscrambled, 6)[0]
-            if _CLOUD_POLICY.should_block_cloud_message(cloud_msg_type):
+            if cloud_policy.should_block_cloud_message(cloud_msg_type):
                 LOG.warning(
                     "Blocked configuration command from Growatt Cloud for %s",
                     device_id,
