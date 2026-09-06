@@ -6,7 +6,7 @@ Reference baseline for this release:
 
 - Upstream repository: `robertzaage/GroBro`
 - Upstream `main`: `4797f8419bd574bcebd32d1a859569f97b58b774` (2026-08-08)
-- Fork release: `2.8.4`
+- Fork release: `2.8.5`
 - Comparison date: 2026-09-06
 
 The goal of this fork is to keep GroBro's normal MQTT/Home Assistant behavior compatible while improving robustness, runtime efficiency and diagnostics, and while validating additional NOAH 2000 behavior from real captures.
@@ -96,6 +96,8 @@ Additional NOAH-specific presentation/cleanup decisions in this fork:
 
 The existing Home Assistant `Heater` entity is preserved. For NOAH `0PVP` status messages of type `0x0104` (decimal 260), the fork reads the observed heater-status byte at payload offset 84 after the 24-byte header (absolute offset 108). Values `0..15` override the older register-17-derived heater value while reusing the existing enum/bitmask representation. Unsupported packets or invalid values leave the old register-based value as fallback. This is an empirical NOAH status-frame mapping and is not presented as official Growatt Modbus documentation.
 
+To reduce overhead without changing Heater behavior, packets shorter than the validated heater offset are rejected before the extra Heater-specific descramble step.
+
 These NOAH-specific removals and overrides do not change the corresponding definitions for other device families.
 
 ## 5. Passive register diagnostics
@@ -171,7 +173,10 @@ TLS certificate verification behavior remains compatible with upstream by defaul
 The fork includes several low-risk hot-path optimizations that apply across device families:
 
 - Growatt scramble/unscramble uses one-pass/preallocated bytearray processing instead of repeated immutable byte concatenation,
+- the Growatt descrambler advances the seven-byte XOR mask index directly instead of evaluating modulo for every payload byte,
 - Modbus parser membership checks and byte slicing were reduced,
+- a single-register-block fast path avoids repeated block iteration/helper-call overhead for the common telemetry case,
+- register parsing avoids copying data that is already immutable `bytes`,
 - static unpack/type lookup structures are reused instead of rebuilt per value,
 - Home Assistant discovery is rebuilt only when its effective signature changes,
 - repeated identical availability publications are skipped,
@@ -217,6 +222,8 @@ Additional tests cover areas including:
 - passive register debug behavior and unchanged-block fast-path behavior.
 
 GitHub Actions is enabled for this fork. Releases are validated with Ruff and the full pytest suite on Python 3.11, 3.12 and 3.13. The Docker workflow builds for `linux/amd64`, `linux/arm64` and `linux/arm/v7` and publishes to the fork-owned `ghcr.io/criticallimit/grobro` namespace after successful CI. Superseded CI runs on the same branch are cancelled automatically to reduce runner churn.
+
+The performance commits included in 2.8.5 were individually validated by CI before the release bump.
 
 Runtime/hardware testing remains important because CI cannot validate every physical Growatt model or firmware revision.
 
