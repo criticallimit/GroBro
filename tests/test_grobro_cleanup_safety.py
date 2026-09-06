@@ -1,5 +1,4 @@
-import base64
-import json
+from unittest.mock import patch
 
 from grobro.grobro import cleanup
 from grobro.grobro.builder import scramble
@@ -28,26 +27,13 @@ def test_noah_heater_does_not_guess_unsupported_packets():
     assert _noah_heater_state_from_packet(b"short", "0PVPTEST") is None
 
 
-def test_raw_dump_appends_all_messages_to_one_jsonl_file(tmp_path, monkeypatch):
-    monkeypatch.setattr(cleanup.grobro_client_module, "DUMP_DIR", str(tmp_path))
+def test_raw_dump_wrapper_delegates_to_centralized_dumper(monkeypatch):
+    monkeypatch.setattr(cleanup.grobro_client_module, "DUMP_DIR", "/tmp/grobro-dump")
 
-    payload1 = b"\x00\x01\x02NOAH"
-    payload2 = b"\xff\x10\x20GROWATT"
+    with patch("grobro.grobro.cleanup.dump_message_jsonl") as dump:
+        cleanup._dump_message_binary_safe("c/33/DEVICE", b"payload")
 
-    cleanup._dump_message_binary_safe("c/33/DEVICE", payload1)
-    cleanup._dump_message_binary_safe("s/DEVICE", payload2)
-
-    dump_file = tmp_path / "messages.jsonl"
-    assert dump_file.exists()
-
-    records = [json.loads(line) for line in dump_file.read_text(encoding="utf-8").splitlines()]
-    assert len(records) == 2
-    assert records[0]["topic"] == "c/33/DEVICE"
-    assert records[1]["topic"] == "s/DEVICE"
-    assert records[0]["payload_length"] == len(payload1)
-    assert records[1]["payload_length"] == len(payload2)
-    assert base64.b64decode(records[0]["payload_base64"]) == payload1
-    assert base64.b64decode(records[1]["payload_base64"]) == payload2
+    dump.assert_called_once_with("/tmp/grobro-dump", "c/33/DEVICE", b"payload")
 
 
 def test_cleanup_no_longer_duplicates_core_config_packet_builders():
