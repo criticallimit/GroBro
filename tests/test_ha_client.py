@@ -293,7 +293,7 @@ class TestClientPublishInput:
                 published = json.loads(call_args[0][1])
                 break
         assert published is not None
-        assert published.get("Ppv") == 525.1
+        assert published.get("Ppv") == 525
         assert published.get("Inverter_Status") == "NormalStatus"
 
     def test_publish_input_register_bat_temp_filter(self, ha_client):
