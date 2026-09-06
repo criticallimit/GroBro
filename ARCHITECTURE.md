@@ -27,13 +27,43 @@ that diagnostics affect normal traffic.
 `grobro/grobro/runtime.py` installs permanent Better GroBro behavior in a fixed,
 tested order:
 
-1. GroBro compatibility/runtime cleanup,
-2. Home Assistant cleanup/compatibility,
-3. Home Assistant telemetry performance layer,
-4. system-time entity cleanup.
+1. centralized raw MQTT dump compatibility hook,
+2. validated NOAH heater compatibility hook,
+3. Home Assistant cleanup/compatibility,
+4. Home Assistant telemetry performance layer,
+5. system-time entity cleanup.
+
+The GroBro-side runtime no longer enters through one broad cleanup hook. The two
+remaining GroBro monkey patches are deliberately isolated in focused modules with
+separate tests:
+
+- `grobro/grobro/raw_dump_hook.py`
+- `grobro/grobro/noah_heater_hook.py`
+
+`grobro/grobro/cleanup.py` is retained only as a compatibility bootstrap for older
+imports/extensions. It is not part of the normal runtime installation path.
 
 These layers are considered product behavior rather than reverse-engineering
 diagnostics.
+
+## Raw MQTT dumps
+
+`grobro/grobro/raw_dump.py` owns the actual append-only raw MQTT dump implementation.
+It writes one `messages.jsonl` stream and preserves payload bytes losslessly as
+Base64. The compatibility hook only redirects the historical
+`dump_message_binary(...)` entry point to this centralized implementation.
+
+The dump code itself must not parse, filter or mutate traffic.
+
+## NOAH heater compatibility
+
+`grobro/grobro/noah_heater.py` contains the packet interpretation for the validated
+NOAH heater byte. `grobro/grobro/noah_heater_hook.py` contains only the runtime
+attachment logic that temporarily augments the HA input callback and restores the
+original callback afterwards.
+
+Keeping interpretation and hook installation separate makes the empirical NOAH
+behavior testable without coupling it to MQTT client patching.
 
 ## Optional diagnostics
 
@@ -69,9 +99,18 @@ GroBro MQTT client and Home Assistant client delegate register-map and device-na
 selection to this registry instead of maintaining separate prefix lists.
 
 The registry exposes stable helpers through `grobro.model`, including family
-resolution, known-device detection, gateway detection, time-sync capability and
-dynamic-PV capability. New runtime code should use these helpers rather than add
-new `startswith(...)` device-family tables.
+resolution, known-device detection, gateway detection, time-sync capability,
+dynamic-PV capability and NOAH-protocol capability. New runtime code should use
+these helpers rather than add new `startswith(...)` device-family tables.
+
+## Growatt config packet builders
+
+`grobro/grobro/builder.py` owns construction of Growatt config read/write packets,
+including `0x0119` reads and `0x0118` writes. The MQTT client calls these builders
+instead of assembling packet headers, TLVs, lengths, scrambling and CRC locally.
+
+Input validation for device IDs, register numbers and ASCII config values belongs
+in the builders so packet safety has one implementation and one test surface.
 
 ## Growatt cloud forwarding policy
 
@@ -87,6 +126,21 @@ The historical `GROWATT_CLOUD*` module variables in `grobro/grobro/client.py` ar
 retained for compatibility. Runtime decisions are resolved through
 `CloudForwardingPolicy`, including when those compatibility variables are patched
 by tests or integrations.
+
+## Home Assistant telemetry publication
+
+`grobro/ha/performance.py` owns the low-risk HA telemetry hot path. It applies the
+existing value rules in one pass, including ENUM conversion, battery filtering,
+whole-watt power normalization and optional total-increasing glitch protection.
+
+The performance layer also keeps a per-device cache of the exact JSON state last
+published to Home Assistant. A fully identical state is not republished. Any real
+change is published immediately, including transitions such as
+`500 -> 501 -> 500`. This removes redundant MQTT churn without discarding actual
+measurement changes or breaking Home Assistant history/energy integration.
+
+The state cache is cleared on MQTT reconnect so the next live state is always
+published after a broker/session interruption.
 
 ## Client wiring
 
