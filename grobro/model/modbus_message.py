@@ -8,8 +8,11 @@ from grobro.model.growatt_registers import GrowattRegisterPosition
 
 LOG = logging.getLogger(__name__)
 
-HEADER_STRUCT = ">HHHBB30s"
-HEADER_SIZE = struct.calcsize(HEADER_STRUCT)
+_HEADER = struct.Struct(">HHHBB30s")
+_BLOCK_HEADER = struct.Struct(">HH")
+_METADATA = struct.Struct(">30s7B")
+HEADER_SIZE = _HEADER.size
+METADATA_SIZE = _METADATA.size
 MIN_BLOCK_SIZE = 6  # start + end + one 16-bit register
 TRAILER_SIZE = 2  # Growatt packets commonly carry a two-byte protocol trailer/CRC
 
@@ -33,27 +36,29 @@ class GrowattModbusBlock(BaseModel):
     @staticmethod
     def parse_grobro(buffer, offset: int = 0) -> Optional["GrowattModbusBlock"]:
         try:
-            if offset < 0 or len(buffer) - offset < 4:
+            buffer_len = len(buffer)
+            if offset < 0 or buffer_len - offset < _BLOCK_HEADER.size:
                 return None
 
-            start, end = struct.unpack_from(">HH", buffer, offset)
+            start, end = _BLOCK_HEADER.unpack_from(buffer, offset)
             if end < start:
                 LOG.warning("Invalid register block range: %s..%s", start, end)
                 return None
 
             register_count = end - start + 1
-            expected_size = 4 + register_count * 2
-            if len(buffer) - offset < expected_size:
+            expected_size = _BLOCK_HEADER.size + register_count * 2
+            available = buffer_len - offset
+            if available < expected_size:
                 LOG.warning(
                     "Truncated register block %s..%s: need %s bytes, got %s",
                     start,
                     end,
                     expected_size,
-                    len(buffer) - offset,
+                    available,
                 )
                 return None
 
-            values_start = offset + 4
+            values_start = offset + _BLOCK_HEADER.size
             values_end = offset + expected_size
             return GrowattModbusBlock(
                 start=start,
@@ -65,10 +70,10 @@ class GrowattModbusBlock(BaseModel):
             return None
 
     def build_grobro(self) -> bytes:
-        return struct.pack(">HH", self.start, self.end) + self.values
+        return _BLOCK_HEADER.pack(self.start, self.end) + self.values
 
     def size(self):
-        return 4 + len(self.values)
+        return _BLOCK_HEADER.size + len(self.values)
 
 
 class GrowattModbusFunction(int, Enum):
@@ -96,19 +101,25 @@ class GrowattMetadata(BaseModel):
     timestamp: Optional[datetime]
 
     def size(self):
-        return 37
+        return METADATA_SIZE
 
     @staticmethod
     def parse_grobro(buffer, offset: int = 0) -> Optional["GrowattMetadata"]:
-        if offset < 0 or len(buffer) - offset < 37:
+        if offset < 0 or len(buffer) - offset < METADATA_SIZE:
             return None
 
         try:
-            device_serial_raw = struct.unpack_from(">30s", buffer, offset)[0]
+            (
+                device_serial_raw,
+                year,
+                month,
+                day,
+                hour,
+                minute,
+                second,
+                millis,
+            ) = _METADATA.unpack_from(buffer, offset)
             device_serial = device_serial_raw.decode("ascii", errors="ignore").strip("\x00")
-            year, month, day, hour, minute, second, millis = struct.unpack_from(
-                ">7B", buffer, offset + 30
-            )
         except struct.error:
             return None
 
@@ -132,8 +143,7 @@ class GrowattMetadata(BaseModel):
         if self.timestamp is None:
             raise ValueError("metadata timestamp is required when building a message")
 
-        return struct.pack(
-            ">30s7B",
+        return _METADATA.pack(
             self.device_sn.encode("ascii").ljust(30, b"\x00"),
             self.timestamp.year - 2000,
             self.timestamp.month,
@@ -202,19 +212,18 @@ class GrowattModbusMessage(BaseModel):
     @staticmethod
     def parse_grobro(buffer) -> Optional["GrowattModbusMessage"]:
         try:
-            if len(buffer) < HEADER_SIZE:
+            buffer_len = len(buffer)
+            if buffer_len < HEADER_SIZE:
                 return None
 
-            unknown, constant_7, msg_len, _constant_1, function, device_id_raw = struct.unpack_from(
-                HEADER_STRUCT,
-                buffer,
-                0,
+            unknown, constant_7, msg_len, _constant_1, function, device_id_raw = _HEADER.unpack_from(
+                buffer, 0
             )
 
             if constant_7 != 7:
                 LOG.debug("Unexpected Growatt header constant: %s", constant_7)
                 return None
-            if msg_len != len(buffer) - 8:
+            if msg_len != buffer_len - 8:
                 return None
 
             device_id = device_id_raw.decode("ascii", errors="ignore").strip("\x00")
@@ -231,18 +240,18 @@ class GrowattModbusMessage(BaseModel):
                 if metadata is None:
                     LOG.warning("Missing or truncated input-register metadata for %s", device_id)
                     return None
-                offset += metadata.size()
+                offset += METADATA_SIZE
 
             # A one-register block is exactly six bytes. Equality must be accepted
             # so a final single-register block is not skipped.
-            while len(buffer) - offset >= MIN_BLOCK_SIZE:
+            while buffer_len - offset >= MIN_BLOCK_SIZE:
                 block = GrowattModbusBlock.parse_grobro(buffer, offset)
                 if block is None:
                     return None
                 register_blocks.append(block)
                 offset += block.size()
 
-            remaining = len(buffer) - offset
+            remaining = buffer_len - offset
             # Real Growatt telemetry fixtures carry a two-byte trailer/CRC after
             # the last register block. Synthetic/unit-built messages may omit it.
             if remaining not in (0, TRAILER_SIZE):
@@ -265,8 +274,7 @@ class GrowattModbusMessage(BaseModel):
             return None
 
     def build_grobro(self) -> bytes:
-        result = struct.pack(
-            HEADER_STRUCT,
+        result = _HEADER.pack(
             self.unknown,
             7,
             self.msg_len,
