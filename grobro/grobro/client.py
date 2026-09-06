@@ -398,7 +398,7 @@ class Client:
             # NOAH/NEXA-specific message types (FE19 config, 0103 holding regs, etc.)
             noah_msg = parser.parse_noah_message(unscrambled)
             if noah_msg and noah_msg.get("message_type") == 0xFE19:
-                if device_id.startswith(("0PVP", "0HVR")):
+                if model.uses_noah_protocol(device_id):
                     config = noah_msg.get("config")
                     if config and config.serial_number:
                         LOG.info(
