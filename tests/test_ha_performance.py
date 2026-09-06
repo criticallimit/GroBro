@@ -4,10 +4,12 @@ from grobro.ha import client as ha_client
 from grobro.ha.performance import _prepare_payload
 
 
-def _reg(state_class=None):
+def _reg(state_class=None, data_type=None):
     return SimpleNamespace(
         homeassistant=SimpleNamespace(state_class=state_class),
-        growatt=SimpleNamespace(data=None),
+        growatt=SimpleNamespace(
+            data=SimpleNamespace(data_type=data_type) if data_type is not None else None
+        ),
     )
 
 
@@ -27,7 +29,7 @@ def test_prepare_payload_preserves_existing_value_rules(monkeypatch):
             "bat2_temp": _reg(),
             "bat4_soc": _reg(),
             "energy": _reg("total_increasing"),
-            "enum_value": _reg(),
+            "enum_value": _reg(data_type="ENUM"),
             "plain": _reg(),
         }
     )
