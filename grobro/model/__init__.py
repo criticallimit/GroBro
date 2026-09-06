@@ -5,6 +5,7 @@ from .device_family import (
     get_device_family as get_device_family,
     get_device_type_name as get_device_type_name,
     get_known_registers as get_known_registers,
+    is_family as is_family,
     is_gateway as is_gateway,
     is_known_device as is_known_device,
     supports_time_sync as supports_time_sync,
