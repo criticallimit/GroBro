@@ -1,12 +1,12 @@
-# GroBro 3.0.0 fork changes vs. robertzaage/GroBro
+# GroBro 3.0.1 fork changes vs. robertzaage/GroBro
 
-This document is the detailed technical companion to `CHANGELOG.md`. It describes the material differences between `criticallimit/GroBro` 3.0.0 and Robert Zaage's upstream GroBro.
+This document is the detailed technical companion to `CHANGELOG.md`. It describes the material differences between `criticallimit/GroBro` 3.0.1 and Robert Zaage's upstream GroBro.
 
 ## Reference baseline
 
 - Upstream repository: `robertzaage/GroBro`
 - Upstream `main` / merge base used for this release: `4797f8419bd574bcebd32d1a859569f97b58b774` (2026-08-08)
-- Fork release: `3.0.0`
+- Fork release: `3.0.1`
 - Comparison date: 2026-09-06
 - Fork status before the 3.0.0 release metadata commits: 185 commits ahead, 0 behind
 
@@ -28,10 +28,13 @@ Families handled by the registry:
 
 Resolved families are cached so Home Assistant and Growatt MQTT do not repeatedly perform independent prefix decisions.
 
-## 2. Home Assistant robustness and identity
+## 2. Home Assistant robustness, identity and power presentation
 
 Compared with upstream, the fork adds or changes the following behavior:
 
+- power entities whose Home Assistant metadata is exactly `device_class: power` and `unit_of_measurement: W` are normalized to whole watts when the Home Assistant state payload is published,
+- sub-watt negative values that round to zero are published as integer `0`, eliminating the `-0 W` presentation seen in Home Assistant,
+- raw Growatt register decoding remains unchanged; energy values in `Wh`/`kWh`, voltage, current, SOC, temperature and other non-power values keep their original precision,
 - discovery payload caching; unchanged discovery is not rebuilt/republished for every telemetry packet,
 - availability-state caching and reconnect invalidation,
 - retained Online state when the optional connectivity sensor is enabled,
@@ -162,7 +165,7 @@ The fork contains a set of low-risk performance optimizations designed to preser
 - reduced repeated Pydantic attribute access during register decoding,
 - cached device-family, MQTT device-ID and battery-key parsing,
 - single-pass Home Assistant telemetry preparation,
-- cached static per-register Home Assistant rules (ENUM, `total_increasing`, battery temperature),
+- cached static per-register Home Assistant rules including ENUM, `total_increasing`, battery temperature and whole-watt power classification,
 - no ENUM mapper call for non-ENUM values,
 - discovery and availability caching,
 - reduced timeout/config timer churn and daemon helper timers,
@@ -198,6 +201,7 @@ The fork adds substantial regression coverage for areas including:
 - embedded NOAH `0x0103`,
 - passive register diagnostics,
 - single-pass Home Assistant telemetry rules,
+- whole-watt power publication and negative-zero elimination,
 - event-driven shutdown behavior.
 
 CI validates Ruff plus the full pytest suite on Python 3.11, 3.12 and 3.13 with the configured coverage threshold. Superseded branch runs are cancelled automatically.
