@@ -10,5 +10,6 @@ from .device_family import (
     is_known_device as is_known_device,
     supports_time_sync as supports_time_sync,
     uses_dynamic_pv_count as uses_dynamic_pv_count,
+    uses_noah_protocol as uses_noah_protocol,
 )
 from .mqtt_config import MQTTConfig as MQTTConfig
