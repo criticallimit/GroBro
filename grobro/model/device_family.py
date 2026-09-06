@@ -104,6 +104,17 @@ def get_device_family(device_id: str) -> DeviceFamily | None:
     return None
 
 
+def is_known_device(device_id: str) -> bool:
+    """Return whether the serial belongs to a registered Growatt family."""
+    return get_device_family(device_id) is not None
+
+
+def is_gateway(device_id: str) -> bool:
+    """Return whether the serial identifies a gateway rather than an endpoint."""
+    family = get_device_family(device_id)
+    return bool(family and family.is_gateway)
+
+
 def get_known_registers(device_id: str) -> GroBroRegisters | None:
     family = get_device_family(device_id)
     return family.registers if family else None
