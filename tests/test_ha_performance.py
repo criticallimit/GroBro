@@ -6,6 +6,7 @@ from grobro.ha.performance import (
     _prepare_payload,
     _register_rules,
 )
+from grobro.model.device_family import DEVICE_FAMILIES
 
 
 def _reg(
@@ -140,6 +141,47 @@ def test_prepare_payload_publishes_power_as_whole_watts(monkeypatch):
     assert result["energy_wh"] == 1234.6
     assert result["energy_kwh"] == 12.345
     assert result["voltage"] == 230.45
+
+
+def test_whole_watt_rule_covers_every_device_family(monkeypatch):
+    """Every supported family must use the same 3.0.1 HA whole-watt path."""
+    monkeypatch.setattr(ha_client, "FILTER_DATA_GLITCHES", False)
+    monkeypatch.setattr(ha_client, "map_enum_value", lambda _reg_def, value: value)
+
+    for family in DEVICE_FAMILIES:
+        power_keys = [
+            name
+            for name, reg in family.registers.input_registers.items()
+            if reg.homeassistant.device_class == "power"
+            and reg.homeassistant.unit_of_measurement == "W"
+        ]
+        assert power_keys, f"{family.key} has no Home Assistant W power entity"
+
+        key = power_keys[0]
+        state = SimpleNamespace(
+            device_id=f"{family.prefixes[0]}TEST",
+            payload={key: -0.4},
+        )
+        client = SimpleNamespace(_last_energy_values={})
+
+        result = _prepare_payload(
+            client,
+            state,
+            effective_max_bat=4,
+            known_registers=family.registers,
+        )
+
+        assert result[key] == 0, family.key
+        assert key in _register_rules(family.registers)[3], family.key
+
+
+def test_shared_register_rules_are_cached_for_every_family():
+    """Shared HA hot-path rule generation must not be NOAH-only."""
+    for family in DEVICE_FAMILIES:
+        _REGISTER_RULES_CACHE.pop(id(family.registers), None)
+        first = _register_rules(family.registers)
+        second = _register_rules(family.registers)
+        assert first is second, family.key
 
 
 def test_register_rules_are_cached_and_preserve_static_semantics():
