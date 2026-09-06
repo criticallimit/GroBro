@@ -176,15 +176,25 @@ class GrowattModbusMessage(BaseModel):
             result += block.size()
         return result
 
+    @staticmethod
+    def _data_from_block(block: GrowattModbusBlock, pos: GrowattRegisterPosition):
+        if block.start > pos.register_no or block.end < pos.register_no:
+            return None
+        block_pos = (pos.register_no - block.start) * 2 + pos.offset
+        end_pos = block_pos + pos.size
+        if block_pos < 0 or end_pos > len(block.values):
+            return None
+        return block.values[block_pos:end_pos]
+
     def get_data(self, pos: GrowattRegisterPosition):
-        for block in self.register_blocks:
-            if block.start > pos.register_no or block.end < pos.register_no:
-                continue
-            block_pos = (pos.register_no - block.start) * 2 + pos.offset
-            end_pos = block_pos + pos.size
-            if block_pos < 0 or end_pos > len(block.values):
-                return None
-            return block.values[block_pos:end_pos]
+        blocks = self.register_blocks
+        if len(blocks) == 1:
+            return self._data_from_block(blocks[0], pos)
+
+        for block in blocks:
+            data = self._data_from_block(block, pos)
+            if data is not None:
+                return data
         return None
 
     @staticmethod
