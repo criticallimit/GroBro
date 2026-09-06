@@ -32,6 +32,7 @@ class DeviceFamily:
     registers: GroBroRegisters
     dynamic_pv_count: bool = False
     is_gateway: bool = False
+    noah_protocol: bool = False
 
 
 DEVICE_FAMILIES: tuple[DeviceFamily, ...] = (
@@ -40,12 +41,14 @@ DEVICE_FAMILIES: tuple[DeviceFamily, ...] = (
         display_name="NOAH",
         prefixes=("0PVP",),
         registers=KNOWN_NOAH_REGISTERS,
+        noah_protocol=True,
     ),
     DeviceFamily(
         key="nexa",
         display_name="NEXA",
         prefixes=("0HVR",),
         registers=KNOWN_NEXA_REGISTERS,
+        noah_protocol=True,
     ),
     DeviceFamily(
         key="neo",
@@ -159,3 +162,9 @@ def supports_time_sync(device_id: str) -> bool:
 def uses_dynamic_pv_count(device_id: str) -> bool:
     family = get_device_family(device_id)
     return bool(family and family.dynamic_pv_count)
+
+
+def uses_noah_protocol(device_id: str) -> bool:
+    """Return whether the family uses the NOAH/NEXA protocol surface."""
+    family = get_device_family(device_id)
+    return bool(family and family.noah_protocol)
