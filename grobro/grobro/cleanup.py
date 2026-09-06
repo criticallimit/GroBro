@@ -1,10 +1,10 @@
-"""Debug-fork-only Growatt runtime helpers.
+"""Better GroBro fork-specific runtime helpers.
 
-Core protocol handling, cloud filtering, MQTT property parsing and shutdown logic
-now live in the hardened core. This module intentionally contains only features
-that are specific to this fork: the single-file raw dump, strict config-message
-wire validation, activation of the central device-family registry, and validated
-NOAH status-frame compatibility fixes.
+Core protocol handling, cloud filtering, config packet building, device-family
+selection, MQTT property parsing and shutdown logic live in the hardened core.
+This module intentionally contains only fork-specific runtime behavior that still
+needs to observe/augment the core client: the single-file raw dump and the
+validated NOAH status-frame heater compatibility fix.
 """
 
 from __future__ import annotations
@@ -17,10 +17,9 @@ import struct
 import threading
 import time
 
+from grobro import model
 from grobro.grobro import client as grobro_client_module
 from grobro.grobro import parser
-from grobro.grobro.builder import append_crc, scramble
-from grobro.model.device_family import get_known_registers
 
 LOG = logging.getLogger(__name__)
 _INSTALLED = False
@@ -63,7 +62,7 @@ def _noah_heater_state_from_packet(payload, device_id: str) -> str | None:
     bitmask. If a future firmware emits a different encoding, the normal R17
     value remains as fallback until that new encoding is validated.
     """
-    if not str(device_id).startswith("0PVP"):
+    if not model.is_family(device_id, "noah"):
         return None
     if not isinstance(payload, (bytes, bytearray, memoryview)):
         return None
@@ -111,82 +110,13 @@ def _dump_message_binary_safe(topic, payload) -> None:
         LOG.error("Failed to dump message for topic %s: %s", topic, exc)
 
 
-def _validate_device_id(device_id: str) -> bytes:
-    if not isinstance(device_id, str) or not device_id:
-        raise ValueError("device_id must be a non-empty string")
-    try:
-        raw = device_id.encode("ascii")
-    except UnicodeEncodeError as exc:
-        raise ValueError("device_id must be ASCII") from exc
-    if len(raw) > 16:
-        raise ValueError("config-message device_id exceeds 16 bytes")
-    return raw.ljust(16, b"\x00")
-
-
-def _validate_register_no(register_no: int) -> int:
-    if isinstance(register_no, bool) or not isinstance(register_no, int):
-        raise ValueError("register_no must be an integer")
-    if not 0 <= register_no <= 0xFFFF:
-        raise ValueError("register_no must be between 0 and 65535")
-    return register_no
-
-
-def _publish_checked(client, topic: str, payload, **kwargs):
-    return grobro_client_module._publish_checked(client, topic, payload, **kwargs)
-
-
-def _build_config_packet(device_id: str, register_no: int, msg_type: int, body: bytes) -> bytes:
-    dev = _validate_device_id(device_id)
-    _validate_register_no(register_no)
-    payload = b"\x00" * 14 + body
-    msg_len = len(payload) + 18
-    raw = (
-        b"\x00\x01\x00\x07"
-        + struct.pack(">H", msg_len)
-        + struct.pack(">H", msg_type)
-        + dev
-        + payload
-    )
-    return append_crc(scramble(raw))
-
-
-def _build_config_read_message(device_id: str, register_no: int) -> bytes:
-    register_no = _validate_register_no(register_no)
-    return _build_config_packet(
-        device_id,
-        register_no,
-        0x0119,
-        struct.pack(">HH", 1, register_no),
-    )
-
-
-def _build_config_write_message(device_id: str, register_no: int, value: str) -> bytes:
-    register_no = _validate_register_no(register_no)
-    value = str(value)
-    try:
-        value_bytes = value.encode("ascii")
-    except UnicodeEncodeError as exc:
-        raise ValueError("config values must be ASCII") from exc
-    if len(value_bytes) > 0xFFFF - 4:
-        raise ValueError("config value is too long")
-
-    tlv = (
-        struct.pack(">HHHH", 1, len(value_bytes) + 4, register_no, len(value_bytes))
-        + value_bytes
-    )
-    return _build_config_packet(device_id, register_no, 0x0118, tlv)
-
-
 def install_grobro_cleanup_hook() -> None:
-    """Install only fork-specific runtime features before clients are created."""
+    """Install only fork-specific runtime behavior before clients are created."""
     global _INSTALLED
     if _INSTALLED:
         return
 
     client_cls = grobro_client_module.Client
-
-    # Central family registry is the active register-map source for every family.
-    grobro_client_module._known_registers_for_device = get_known_registers
 
     # Raw diagnostics use one append-only file instead of thousands of .bin files.
     grobro_client_module.dump_message_binary = _dump_message_binary_safe
@@ -215,30 +145,5 @@ def install_grobro_cleanup_hook() -> None:
             self.on_input_register = original_input_callback
 
     client_cls._Client__on_message = on_message_clean
-
-    def send_config_read_clean(self, device_id: str, register_no: int):
-        payload = _build_config_read_message(device_id, register_no)
-        topic = f"s/33/{device_id}"
-        LOG.info("Sending config read to %s register=%s", device_id, register_no)
-        return _publish_checked(
-            self._client,
-            topic,
-            payload,
-            properties=grobro_client_module.MQTT_PROP_FORWARD_HA,
-        )
-
-    def send_config_clean(self, device_id: str, register_no: int, value: str):
-        payload = _build_config_write_message(device_id, register_no, value)
-        topic = f"s/33/{device_id}"
-        LOG.info("Sending config message to %s register=%s", device_id, register_no)
-        return _publish_checked(
-            self._client,
-            topic,
-            payload,
-            properties=grobro_client_module.MQTT_PROP_FORWARD_HA,
-        )
-
-    client_cls.send_config_read_message = send_config_read_clean
-    client_cls.send_config_message = send_config_clean
     _INSTALLED = True
     LOG.info("Installed GroBro fork runtime layer")
