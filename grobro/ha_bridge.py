@@ -10,7 +10,8 @@ import os
 import signal
 from threading import Event
 
-from grobro import ha, model, grobro
+from grobro import ha, grobro
+from grobro.grobro.configuration import load_bridge_mqtt_configs
 from grobro.grobro.diagnostics import install_optional_diagnostics
 from grobro.grobro.runtime import install_runtime_layers
 from grobro.grobro.wiring import wire_clients
@@ -34,19 +35,9 @@ LOG = logging.getLogger(__name__)
 install_runtime_layers()
 install_optional_diagnostics()
 
-# Configuration from environment variables
-GROBRO_MQTT_CONFIG = model.MQTTConfig.from_env(
-    prefix="SOURCE",
-    defaults=model.MQTTConfig(host="localhost", port=1883),
-)
-HA_MQTT_CONFIG = model.MQTTConfig.from_env(
-    prefix="TARGET",
-    defaults=GROBRO_MQTT_CONFIG,
-)
-FORWARD_MQTT_CONFIG = model.MQTTConfig.from_env(
-    prefix="FORWARD",
-    defaults=model.MQTTConfig(host="mqtt.growatt.com", port=7006),
-)
+# Preserve the established module-level names for compatibility/tests while
+# delegating environment parsing to one focused helper.
+GROBRO_MQTT_CONFIG, HA_MQTT_CONFIG, FORWARD_MQTT_CONFIG = load_bridge_mqtt_configs()
 
 
 class SignalHandler:
