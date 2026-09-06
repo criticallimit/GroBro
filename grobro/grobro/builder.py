@@ -9,8 +9,12 @@ _SCRAMBLE_MASK_LEN = len(_SCRAMBLE_MASK)
 def scramble(pkt: bytes) -> bytes:
     """Apply Growatt's repeating XOR mask after the unchanged 8-byte header."""
     out = bytearray(pkt)
+    mask_index = 0
     for index in range(8, len(out)):
-        out[index] ^= _SCRAMBLE_MASK[(index - 8) % _SCRAMBLE_MASK_LEN]
+        out[index] ^= _SCRAMBLE_MASK[mask_index]
+        mask_index += 1
+        if mask_index == _SCRAMBLE_MASK_LEN:
+            mask_index = 0
     return bytes(out)
 
 
