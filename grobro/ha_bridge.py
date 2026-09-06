@@ -12,8 +12,7 @@ from threading import Event
 
 from grobro import ha, model, grobro
 from grobro.grobro.cleanup import install_grobro_cleanup_hook
-from grobro.grobro.noah_traffic_hook import install_noah_traffic_debug_hook
-from grobro.grobro.register_debug import install_register_debug_hook
+from grobro.grobro.diagnostics import install_optional_diagnostics
 from grobro.ha.cleanup import install_ha_cleanup_hook
 from grobro.ha.performance import install_ha_performance_hook
 from grobro.ha.system_time_cleanup import install_system_time_entity_cleanup
@@ -33,15 +32,14 @@ except Exception as exc:  # pylint: disable=broad-exception-caught
     print(f"Failed to setup logger {exc} USING DEFAULT LOG Level(Error)")
 LOG = logging.getLogger(__name__)
 
-# Install compatibility cleanups and optional passive diagnostics before clients
-# start processing messages. The traffic hook only records packets already
-# flowing through GroBro and never creates device/cloud traffic itself.
+# Install compatibility/runtime hardening first, then optional passive diagnostics.
+# Diagnostic observers preserve the existing register and full-MQTT capture
+# behavior and are feature-gated internally.
 install_grobro_cleanup_hook()
 install_ha_cleanup_hook()
 install_ha_performance_hook()
 install_system_time_entity_cleanup()
-install_register_debug_hook()
-install_noah_traffic_debug_hook()
+install_optional_diagnostics()
 
 # Configuration from environment variables
 GROBRO_MQTT_CONFIG = model.MQTTConfig.from_env(
