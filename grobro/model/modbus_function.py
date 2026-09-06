@@ -5,17 +5,18 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from grobro.model.modbus_message import GrowattModbusFunction, MODBUS_FUNCTION_VALUES
 
-MODBUS_COMMAND_STRUCT = ">HHHBB30sHH"
-MODBUS_COMMAND_SIZE = struct.calcsize(MODBUS_COMMAND_STRUCT)
+_MODBUS_COMMAND = struct.Struct(">HHHBB30sHH")
+MODBUS_COMMAND_SIZE = _MODBUS_COMMAND.size
 TRAILER_SIZE = 2
 
 
 def _unpack_command_header(buffer: bytes):
     """Return ``(header_tuple, core_length)`` or None for malformed data."""
-    if len(buffer) < MODBUS_COMMAND_SIZE:
+    buffer_len = len(buffer)
+    if buffer_len < MODBUS_COMMAND_SIZE:
         return None
     try:
-        values = struct.unpack_from(MODBUS_COMMAND_STRUCT, buffer, 0)
+        values = _MODBUS_COMMAND.unpack_from(buffer, 0)
     except struct.error:
         return None
 
@@ -30,7 +31,7 @@ def _unpack_command_header(buffer: bytes):
     core_length = msg_len + 6
     if core_length < MODBUS_COMMAND_SIZE:
         return None
-    if len(buffer) not in (core_length, core_length + TRAILER_SIZE):
+    if buffer_len not in (core_length, core_length + TRAILER_SIZE):
         return None
 
     return values, core_length
@@ -82,8 +83,7 @@ class GrowattModbusFunctionMultiple(BaseModel):
         )
 
     def build_grobro(self) -> bytes:
-        header = struct.pack(
-            MODBUS_COMMAND_STRUCT,
+        header = _MODBUS_COMMAND.pack(
             1,
             7,
             36 + len(self.values),
@@ -136,8 +136,7 @@ class GrowattModbusFunctionSingle(BaseModel):
         )
 
     def build_grobro(self) -> bytes:
-        return struct.pack(
-            MODBUS_COMMAND_STRUCT,
+        return _MODBUS_COMMAND.pack(
             1,
             7,
             36,
