@@ -3,8 +3,10 @@ from types import SimpleNamespace
 from grobro.ha import client as ha_client
 from grobro.ha.performance import (
     _REGISTER_RULES_CACHE,
+    _clear_state_publish_cache,
     _prepare_payload,
     _register_rules,
+    _should_publish_state,
 )
 from grobro.model.device_family import DEVICE_FAMILIES
 
@@ -213,3 +215,41 @@ def test_register_rules_are_cached_and_preserve_static_semantics():
     assert invalid_battery_temps == frozenset({"bat2_temp"})
     assert whole_watt_power == frozenset({"power"})
     assert has_serial_parts is True
+
+
+def test_identical_state_is_published_only_once_per_device():
+    client = SimpleNamespace()
+    payload = '{"power":500,"soc":80}'
+
+    assert _should_publish_state(client, "0PVPTEST", payload) is True
+    assert _should_publish_state(client, "0PVPTEST", payload) is False
+
+
+def test_changed_state_is_never_suppressed():
+    client = SimpleNamespace()
+
+    assert _should_publish_state(client, "0PVPTEST", '{"power":500}') is True
+    assert _should_publish_state(client, "0PVPTEST", '{"power":501}') is True
+    assert _should_publish_state(client, "0PVPTEST", '{"power":500}') is True
+
+
+def test_state_cache_is_isolated_per_device():
+    client = SimpleNamespace()
+    payload = '{"power":500}'
+
+    assert _should_publish_state(client, "0PVP-A", payload) is True
+    assert _should_publish_state(client, "0PVP-B", payload) is True
+    assert _should_publish_state(client, "0PVP-A", payload) is False
+    assert _should_publish_state(client, "0PVP-B", payload) is False
+
+
+def test_reconnect_cache_clear_forces_next_live_state_publish():
+    client = SimpleNamespace()
+    payload = '{"power":500}'
+
+    assert _should_publish_state(client, "0PVPTEST", payload) is True
+    assert _should_publish_state(client, "0PVPTEST", payload) is False
+
+    _clear_state_publish_cache(client)
+
+    assert _should_publish_state(client, "0PVPTEST", payload) is True
