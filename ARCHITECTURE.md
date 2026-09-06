@@ -61,6 +61,33 @@ preserving the established relationships:
 
 `ha_bridge.py` keeps the historical module-level config names for compatibility.
 
+## Device-family registry
+
+`grobro/model/device_family.py` is the single source of truth for Growatt device
+serial prefixes, display names, register maps and family capabilities. Both the
+GroBro MQTT client and Home Assistant client delegate register-map and device-name
+selection to this registry instead of maintaining separate prefix lists.
+
+The registry exposes stable helpers through `grobro.model`, including family
+resolution, known-device detection, gateway detection, time-sync capability and
+dynamic-PV capability. New runtime code should use these helpers rather than add
+new `startswith(...)` device-family tables.
+
+## Growatt cloud forwarding policy
+
+`grobro/grobro/cloud_policy.py` owns parsing and decisions for Growatt cloud
+forwarding. It covers:
+
+- disabled values,
+- unrestricted forwarding,
+- comma-separated device allowlists,
+- optional blocking of cloud configuration commands.
+
+The historical `GROWATT_CLOUD*` module variables in `grobro/grobro/client.py` are
+retained for compatibility. Runtime decisions are resolved through
+`CloudForwardingPolicy`, including when those compatibility variables are patched
+by tests or integrations.
+
 ## Client wiring
 
 `grobro/grobro/wiring.py` owns the bidirectional callback connections between the
