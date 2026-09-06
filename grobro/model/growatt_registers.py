@@ -21,7 +21,16 @@ class GrowattRegisterEnumTypes(str, Enum):
     BITFIELD = "BITFIELD"
 
 
-_UNSIGNED_UNPACK_TYPES = {1: "!B", 2: "!H", 4: "!I"}
+_UNSIGNED_UNPACKERS = {
+    1: struct.Struct("!B"),
+    2: struct.Struct("!H"),
+    4: struct.Struct("!I"),
+}
+_SIGNED_UNPACKERS = {
+    1: struct.Struct("!b"),
+    2: struct.Struct("!h"),
+    4: struct.Struct("!i"),
+}
 _SIGNED_DATA_TYPES = frozenset(
     (GrowattRegisterDataTypes.SIGNED_INT, GrowattRegisterDataTypes.SIGNED_FLOAT)
 )
@@ -59,15 +68,16 @@ class GrowattRegisterDataType(BaseModel):
         if self.data_type == GrowattRegisterDataTypes.STRING:
             return raw.decode("ascii", errors="ignore").strip("\x00")
 
-        unpack_type = _UNSIGNED_UNPACK_TYPES.get(len(raw))
-        if unpack_type is None:
+        unpacker = (
+            _SIGNED_UNPACKERS.get(len(raw))
+            if self.data_type in _SIGNED_DATA_TYPES
+            else _UNSIGNED_UNPACKERS.get(len(raw))
+        )
+        if unpacker is None:
             return None
 
-        if self.data_type in _SIGNED_DATA_TYPES:
-            unpack_type = unpack_type.lower()
-
         try:
-            value = struct.unpack_from(unpack_type, raw, 0)[0]
+            value = unpacker.unpack_from(raw, 0)[0]
         except struct.error:
             return None
 
