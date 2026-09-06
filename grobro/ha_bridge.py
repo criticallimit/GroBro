@@ -13,6 +13,7 @@ from threading import Event
 from grobro import ha, model, grobro
 from grobro.grobro.diagnostics import install_optional_diagnostics
 from grobro.grobro.runtime import install_runtime_layers
+from grobro.grobro.wiring import wire_clients
 
 # Setup Logger
 LOG_LEVEL = os.getenv("LOG_LEVEL", "ERROR").upper()
@@ -73,19 +74,7 @@ class SignalHandler:
 if __name__ == "__main__":
     ha_client = ha.Client(HA_MQTT_CONFIG)
     grobro_client = grobro.Client(GROBRO_MQTT_CONFIG, FORWARD_MQTT_CONFIG)
-
-    # setup com: grobro -> ha
-    grobro_client.on_input_register = ha_client.publish_input_register
-    grobro_client.on_holding_register_input = ha_client.publish_holding_register_input
-    grobro_client.on_config = ha_client.set_config
-    grobro_client.on_config_read_response = ha_client.handle_config_read_response
-
-    # setup com: ha -> grobro
-    ha_client.on_command = grobro_client.send_command
-    ha_client.on_config_read = grobro_client.send_config_read_message
-    ha_client.on_config_command = (
-        lambda dev, reg, val: grobro_client.send_config_message(dev, reg, val)
-    )
+    wire_clients(ha_client, grobro_client)
 
     signal_handler = SignalHandler()
 
