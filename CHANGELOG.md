@@ -1,303 +1,96 @@
-## v2.8.5
-
-### Further telemetry hot-path optimization
-+ Removed a redundant `bytes(...)` copy when register data is already immutable bytes, reducing per-sensor allocations during telemetry decoding.
-+ Added and inlined a fast path for the common case where a Modbus message contains exactly one register block, avoiding repeated block-iteration/helper-call overhead for each sensor lookup.
-+ Skips NOAH Heater-frame decoding entirely for packets that are too short to contain the validated heater byte, avoiding unnecessary decrypt work while preserving the existing Heater fallback behavior.
-+ Reworked Growatt `unscramble()` to advance the seven-byte XOR mask index directly instead of calculating modulo for every payload byte; output remains bit-for-bit identical.
-+ All changes are performance-only: Home Assistant entity IDs, MQTT topics, device-family mappings, register meanings, control behavior and protocol limits are unchanged.
-+ The performance commits were validated with Ruff and the full pytest suite on Python 3.11, 3.12 and 3.13 before this release was finalized.
-
-## v2.8.4
-
-### Runtime performance and lower diagnostic overhead
-+ Reduced hot-path work for normal `LOG_LEVEL=ERROR` operation by avoiding eager hex-string formatting of decrypted MQTT payloads unless DEBUG logging is actually enabled.
-+ Cached MQTT topic-to-device-id parsing and stable Home Assistant battery-key parsing to avoid repeating regex/string work for every telemetry packet.
-+ Avoided debug-only MQTT property lookups when DEBUG logging is disabled and added a direct MQTT v5 `UserProperty` fast path before the compatibility JSON fallback.
-+ Converted runtime timeout/config timers to daemon timers and retained explicit shutdown cancellation so timers no longer keep processes/tests alive unnecessarily.
-+ Optimized passive register debugging in `REGISTER_DEBUG_CHANGES_ONLY` mode so an unchanged Modbus block is skipped before per-register unpacking and JSON record construction.
-+ Added regression coverage for the unchanged-register-block fast path.
-+ Changed the add-on default `REGISTER_DEBUG` from `true` to `false`. `DUMP_MESSAGES` remains disabled by default and the normal log level remains `ERROR`, so diagnostic parsing/file I/O is off during normal operation unless explicitly enabled.
-+ No Home Assistant entity IDs, MQTT state topics, register meanings, device-family mappings, control semantics or protocol write limits were changed by these optimizations.
-
-## v2.8.3
-
-### CI, release pipeline and identity hardening
-+ Enabled and validated GitHub Actions for the fork. The current codebase passes Ruff and the full pytest suite on Python 3.11, 3.12 and 3.13 with coverage above the configured 85% threshold.
-+ Added CI concurrency so superseded runs on the same branch are cancelled instead of consuming runner time.
-+ Fixed the fork container workflow to publish to `ghcr.io/criticallimit/grobro` instead of the upstream `ghcr.io/robertzaage/grobro` namespace. The multi-architecture build for amd64, arm64 and arm/v7 now completes and pushes successfully.
-+ Hardened parsed device metadata so placeholder serials consisting only of `X` characters (for example `XXXXXXXXXX`) are discarded instead of replacing the stable MQTT device identity in Home Assistant.
-+ Aligned regression tests with the current architecture: time-sync capability is derived from register 31, discovery caching intentionally suppresses unchanged republishes, `MAX_BAT=auto` remains conservative when the actual battery count is unknown, and family fixtures are no longer misused as evidence for unrelated device families.
-+ Corrected NOAH test expectations against the actual captured fixtures, including the embedded `R251` value and preset-single parsing path.
-
-## v2.8.2
-
-### NOAH Heater state
-+ Kept the existing Home Assistant `Heater` entity and added a NOAH-specific runtime override from the validated status frame (`0x0104` / decimal 260), payload byte offset 84 after the 24-byte header (absolute offset 108).
-+ Valid heater values `0..15` reuse the existing Heater enum/bitmask representation; if no valid status byte is available, the previous register-17-derived value remains the fallback.
-+ The override is restricted to NOAH (`0PVP`) status frames and does not create a second Heater entity or change its existing identity.
-+ Added regression coverage for valid heater extraction and rejection of unsupported packets/families.
-
-## v2.8.1
-
-### Home Assistant time-sync cleanup
-+ Removed the manual `Sync Time` button from Home Assistant discovery because clock synchronization is automatic.
-+ Removed the `System Time` Home Assistant config entity while keeping config register 31 internally available for scheduled synchronization.
-+ Automatic clock synchronization remains scheduled for 00:00 and 12:00 local time for supported families.
-
-## v2.8.0
-
-### Consolidated fork release
-
-This release consolidates the material changes in `criticallimit/GroBro` compared with the current upstream `robertzaage/GroBro` baseline (`4797f8419bd574bcebd32d1a859569f97b58b774`, 2026-08-08).
-
-### Architecture and runtime
-+ Added a central device-family registry for NOAH, NEXA, NEO/PTQ, ShineWeLink/RAQ, SPF, MIN-XH2 and MOD so Home Assistant and Growatt MQTT use one active source of truth for family/register-map detection.
-+ Added cached device-family lookups and low-risk parser/runtime optimizations across all supported families.
-+ Reduced Growatt scramble/unscramble allocations and repeated Modbus/register decoding work.
-+ Removed obsolete fork compatibility helpers that duplicated behavior already hardened in the core.
-
-### Home Assistant
-+ Added discovery-signature caching so full device discovery is not rebuilt on every telemetry packet.
-+ Added availability-state caching and lower-churn device timeout handling.
-+ Fixed the optional Online binary sensor to publish retained `ON/OFF` state so it survives Home Assistant/MQTT reconnect timing.
-+ Invalidates discovery/availability caches on MQTT reconnect so retained state is recreated after broker restarts.
-+ Improved device metadata handling, config persistence and local-IP/configuration-URL validation without changing existing entity identities/topics unnecessarily.
-+ Removed the manual Sync Time button from discovery.
-
-### Automatic clock synchronization
-+ Added automatic `system_time` synchronization at 00:00 and 12:00 local time for families whose active register map exposes config register 31 as STRING: NOAH, NEXA, NEO/PTQ, SPF, MIN-XH2 and MOD.
-+ RAQ/ShineWeLink gateways are not written directly; a detected PTQ inverter behind the gateway is handled as NEO.
-+ When the add-on `TZ` option is empty, the launcher attempts to use the Home Assistant Supervisor timezone.
-
-### NOAH 2000 validation and cleanup
-+ Added validation documentation based on real captures from a three-module NOAH 2000 stack running firmware 19.19.14.
-+ Added passive parsing/diagnostics for the embedded NOAH `0x0103` holding-register block (`R250-R374`) and passive watch logging for unknown `R299-R304` values.
-+ Kept NOAH SOH (`R102`) as a whole-number percentage in Home Assistant.
-+ Removed experimental NOAH Home Assistant entities `Temperature PV1`, `Temperature PV2`, `System Temperature` and `MQTT IP` from the effective NOAH map.
-
-### Parser, safety and persistence
-+ Hardened malformed/truncated Modbus and config-message handling, register bounds, numeric lengths and `TIME_HHMM` validation.
-+ Added strict config message device/register/value validation and avoids logging config values.
-+ Made persisted device config atomic and excludes sensitive password/raw fields.
-+ Clarified and hardened Growatt Cloud forwarding/filter behavior and publish-result checking.
-
-### Diagnostics
-+ Added passive register JSONL logging to `/share/GroBro/register_debug/registers.jsonl`.
-+ Raw message dumps are stored as exact Base64 payloads in one `/share/GroBro/dump/messages.jsonl` file instead of creating thousands of individual `.bin` files in this fork.
-+ Debug capture remains passive and does not actively scan the configured register range.
-
-### Documentation and tests
-+ Added `FORK_CHANGES.md` with the detailed upstream comparison and evidence levels.
-+ Added `NOAH_VALIDATION.md` and `REGISTER_DEBUG.md`.
-+ Added regression tests for parser validation, config persistence/security, discovery/availability caching, reconnect behavior, family resolution, time sync, NOAH `0x0103` handling and passive diagnostics.
-+ GitHub Actions was not enabled yet at the time of the 2.8.0 consolidation; later releases enabled and validated the CI pipeline.
-
-## v2.7.5
-
-### Bug Fixes
-+ Reverted the 0x0103 holding register dump handler introduced in v2.7.3. It caused all-zero sensor readings for some users, disturbing automations. The original warning messages from unknown message type 259 will reappear in logs (#198)
-
-## v2.7.4
-
-### Bug Fixes
-+ Fixed v2.7.3 regression: 0x0103 dumps no longer publish invalid config values like `charge_limit: 0` (#198)
-
-## v2.7.3
-
-### New Features
-+ Added `KEEP_BATTERY_POSITION` option (default: off). When enabled, GroBro tracks NOAH battery serial numbers across position changes and logs a warning if the inverter stack re-enumerates and a battery moves to a different slot (#196)
-
-### Bug Fixes
-+ Fixed NEXA and NOAH devices crashing the parser every hour when sending holding register dumps (message type 0x0103) (#198)
-+ Fixed NEXA household load sensors showing wrong values when the load is negative (e.g. exporting to grid). The registers are now parsed as signed values (#195)
-
-## v2.7.2
-
-### New Features
-+ NEO 2000 inverters (4 MPPT inputs) now expose PV3 and PV4 voltage, current, and power sensors. Detection is automatic - GroBro compares total PV power against individual MPPT sums at runtime. No configuration needed (#182)
-+ Added TL-XH2 inverter support (ZGQ serial prefix). The XH2 family shares the NEO register map and exposes grid import/export power, load power, battery state, BMS telemetry, and diagnostic sensors with XH2-specific names and publish defaults (#185)
-
-### Bug Fixes
-+ Added missing device class `battery` to individual battery SOC sensors for NOAH and SPF devices, so they display with colored badges in Home Assistant (#181)
-+ Fixed NOAH battery devices being merged into one in Home Assistant. All NOAH devices report the same non-unique MAC address (`AA:BB:CC:DD:EE:XX`), which caused Home Assistant's device registry to treat them as the same device. The MAC is now validated and masked MACs like this are rejected and no longer used for device matching (#178)
-+ Fixed missing TZ definition in German translation (#183)
-+ Fixed `MAX_BAT=auto` showing phantom empty batteries, battery count is now read from the device's own `bat_cnt` register instead of relying solely on serial-number register presence (#187)
-
-## v2.6.2
-
-### New Features
-+ `MAX_BAT=auto` is now the default. The number of battery packs is detected automatically. You can still override with `MAX_BAT=1`, `MAX_BAT=2`, etc.
-+ Battery serial numbers are now combined into a single sensor per battery (`Bat2/3/4 Serial`) instead of 4 separate part-sensors. Battery 1 uses the device serial ("Device SN").
-+ PTQ inverters (NEO 1000M-X via LoRa) behind ShineWeLink dongles are now extracted from config messages and registered as separate NEO devices in Home Assistant, with modbus data routed to them automatically.
-
-### Bug Fixes
-+ Fixed MQTT topic serial containing control characters being used as HA device identifier
-+ Fixed ShineWeLink config messages (type 0x0129, function 0x29) being silently dropped
-
-## v2.5.2
-
-### Bug Fixes
-+ Fixed NOAH FE19 config messages using the config's serial number (data logger serial) as HA device identifier instead of the MQTT topic serial. This caused multiple devices behind a shared data logger to be merged into one device in Home Assistant (#178)
-
-## v2.5.1
-
-### Bug Fixes
-+ Fixed regression where NOAH message dispatcher consumed ALL device types' function 3 (holding register) and function 16 (preset multiple) messages, causing them to never reach the modbus parser. This broke NEO, NEXA, and SPF devices that send these function codes.
-
-## v2.5.0
-
-### New Features
-+ Added `MAX_BAT` environment variable to control how many battery packs appear in Home Assistant. For example, `MAX_BAT=1` hides all but the first battery module. Set it to match how many batteries your system actually has.
-+ Added `FILTER_DATA_GLITCHES` option (default: off) to prevent glitches on total_increasing sensors after a device reconnects (#154)
-+ Added 37 missing NOAH input registers: PV1/PV2 temperature, battery SOH, PV3/PV4 voltage/current/temperature, battery 1 serial number, all battery warning and protection statuses, work mode, charging status/power, fault status, AC couple statuses, CT/grid/household load registers, system temperature, and cell voltage limits
-+ Parser now supports the `mult` field (in addition to `float_options`) for simpler register definitions
-+ Added support for ShineWeLink-X2 data loggers (RAQ serial prefix). These dongles bridge LoRa-connected inverters like the NEO 1000M-X into MQTT. Their messages are now properly routed, including config telemetry (firmware version, serial number).
-+ Added parser for new message type `0x6F64` (EcoTracker JSON data). EcoTracker sensor data is now forwarded to HA instead of being silently dropped (#176)
-
-### Bug Fixes
-+ Fixed missing `device_class: voltage` for Output Voltage sensor
-+ Removed duplicate `out_voltage` register definition
-+ Added `VENDOR_100` to modbus function enum and downgraded unknown function log from INFO to DEBUG to reduce log noise (#176)
-+ Fixed NOAH config messages (FE19) not being processed - firmware version, serial number and other device info are now properly saved in Home Assistant
-
-## v2.4.0
-
-### New Features
-+ Added NEXA register to allow grid charging
-
-### Bug Fixes
-+ Fixed wrong NEXA battery 1 temperature reading (#162)
-+ Fixed bug which always blocks config messages from Growatt cloud
-
-## v2.3.0
-
-### New Features
-+ Added most of the NEXA 2000 config and holding registers that were still missing (#157)
-+ Improved logging for MQTT config (#55)
-
-### Bug Fixes
-+ NEXA: "Battery Count" and "Battery Cycle Count" should be INT, not FLOAT (#161)
-
-## v2.2.0
-
-### Bug Fixes
-+ Fixed NOAH battery temperature accuracy by correcting offsets and mapping
-+ Fixed NOAH battery temperature display to show "unknown" instead of stale data when offline
-+ Fixed missing `AVAILABILITY_SENSOR` configuration in the Home Assistant add-on (#132)
-+ Fixed message parsing order to prevent read from wrong parser
-+ Improved logging for configuration read responses and general system events
-
-### New Features
-+ Added `GROWATT_CLOUD_CONFIG_FILTER` option to prevent the Growatt Cloud from remotely changing datalogger settings (#38)
-+ Added interactive control features: Datalogger restart button and Time Synchronization button (#122) and (#81)
-+ Added ability to configure the data reporting interval
-+ Added configurable MQTT Client IDs to allow running multiple GroBro instances in parallel (#142)
-+ Added support for reading configuration messages and updated all register maps with config controls
-+ Enhanced UI with updated control icons for configuration settings
-+ Added `TZ` option to HA-Addon to set the desired time zone for logging (#149)
-
-## v2.1.0
-
-### Bug Fixes
-
-+ Fixed pydantic warnings on startup
-+ Continue with local message processing if cloud forwarding fails
-+ Fixed object_id deprecated messages in HA
-
-### New Features
-
-+ Added support for SPF models (via Shine WiFi X dongle)
-+ Added smart mode (NOAH) which works only in connection with Growatt cloud again
-+ Extended NOAH device infos
-+ Added option to expose device availability via dedicated online sensor and to send sensor states retain via MQTT
-
-## v2.0.1
-
-### Bug Fixes
-
-+ Subscribe to MQTT topic again after broken connection
-
-### New Features
-
-+ Added possibility to select the smart mode for slots of a NOAH
-
-## v2.0.0
-
-⚠️ This is a major release with **breaking changes**. Please read carefully before upgrading.
-+ Double-check and **update your configuration**
-+ Remove any old Growatt devices from Home Assistant if you experience problems
-
-### Breaking Changes
-
-+ **Home Assistant auto-discovery** is now **device-based** (was previously global).
-+ The following environment variables have been **deprecated**:
-  + `REGISTER_FILTER` → replaced by automatic device detection and is removed
-  + `ACTIVATE_COMMUNICATION_GROWATT_SERVER` → replaced by `GROWATT_CLOUD` with optional **selective forwarding** per device serial
-+ **Sensor names may have changed**, and **additional sensors were added**.  
-
-### New Environment Variables
-
-+ `GROWATT_CLOUD`: Enables Growatt cloud communication with **selective forwarding**
-+ `DEVICE_TIMEOUT`: Marks device as inactive after a specified timeout without data
-+ `MAX_SLOTS`: Sets number of Home Assistant control timeslots for **NOAH batteries**
-
-### New Features
-
-+ Full codebase refactor
-+ **Control support** for Inverters and Batteries
-+ Added support for **NEXA-series batteries**
-
-## v1.7.4
-
-+ Enabled automatic selection of the correct register map based on device ID, deprecating the user-unfriendly `REGISTER_FILTER` variable.
-+ Replaced `ACTIVATE_COMMUNICATION_GROWATT_SERVER` with `GROWATT_CLOUD`, enabling selective message forwarding via a comma-separated list.
-
-## v1.7.3
-
-+ Fix #52: missing ssl import in ha client
-
-## v1.7.2
-
-+ Fix broken shebang in run.sh
-+ Add missing jq dependency in docker build
-
-## v1.7.0
-+ Introduced semantic versioning.
-+ Refactoring for a new modular design.
-+ Added a new unavailability option.
-
-## v1.6
-+ Large update of NOAH mappings.
-+ Small fixes in message detection.
-
-## v1.5
-+ Updated the NOAH and NEO mappings.
-+ Added a new message dump option, DUMP_MESSAGES=True, which writes all incoming messages to /data.
-+ Introduced a LOG_LEVEL option for configurable logging.
-
-## v1.4
-Thanks to @justinh998 for adding two-way message forwarding to Growatt Cloud! 🎉
-
-You can enable the relay by setting:
---env ACTIVATE_COMMUNICATION_GROWATT_SERVER=True
-
-Note: Once enabled, your device can be controlled by Growatt. This can be seen as both a benefit and a potential risk, depending on your use case.
-
-## v1.3
-Use REGISTER_FILTER variable to set the right mapping for your Inverters and batteries.
-
-Example: --env REGISTER_FILTER=QMN000XXXXXXXX:NEO800,YYYYYYYYXXXXX:NOAH
-
-## v1.2
-Good news, everyone!
-
-In this release, NOAH-series batteries are now partially (mapping isn't complete yet) supported and will show up in Home Assistant as—yep, you guessed it—battery.
-
-The updated register mapping results in a large number of new sensors appearing in Home Assistant. This will be addressed in the upcoming release through device-based register masks.
-
-## v1.1
-Added support for config messages and enhanced device information
-
-## v1.0
-Another try
+# GroBro 3.0.0 — Differences from robertzaage/GroBro
+
+This changelog intentionally contains no historical release log. It documents only the material differences between `criticallimit/GroBro` 3.0.0 and the current upstream baseline used for this release.
+
+Comparison baseline:
+
+- Upstream repository: `robertzaage/GroBro`
+- Upstream `main` / merge base: `4797f8419bd574bcebd32d1a859569f97b58b774`
+- Comparison date: 2026-09-06
+- Fork status before the 3.0.0 release metadata commits: 185 commits ahead, 0 behind
+
+## Runtime and performance
+
+- Added a central device-family registry for NOAH, NEXA, NEO/PTQ, ShineWeLink/RAQ, SPF, MIN-XH2 and MOD, replacing duplicated prefix decisions in multiple runtime paths.
+- Added cached device-family, MQTT topic/device-ID and Home Assistant battery-key resolution.
+- Reworked Growatt scramble/unscramble to use one mutable buffer and a rolling XOR-mask index instead of repeated immutable allocations and per-byte modulo operations.
+- Added a fast path for the common single-Modbus-block telemetry case.
+- Reused precompiled `struct.Struct` decoders for register values, Modbus messages, metadata and Modbus commands.
+- Avoided redundant `bytes(...)` copies when register data is already immutable bytes.
+- Reduced repeated Pydantic attribute access in per-register decoding.
+- Added a single-pass Home Assistant telemetry preparation path instead of repeatedly iterating and allocating lists from the same payload.
+- Cached static Home Assistant register rules such as ENUM, `total_increasing` and battery-temperature handling per register map.
+- Skipped ENUM mapping calls entirely for non-ENUM sensors.
+- Added discovery-signature caching so unchanged Home Assistant discovery is not rebuilt and republished on every telemetry packet.
+- Added availability-state caching and lower-churn timeout handling.
+- Converted helper/config/timeout timers to daemon timers while retaining explicit shutdown cleanup.
+- Replaced the bridge's 100 ms polling loop with event-driven waiting, removing ten idle wakeups per second.
+- Avoided eager payload hex formatting and other DEBUG-only work when DEBUG logging is disabled.
+- Added direct MQTT v5 `UserProperty` access on the common path instead of constructing a full JSON representation.
+
+## Home Assistant behavior
+
+- Preserves stable MQTT device identity and rejects placeholder serial values made only of `X` characters from replacing that identity.
+- Restores persisted device configuration by MQTT device ID and hardens device metadata publication.
+- Keeps the optional Online state retained and invalidates discovery/availability caches after reconnect so retained state can be recreated after broker restarts.
+- Removes the manual `Sync Time` button and the exposed `System Time` config entity.
+- Automatically synchronizes supported device clocks at 00:00 and 12:00 local time using config register 31.
+- Derives time-sync support from the active register map; RAQ/ShineWeLink gateways are not written directly, while a detected PTQ inverter is handled as NEO.
+- Inherits the Home Assistant Supervisor timezone when the add-on `TZ` option is empty; an explicitly configured `TZ` remains an override.
+- Keeps `MAX_BAT=auto` conservative when the actual battery count is unknown and retains optional battery-position tracking.
+
+## NOAH-specific differences
+
+- Adds validation and documentation based on real NOAH 2000 captures, including a three-module stack.
+- Adds passive parsing/diagnostics for the embedded NOAH `0x0103` holding-register block covering `R250-R374`.
+- Keeps NOAH Battery Health / SOH as a whole-number percentage.
+- Removes the experimental NOAH Home Assistant entities `Temperature PV1`, `Temperature PV2`, `System Temperature` and `MQTT IP` from the effective NOAH map.
+- Preserves the existing `Heater` entity but, for NOAH `0PVP` status message `0x0104`, overrides its state from the validated status-frame heater byte at absolute offset 108 when the value is in the existing `0..15` bitmask range.
+- Keeps the previous register-derived Heater value as fallback when the status packet/value is unsupported.
+- Skips the extra Heater-specific descramble for packets that are too short to contain the validated Heater byte.
+- Keeps passive watch logging for unknown NOAH register values without adding active scans or unsafe writes.
+
+## Protocol, safety and persistence hardening
+
+- Adds stricter validation for malformed/truncated Modbus and config traffic, including message lengths, register ranges, trailers and numeric value sizes.
+- Accepts valid final single-register blocks and supported protocol trailer bytes correctly.
+- Rejects invalid `TIME_HHMM` values instead of publishing malformed times.
+- Validates config-write device IDs, register numbers, ASCII values and protocol length limits before building packets.
+- Avoids logging config values that can contain credentials.
+- Writes persisted device configuration atomically and excludes sensitive password/raw fields.
+- Clarifies Growatt Cloud enable/filter behavior and keeps cloud configuration filtering in the Growatt Cloud -> local device direction.
+- Checks local MQTT publish results and keeps forwarding clients instance-local with explicit shutdown cleanup.
+- Retains the compatibility-oriented TLS behavior rather than imposing stricter certificate verification that could break existing installations.
+
+## Diagnostics
+
+- Adds passive register diagnostics written to `/share/GroBro/register_debug/registers.jsonl`.
+- Adds raw MQTT capture to one append-only `/share/GroBro/dump/messages.jsonl` file with exact Base64 payload preservation instead of creating large numbers of individual binary files.
+- Optimizes change-only register diagnostics by rejecting unchanged Modbus blocks before per-register unpacking and JSON construction.
+- Sets normal-operation diagnostics to low-overhead defaults: `LOG_LEVEL=ERROR`, `DUMP_MESSAGES=false`, `REGISTER_DEBUG=false`.
+- Diagnostics remain opt-in and passive; they do not actively scan the configured register range.
+
+## Add-on and runtime integration
+
+- Stores persistent `config_*.json` state under `/data/GroBro` across add-on rebuilds.
+- Exports Home Assistant add-on options with shell-safe quoting.
+- Keeps application code explicitly on `PYTHONPATH` while runtime state remains in the persistent data directory.
+- Includes fork-specific German and English add-on configuration/translation updates.
+
+## CI and container pipeline
+
+- Enables fork CI with Ruff and the full pytest suite on Python 3.11, 3.12 and 3.13 with the configured coverage requirement.
+- Adds CI concurrency so superseded runs on the same branch are cancelled.
+- Publishes fork container images to `ghcr.io/criticallimit/grobro` instead of the upstream namespace.
+- Builds multi-architecture images for `linux/amd64`, `linux/arm64` and `linux/arm/v7`.
+- Forces Docker Buildx to use `context: .` after checking out the exact successful CI `head_sha`, so the image is built from the same commit that CI tested.
+- The corrected workflow was validated by a successful multi-architecture push whose build metadata records the local context and the exact checked-out revision.
+
+## Additional validation and documentation
+
+- Adds `FORK_CHANGES.md` as the detailed fork-vs-upstream comparison.
+- Adds `NOAH_VALIDATION.md` for NOAH capture evidence and validated register findings.
+- Adds `REGISTER_DEBUG.md` for passive diagnostics behavior.
+- Adds regression coverage for device-family resolution, malformed protocol handling, config persistence/security, discovery/availability caching, reconnect behavior, automatic clock sync, NOAH Heater handling, embedded `0x0103` parsing, register diagnostics and Home Assistant telemetry performance rules.
+
+Existing Home Assistant entity IDs, unique IDs, MQTT state topics, device identifiers and protocol write limits are kept stable wherever possible; the performance changes above are intended to reduce CPU/allocation/idle overhead without changing the supported control semantics.
