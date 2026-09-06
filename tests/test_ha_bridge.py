@@ -7,14 +7,23 @@ class TestSignalHandler:
         from grobro.ha_bridge import SignalHandler
         sh = SignalHandler()
         assert sh.caught is True
+        assert sh._stop_event.is_set() is False
 
-    def test_handle_signal(self):
+    @patch("grobro.ha_bridge.signal.signal")
+    def test_handle_signal(self, mock_signal):
         from grobro.ha_bridge import SignalHandler
         sh = SignalHandler()
-        sh._running = True
         sh._handle(None, None)
-        assert sh._running is False
+        assert sh._stop_event.is_set() is True
         assert sh.caught is False
+
+    @patch("grobro.ha_bridge.signal.signal")
+    def test_wait_blocks_on_stop_event(self, mock_signal):
+        from grobro.ha_bridge import SignalHandler
+        sh = SignalHandler()
+        with patch.object(sh._stop_event, "wait") as mock_wait:
+            sh.wait()
+        mock_wait.assert_called_once_with()
 
 
 class TestModule:
