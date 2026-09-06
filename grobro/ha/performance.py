@@ -14,12 +14,62 @@ from grobro.ha import client as ha_client_module
 
 LOG = logging.getLogger(__name__)
 _INSTALLED = False
+_REGISTER_RULES_CACHE: dict[int, tuple[dict, frozenset[str], frozenset[str], bool]] = {}
+_BAT_SERIAL_GROUPS = (
+    (2, ("bat2_ser_part_1", "bat2_ser_part_2", "bat2_ser_part_3", "bat2_ser_part_4"), "bat2_serial"),
+    (3, ("bat3_ser_part_1", "bat3_ser_part_2", "bat3_ser_part_3", "bat3_ser_part_4"), "bat3_serial"),
+    (4, ("bat4_ser_part_1", "bat4_ser_part_2", "bat4_ser_part_3", "bat4_ser_part_4"), "bat4_serial"),
+)
 
 
-def _prepare_payload(client, state, effective_max_bat: int, known_registers):
+def _register_rules(known_registers):
+    """Cache static per-register HA rules for one immutable runtime register map."""
+    if known_registers is None:
+        return {}, frozenset(), frozenset(), False
+
+    cache_key = id(known_registers)
+    cached = _REGISTER_RULES_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+
+    enum_registers: dict = {}
+    total_increasing: set[str] = set()
+    invalid_battery_temps: set[str] = set()
+    has_battery_serial_parts = False
+
+    for name, reg in known_registers.input_registers.items():
+        data = getattr(reg.growatt, "data", None)
+        if data is not None and getattr(data, "data_type", None) == "ENUM":
+            enum_registers[name] = reg
+        if getattr(reg.homeassistant, "state_class", None) == "total_increasing":
+            total_increasing.add(name)
+        if name.startswith("bat") and name.endswith("_temp"):
+            invalid_battery_temps.add(name)
+        if name.startswith("bat") and "_ser_part_" in name:
+            has_battery_serial_parts = True
+
+    rules = (
+        enum_registers,
+        frozenset(total_increasing),
+        frozenset(invalid_battery_temps),
+        has_battery_serial_parts,
+    )
+    _REGISTER_RULES_CACHE[cache_key] = rules
+    return rules
+
+
+def _prepare_payload(
+    client,
+    state,
+    effective_max_bat: int,
+    known_registers,
+    rules=None,
+):
     """Apply the existing HA value rules in one pass over the source payload."""
-    input_registers = known_registers.input_registers if known_registers else None
-    input_get = input_registers.get if input_registers is not None else None
+    if rules is None:
+        rules = _register_rules(known_registers)
+    enum_registers, total_increasing, invalid_battery_temps, _ = rules
+
     get_bat_number = ha_client_module._get_bat_number
     map_enum_value = ha_client_module.map_enum_value
     filter_data_glitches = ha_client_module.FILTER_DATA_GLITCHES
@@ -33,39 +83,35 @@ def _prepare_payload(client, state, effective_max_bat: int, known_registers):
             continue
 
         value = raw_value
-        reg = input_get(key) if input_get is not None else None
+        if (
+            isinstance(value, (int, float))
+            and value == -273.1
+            and key in invalid_battery_temps
+        ):
+            value = None
 
-        if reg is not None:
-            if (
-                isinstance(value, (int, float))
-                and value == -273.1
-                and key.startswith("bat")
-                and key.endswith("_temp")
-            ):
-                value = None
+        enum_reg = enum_registers.get(key)
+        if enum_reg is not None:
+            value = map_enum_value(enum_reg, value)
 
-            data = getattr(reg.growatt, "data", None)
-            if data is not None and getattr(data, "data_type", None) == "ENUM":
-                value = map_enum_value(reg, value)
-
-            if (
-                filter_data_glitches
-                and getattr(reg.homeassistant, "state_class", None) == "total_increasing"
-                and isinstance(value, (int, float))
-            ):
-                device_key = (device_id, key)
-                last_value = last_energy_values.get(device_key)
-                if last_value is not None and value < last_value:
-                    LOG.debug(
-                        "Suppressed decrease for %s/%s: %.1f -> %.1f",
-                        device_id,
-                        key,
-                        last_value,
-                        value,
-                    )
-                    value = last_value
-                else:
-                    last_energy_values[device_key] = value
+        if (
+            filter_data_glitches
+            and key in total_increasing
+            and isinstance(value, (int, float))
+        ):
+            device_key = (device_id, key)
+            last_value = last_energy_values.get(device_key)
+            if last_value is not None and value < last_value:
+                LOG.debug(
+                    "Suppressed decrease for %s/%s: %.1f -> %.1f",
+                    device_id,
+                    key,
+                    last_value,
+                    value,
+                )
+                value = last_value
+            else:
+                last_energy_values[device_key] = value
 
         payload[key] = value
 
@@ -95,26 +141,29 @@ def install_ha_performance_hook() -> None:
             self._Client__reset_device_timer(device_id)
 
         known_registers = ha_client_module.get_known_registers(device_id)
+        rules = _register_rules(known_registers)
         payload = _prepare_payload(
             self,
             state,
             effective_max_bat,
             known_registers,
+            rules,
         )
 
-        # Combine battery serial parts into single values.
-        for bat_num in range(2, 5):
-            parts = []
-            for index in range(1, 5):
-                key = f"bat{bat_num}_ser_part_{index}"
-                value = payload.pop(key, None)
-                if value is not None:
-                    parts.append(str(value))
-            combined = "".join(parts).strip()
-            if combined:
-                payload[f"bat{bat_num}_serial"] = combined
-            else:
-                payload.pop(f"bat{bat_num}_serial", None)
+        # Only families whose static register map contains serial parts need the
+        # legacy combine step. The key strings themselves are prebuilt as well.
+        if rules[3]:
+            for _bat_num, part_keys, combined_key in _BAT_SERIAL_GROUPS:
+                parts = []
+                for key in part_keys:
+                    value = payload.pop(key, None)
+                    if value is not None:
+                        parts.append(str(value))
+                combined = "".join(parts).strip()
+                if combined:
+                    payload[combined_key] = combined
+                else:
+                    payload.pop(combined_key, None)
 
         # Preserve optional battery-position tracking exactly as before.
         if ha_client_module.KEEP_BATTERY_POSITION:
