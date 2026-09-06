@@ -19,12 +19,6 @@ from grobro import model
 from grobro.grobro import parser
 from grobro.grobro.builder import append_crc, scramble
 from grobro.model.growatt_registers import (
-    KNOWN_MOD_REGISTERS,
-    KNOWN_NEO_REGISTERS,
-    KNOWN_NEXA_REGISTERS,
-    KNOWN_NOAH_REGISTERS,
-    KNOWN_SPF_REGISTERS,
-    KNOWN_XH2_REGISTERS,
     HomeAssistantHoldingRegisterInput,
     HomeAssistantHoldingRegisterValue,
     HomeAssistantInputRegister,
@@ -51,19 +45,8 @@ def _extract_device_id(topic: str) -> str:
 
 
 def _known_registers_for_device(device_id: str):
-    if device_id.startswith(("QMN", "RAQ", "PTQ")):
-        return KNOWN_NEO_REGISTERS
-    if device_id.startswith("0PVP"):
-        return KNOWN_NOAH_REGISTERS
-    if device_id.startswith("0HVR"):
-        return KNOWN_NEXA_REGISTERS
-    if device_id.startswith("HAQ"):
-        return KNOWN_SPF_REGISTERS
-    if device_id.startswith("ZGQ"):
-        return KNOWN_XH2_REGISTERS
-    if device_id.startswith("VWQ"):
-        return KNOWN_MOD_REGISTERS
-    return None
+    """Compatibility wrapper around the central device-family registry."""
+    return model.get_known_registers(device_id)
 
 
 def _publish_checked(client, topic: str, payload=None, **kwargs):
@@ -565,13 +548,18 @@ def dump_message_binary(topic, payload):
         topic_parts = [part for part in str(topic).strip("/").split("/") if part]
         if not topic_parts:
             topic_parts = ["_"]
-        safe_parts = [re.sub(r"[^A-Za-z0-9._-]+", "_", part).strip(".") or "_" for part in topic_parts]
+        safe_parts = [
+            re.sub(r"[^A-Za-z0-9._-]+", "_", part).strip(".") or "_"
+            for part in topic_parts
+        ]
         root = os.path.abspath(DUMP_DIR)
         dir_path = os.path.abspath(os.path.join(root, *safe_parts))
         if os.path.commonpath([root, dir_path]) != root:
             raise ValueError("dump path escaped DUMP_DIR")
         os.makedirs(dir_path, exist_ok=True)
-        file_path = os.path.join(dir_path, f"{int(__import__('time').time() * 1000)}.bin")
+        file_path = os.path.join(
+            dir_path, f"{int(__import__('time').time() * 1000)}.bin"
+        )
         with open(file_path, "wb") as handle:
             handle.write(bytes(payload))
     except (OSError, TypeError, ValueError) as exc:
