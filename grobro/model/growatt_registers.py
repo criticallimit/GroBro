@@ -62,15 +62,14 @@ class GrowattRegisterDataType(BaseModel):
         if not data_raw or not isinstance(data_raw, (bytes, bytearray, memoryview)):
             return None
 
-        # get_data() returns bytes in the normal telemetry path. Re-wrapping an
-        # existing bytes object creates needless work for every decoded sensor.
+        data_type = self.data_type
         raw = data_raw if isinstance(data_raw, bytes) else bytes(data_raw)
-        if self.data_type == GrowattRegisterDataTypes.STRING:
+        if data_type == GrowattRegisterDataTypes.STRING:
             return raw.decode("ascii", errors="ignore").strip("\x00")
 
         unpacker = (
             _SIGNED_UNPACKERS.get(len(raw))
-            if self.data_type in _SIGNED_DATA_TYPES
+            if data_type in _SIGNED_DATA_TYPES
             else _UNSIGNED_UNPACKERS.get(len(raw))
         )
         if unpacker is None:
@@ -81,25 +80,28 @@ class GrowattRegisterDataType(BaseModel):
         except struct.error:
             return None
 
-        if self.data_type in _FLOAT_DATA_TYPES:
-            if self.mult is not None:
-                value *= self.mult
-            elif self.float_options:
-                value *= self.float_options.multiplier
-                value += self.float_options.delta
+        if data_type in _FLOAT_DATA_TYPES:
+            mult = self.mult
+            if mult is not None:
+                value *= mult
+            else:
+                float_options = self.float_options
+                if float_options:
+                    value *= float_options.multiplier
+                    value += float_options.delta
             return round(value, 3)
 
-        if self.data_type == GrowattRegisterDataTypes.TIME_HHMM:
+        if data_type == GrowattRegisterDataTypes.TIME_HHMM:
             hour = (value >> 8) & 0xFF
             minute = value & 0xFF
             if hour > 23 or minute > 59:
                 return None
             return f"{hour:02d}:{minute:02d}"
 
-        if self.data_type in _INT_DATA_TYPES:
+        if data_type in _INT_DATA_TYPES:
             return value
 
-        if self.data_type == GrowattRegisterDataTypes.ENUM:
+        if data_type == GrowattRegisterDataTypes.ENUM:
             opts = self.enum_options
             if not opts:
                 return None
