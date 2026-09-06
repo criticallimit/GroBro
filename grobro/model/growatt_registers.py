@@ -53,7 +53,9 @@ class GrowattRegisterDataType(BaseModel):
         if not data_raw or not isinstance(data_raw, (bytes, bytearray, memoryview)):
             return None
 
-        raw = bytes(data_raw)
+        # get_data() returns bytes in the normal telemetry path. Re-wrapping an
+        # existing bytes object creates needless work for every decoded sensor.
+        raw = data_raw if isinstance(data_raw, bytes) else bytes(data_raw)
         if self.data_type == GrowattRegisterDataTypes.STRING:
             return raw.decode("ascii", errors="ignore").strip("\x00")
 
