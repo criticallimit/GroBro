@@ -1,6 +1,6 @@
 name: "Better GroBro"
 description: "Growatt MQTT Message Broker for Home Assistant"
-version: "3.0.5"
+version: "3.0.6"
 slug: "grobro_register_debug"
 init: false
 url: https://github.com/criticallimit/GroBro
