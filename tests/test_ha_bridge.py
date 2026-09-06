@@ -36,7 +36,7 @@ class TestModule:
     def test_logger_fallback_on_bad_level(self):
         import importlib
         with patch.dict("os.environ", {"LOG_LEVEL": "INVALID_LEVEL_THAT_IS_WAY_TOO_LONG"}):
-            with patch("grobro.ha_bridge.logging.basicConfig") as mock_basic_config:
+            with patch("grobro.grobro.logging_setup.logging.basicConfig") as mock_basic_config:
                 mock_basic_config.side_effect = [ValueError("bad level"), None]
                 import grobro.ha_bridge as mod
                 importlib.reload(mod)
@@ -45,7 +45,7 @@ class TestModule:
     def test_logger_fallback_prints_error(self, capsys):
         import importlib
         with patch.dict("os.environ", {"LOG_LEVEL": "INVALID"}):
-            with patch("grobro.ha_bridge.logging.basicConfig") as mock_basic_config:
+            with patch("grobro.grobro.logging_setup.logging.basicConfig") as mock_basic_config:
                 mock_basic_config.side_effect = [ValueError("bad level"), None]
                 import grobro.ha_bridge as mod
                 importlib.reload(mod)
