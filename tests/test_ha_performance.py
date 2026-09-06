@@ -1,7 +1,11 @@
 from types import SimpleNamespace
 
 from grobro.ha import client as ha_client
-from grobro.ha.performance import _prepare_payload
+from grobro.ha.performance import (
+    _REGISTER_RULES_CACHE,
+    _prepare_payload,
+    _register_rules,
+)
 
 
 def _reg(state_class=None, data_type=None):
@@ -85,3 +89,25 @@ def test_prepare_payload_updates_increasing_energy_cache(monkeypatch):
 
     assert result["energy"] == 125
     assert client._last_energy_values[(state.device_id, "energy")] == 125
+
+
+def test_register_rules_are_cached_and_preserve_static_semantics():
+    known_registers = SimpleNamespace(
+        input_registers={
+            "bat2_temp": _reg(),
+            "bat2_ser_part_1": _reg(),
+            "energy": _reg("total_increasing"),
+            "enum_value": _reg(data_type="ENUM"),
+        }
+    )
+    _REGISTER_RULES_CACHE.pop(id(known_registers), None)
+
+    first = _register_rules(known_registers)
+    second = _register_rules(known_registers)
+
+    assert first is second
+    enum_registers, total_increasing, invalid_battery_temps, has_serial_parts = first
+    assert enum_registers["enum_value"] is known_registers.input_registers["enum_value"]
+    assert total_increasing == frozenset({"energy"})
+    assert invalid_battery_temps == frozenset({"bat2_temp"})
+    assert has_serial_parts is True
