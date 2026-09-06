@@ -13,6 +13,7 @@ from threading import Event
 from grobro import ha, grobro
 from grobro.grobro.configuration import load_bridge_mqtt_configs
 from grobro.grobro.diagnostics import install_optional_diagnostics
+from grobro.grobro.lifecycle import run_clients
 from grobro.grobro.runtime import install_runtime_layers
 from grobro.grobro.wiring import wire_clients
 
@@ -66,15 +67,5 @@ if __name__ == "__main__":
     ha_client = ha.Client(HA_MQTT_CONFIG)
     grobro_client = grobro.Client(GROBRO_MQTT_CONFIG, FORWARD_MQTT_CONFIG)
     wire_clients(ha_client, grobro_client)
-
-    signal_handler = SignalHandler()
-
-    ha_client.start()
-    grobro_client.start()
-
-    try:
-        signal_handler.wait()
-    finally:
-        ha_client.stop()
-        grobro_client.stop()
-        LOG.info("Stopped both clients. Exiting...")
+    run_clients(ha_client, grobro_client, SignalHandler())
+    LOG.info("Stopped both clients. Exiting...")
