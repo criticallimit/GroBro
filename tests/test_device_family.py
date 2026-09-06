@@ -8,6 +8,7 @@ from grobro.model.device_family import (
     is_known_device,
     supports_time_sync,
     uses_dynamic_pv_count,
+    uses_noah_protocol,
 )
 from grobro.model.growatt_registers import (
     GrowattRegisterDataTypes,
@@ -44,6 +45,7 @@ def test_unknown_device_is_not_guessed():
     assert is_known_device("UNKNOWN") is False
     assert is_family("UNKNOWN", "noah") is False
     assert is_gateway("UNKNOWN") is False
+    assert uses_noah_protocol("UNKNOWN") is False
     assert get_device_type_name("UNKNOWN") == "UNKNOWN"
     assert get_known_registers("UNKNOWN") is None
 
@@ -72,6 +74,20 @@ def test_gateway_capability_is_explicit():
         "VWQTEST",
     ):
         assert is_gateway(device_id) is False
+
+
+def test_noah_protocol_capability_is_explicit():
+    assert uses_noah_protocol("0PVPTEST") is True
+    assert uses_noah_protocol("0HVRTEST") is True
+    for device_id in (
+        "QMNTEST",
+        "PTQTEST",
+        "RAQTEST",
+        "HAQTEST",
+        "ZGQTEST",
+        "VWQTEST",
+    ):
+        assert uses_noah_protocol(device_id) is False
 
 
 def test_clock_sync_capability_is_derived_from_register_map():
