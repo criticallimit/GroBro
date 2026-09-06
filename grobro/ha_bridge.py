@@ -5,31 +5,16 @@ Reads Growatt MQTT packets, decodes them, maps registers
 and republishes values for Home Assistant auto-discovery.
 """
 
-import logging
-import os
-
 from grobro import ha, grobro
 from grobro.grobro.configuration import load_bridge_mqtt_configs
 from grobro.grobro.diagnostics import install_optional_diagnostics
 from grobro.grobro.lifecycle import run_clients
+from grobro.grobro.logging_setup import configure_logging
 from grobro.grobro.runtime import install_runtime_layers
 from grobro.grobro.signals import SignalHandler
 from grobro.grobro.wiring import wire_clients
 
-# Setup Logger
-LOG_LEVEL = os.getenv("LOG_LEVEL", "ERROR").upper()
-try:
-    logging.basicConfig(
-        level=LOG_LEVEL,
-        format="%(asctime)s [%(levelname)s] %(message)s",
-    )
-except Exception as exc:  # pylint: disable=broad-exception-caught
-    logging.basicConfig(
-        level=logging.ERROR,
-        format="%(asctime)s [%(levelname)s] %(message)s",
-    )
-    print(f"Failed to setup logger {exc} USING DEFAULT LOG Level(Error)")
-LOG = logging.getLogger(__name__)
+LOG_LEVEL, LOG = configure_logging()
 
 # Install permanent runtime hardening first, then optional passive diagnostics.
 install_runtime_layers()
