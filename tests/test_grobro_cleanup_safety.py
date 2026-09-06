@@ -1,17 +1,9 @@
 import base64
 import json
 
-import pytest
-
 from grobro.grobro import cleanup
 from grobro.grobro.builder import scramble
-from grobro.grobro.cleanup import (
-    _build_config_read_message,
-    _build_config_write_message,
-    _noah_heater_state_from_packet,
-    _validate_device_id,
-    _validate_register_no,
-)
+from grobro.grobro.cleanup import _noah_heater_state_from_packet
 
 
 def _noah_status_packet(heater_value: int, message_type: int = 0x0104) -> bytes:
@@ -30,6 +22,7 @@ def test_noah_heater_uses_validated_status_frame_byte():
 
 def test_noah_heater_does_not_guess_unsupported_packets():
     assert _noah_heater_state_from_packet(_noah_status_packet(1), "QMNTEST") is None
+    assert _noah_heater_state_from_packet(_noah_status_packet(1), "0HVRTEST") is None
     assert _noah_heater_state_from_packet(_noah_status_packet(1, 0x0103), "0PVPTEST") is None
     assert _noah_heater_state_from_packet(_noah_status_packet(16), "0PVPTEST") is None
     assert _noah_heater_state_from_packet(b"short", "0PVPTEST") is None
@@ -57,25 +50,8 @@ def test_raw_dump_appends_all_messages_to_one_jsonl_file(tmp_path, monkeypatch):
     assert base64.b64decode(records[1]["payload_base64"]) == payload2
 
 
-def test_config_message_validation_rejects_bad_wire_values():
-    assert len(_validate_device_id("0PVP50ZR175T00E8")) == 16
-    assert _validate_register_no(65535) == 65535
-
-    with pytest.raises(ValueError):
-        _validate_device_id("")
-    with pytest.raises(ValueError):
-        _validate_device_id("TOO-LONG-DEVICE-ID")
-    with pytest.raises(ValueError):
-        _validate_register_no(-1)
-    with pytest.raises(ValueError):
-        _validate_register_no(65536)
-
-
-def test_config_builders_return_valid_wire_payloads():
-    read_payload = _build_config_read_message("0PVP50ZR175T00E8", 17)
-    write_payload = _build_config_write_message("0PVP50ZR175T00E8", 17, "secret")
-
-    assert isinstance(read_payload, bytes)
-    assert isinstance(write_payload, bytes)
-    assert len(read_payload) > 40
-    assert len(write_payload) > len(read_payload)
+def test_cleanup_no_longer_duplicates_core_config_packet_builders():
+    assert not hasattr(cleanup, "_build_config_read_message")
+    assert not hasattr(cleanup, "_build_config_write_message")
+    assert not hasattr(cleanup, "_validate_device_id")
+    assert not hasattr(cleanup, "_validate_register_no")
