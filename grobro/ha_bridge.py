@@ -8,7 +8,7 @@ and republishes values for Home Assistant auto-discovery.
 import logging
 import os
 import signal
-import time
+from threading import Event
 
 from grobro import ha, model, grobro
 from grobro.grobro.cleanup import install_grobro_cleanup_hook
@@ -60,18 +60,22 @@ class SignalHandler:
     """Catch SIGINT/SIGTERM and trigger graceful shutdown."""
 
     def __init__(self):
-        self._running = True
+        self._stop_event = Event()
         signal.signal(signal.SIGINT, self._handle)
         signal.signal(signal.SIGTERM, self._handle)
 
     def _handle(self, _, __):
         LOG.info("Signal received, shutting down...")
-        self._running = False
+        self._stop_event.set()
 
     @property
     def caught(self) -> bool:
-        """Return whether the main loop should keep running."""
-        return self._running
+        """Return whether the bridge should keep running."""
+        return not self._stop_event.is_set()
+
+    def wait(self) -> None:
+        """Block without periodic wakeups until a shutdown signal arrives."""
+        self._stop_event.wait()
 
 
 if __name__ == "__main__":
@@ -97,8 +101,7 @@ if __name__ == "__main__":
     grobro_client.start()
 
     try:
-        while signal_handler.caught:
-            time.sleep(0.1)
+        signal_handler.wait()
     finally:
         ha_client.stop()
         grobro_client.stop()
