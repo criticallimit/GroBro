@@ -3,27 +3,22 @@
 Core protocol handling, cloud filtering, config packet building, device-family
 selection, MQTT property parsing and shutdown logic live in the hardened core.
 This module intentionally contains only fork-specific runtime behavior that still
-needs to observe/augment the core client: the single-file raw dump and the
+needs to observe/augment the core client: raw-dump compatibility wiring and the
 validated NOAH status-frame heater compatibility fix.
 """
 
 from __future__ import annotations
 
-import base64
-import json
 import logging
-import os
 import struct
-import threading
-import time
 
 from grobro import model
 from grobro.grobro import client as grobro_client_module
 from grobro.grobro import parser
+from grobro.grobro.raw_dump import dump_message_jsonl
 
 LOG = logging.getLogger(__name__)
 _INSTALLED = False
-_DUMP_LOCK = threading.Lock()
 
 # Community-validated NOAH status frame (message type 260 / 0x0104): after
 # descrambling, the status payload begins at byte 24 and heater state is byte 84
@@ -82,32 +77,8 @@ def _noah_heater_state_from_packet(payload, device_id: str) -> str | None:
 
 
 def _dump_message_binary_safe(topic, payload) -> None:
-    """Append raw MQTT messages to one JSONL file while preserving payload bytes."""
-    try:
-        if not isinstance(payload, (bytes, bytearray, memoryview)):
-            raise TypeError("payload must be bytes-like")
-
-        raw = bytes(payload)
-        root = os.path.abspath(grobro_client_module.DUMP_DIR)
-        os.makedirs(root, exist_ok=True)
-        file_path = os.path.abspath(os.path.join(root, "messages.jsonl"))
-        if os.path.commonpath([root, file_path]) != root:
-            raise ValueError("resolved dump path escaped DUMP_DIR")
-
-        record = {
-            "captured_at_ms": int(time.time() * 1000),
-            "topic": str(topic),
-            "payload_length": len(raw),
-            "payload_encoding": "base64",
-            "payload_base64": base64.b64encode(raw).decode("ascii"),
-        }
-        line = json.dumps(record, separators=(",", ":"))
-
-        with _DUMP_LOCK, open(file_path, "a", encoding="utf-8") as handle:
-            handle.write(line)
-            handle.write("\n")
-    except (OSError, TypeError, ValueError) as exc:
-        LOG.error("Failed to dump message for topic %s: %s", topic, exc)
+    """Compatibility wrapper around the centralized single-file raw dumper."""
+    dump_message_jsonl(grobro_client_module.DUMP_DIR, topic, payload)
 
 
 def install_grobro_cleanup_hook() -> None:
@@ -118,7 +89,8 @@ def install_grobro_cleanup_hook() -> None:
 
     client_cls = grobro_client_module.Client
 
-    # Raw diagnostics use one append-only file instead of thousands of .bin files.
+    # Preserve the historical dump hook name while routing it to the centralized
+    # append-only JSONL dumper. The client can later call raw_dump directly.
     grobro_client_module.dump_message_binary = _dump_message_binary_safe
 
     # Preserve the existing NOAH Heater HA entity, but replace its unreliable R17
