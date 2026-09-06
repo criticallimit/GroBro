@@ -44,7 +44,9 @@ def _prepare_payload(client, state, effective_max_bat: int, known_registers):
             ):
                 value = None
 
-            value = map_enum_value(reg, value)
+            data = getattr(reg.growatt, "data", None)
+            if data is not None and getattr(data, "data_type", None) == "ENUM":
+                value = map_enum_value(reg, value)
 
             if (
                 filter_data_glitches
