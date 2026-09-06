@@ -14,6 +14,7 @@ from grobro import ha, model, grobro
 from grobro.grobro.cleanup import install_grobro_cleanup_hook
 from grobro.grobro.register_debug import install_register_debug_hook
 from grobro.ha.cleanup import install_ha_cleanup_hook
+from grobro.ha.performance import install_ha_performance_hook
 from grobro.ha.system_time_cleanup import install_system_time_entity_cleanup
 
 # Setup Logger
@@ -32,9 +33,11 @@ except Exception as exc:  # pylint: disable=broad-exception-caught
 LOG = logging.getLogger(__name__)
 
 # Install compatibility cleanups and optional passive register logger before
-# clients start processing messages.
+# clients start processing messages. The telemetry performance hook is installed
+# after HA cleanup so it reuses the already-hardened discovery/timer methods.
 install_grobro_cleanup_hook()
 install_ha_cleanup_hook()
+install_ha_performance_hook()
 install_system_time_entity_cleanup()
 install_register_debug_hook()
 
