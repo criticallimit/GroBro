@@ -18,8 +18,12 @@ def unscramble(decdata: bytes):
     # the quadratic bytes concatenation and repeated hex/int conversions used by
     # the legacy implementation while remaining bit-for-bit identical.
     result = bytearray(decdata)
+    mask_index = 0
     for index in range(8, len(result)):
-        result[index] ^= _SCRAMBLE_MASK[(index - 8) % _SCRAMBLE_MASK_LEN]
+        result[index] ^= _SCRAMBLE_MASK[mask_index]
+        mask_index += 1
+        if mask_index == _SCRAMBLE_MASK_LEN:
+            mask_index = 0
     return bytes(result)
 
 
