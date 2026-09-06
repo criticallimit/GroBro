@@ -2,14 +2,14 @@ from unittest.mock import patch
 
 
 class TestSignalHandler:
-    @patch("grobro.ha_bridge.signal.signal")
+    @patch("grobro.grobro.signals.signal.signal")
     def test_init(self, mock_signal):
         from grobro.ha_bridge import SignalHandler
         sh = SignalHandler()
         assert sh.caught is True
         assert sh._stop_event.is_set() is False
 
-    @patch("grobro.ha_bridge.signal.signal")
+    @patch("grobro.grobro.signals.signal.signal")
     def test_handle_signal(self, mock_signal):
         from grobro.ha_bridge import SignalHandler
         sh = SignalHandler()
@@ -17,7 +17,7 @@ class TestSignalHandler:
         assert sh._stop_event.is_set() is True
         assert sh.caught is False
 
-    @patch("grobro.ha_bridge.signal.signal")
+    @patch("grobro.grobro.signals.signal.signal")
     def test_wait_blocks_on_stop_event(self, mock_signal):
         from grobro.ha_bridge import SignalHandler
         sh = SignalHandler()
@@ -60,7 +60,7 @@ class TestModule:
             "TARGET_MQTT_HOST": "target.local",
             "TARGET_MQTT_PORT": "2883",
         }):
-            with patch("grobro.ha_bridge.signal.signal"):
+            with patch("grobro.grobro.signals.signal.signal"):
                 import grobro.ha_bridge as mod
                 importlib.reload(mod)
                 assert mod.GROBRO_MQTT_CONFIG.host == "source.local"
