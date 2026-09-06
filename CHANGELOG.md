@@ -1,3 +1,13 @@
+## v2.8.5
+
+### Further telemetry hot-path optimization
++ Removed a redundant `bytes(...)` copy when register data is already immutable bytes, reducing per-sensor allocations during telemetry decoding.
++ Added and inlined a fast path for the common case where a Modbus message contains exactly one register block, avoiding repeated block-iteration/helper-call overhead for each sensor lookup.
++ Skips NOAH Heater-frame decoding entirely for packets that are too short to contain the validated heater byte, avoiding unnecessary decrypt work while preserving the existing Heater fallback behavior.
++ Reworked Growatt `unscramble()` to advance the seven-byte XOR mask index directly instead of calculating modulo for every payload byte; output remains bit-for-bit identical.
++ All changes are performance-only: Home Assistant entity IDs, MQTT topics, device-family mappings, register meanings, control behavior and protocol limits are unchanged.
++ The performance commits were validated with Ruff and the full pytest suite on Python 3.11, 3.12 and 3.13 before this release was finalized.
+
 ## v2.8.4
 
 ### Runtime performance and lower diagnostic overhead
