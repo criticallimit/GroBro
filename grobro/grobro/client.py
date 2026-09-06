@@ -18,6 +18,7 @@ from paho.mqtt.client import MQTTMessage
 from grobro import model
 from grobro.grobro import parser
 from grobro.grobro.builder import append_crc, scramble
+from grobro.grobro.cloud_policy import CloudForwardingPolicy
 from grobro.model.growatt_registers import (
     HomeAssistantHoldingRegisterInput,
     HomeAssistantHoldingRegisterValue,
@@ -29,7 +30,6 @@ from grobro.model.mqtt_config import MQTTConfig
 
 
 _DEVICE_ID_RE = re.compile(r"[^A-Za-z0-9]")
-_FALSE_VALUES = {"", "false", "0", "no", "off"}
 
 
 @lru_cache(maxsize=256)
@@ -66,23 +66,16 @@ def _publish_checked(client, topic: str, payload=None, **kwargs):
 LOG = logging.getLogger(__name__)
 HA_BASE_TOPIC = os.getenv("HA_BASE_TOPIC", "homeassistant")
 
-# Updated growatt cloud forwarding config.
-# `false` must really mean disabled; any other non-boolean value is interpreted
-# as a comma-separated device allowlist for backwards compatibility.
+# Preserve the established module-level settings for compatibility while
+# delegating all forwarding decisions to one focused policy object.
 GROWATT_CLOUD = os.getenv("GROWATT_CLOUD", "false").strip()
 GROWATT_CLOUD_CONFIG_FILTER = os.getenv("GROWATT_CLOUD_CONFIG_FILTER", "false").lower()
-_cloud_lower = GROWATT_CLOUD.lower()
-if _cloud_lower in _FALSE_VALUES:
-    GROWATT_CLOUD_ENABLED = False
-    GROWATT_CLOUD_FILTER = set()
-elif _cloud_lower == "true":
-    GROWATT_CLOUD_ENABLED = True
-    GROWATT_CLOUD_FILTER = set()
-else:
-    GROWATT_CLOUD_ENABLED = True
-    GROWATT_CLOUD_FILTER = {
-        item.strip() for item in GROWATT_CLOUD.split(",") if item.strip()
-    }
+_CLOUD_POLICY = CloudForwardingPolicy.parse(
+    GROWATT_CLOUD,
+    GROWATT_CLOUD_CONFIG_FILTER,
+)
+GROWATT_CLOUD_ENABLED = _CLOUD_POLICY.enabled
+GROWATT_CLOUD_FILTER = set(_CLOUD_POLICY.allowlist)
 
 DUMP_MESSAGES = os.getenv("DUMP_MESSAGES", "false").lower() == "true"
 PUBLISH_SENSORS_RETAINED = os.getenv("PUBLISH_SENSORS_RETAINED", "False").lower() == "true"
@@ -250,9 +243,7 @@ class Client:
                 LOG.debug("Ignoring MQTT message without a usable device id: %s", msg.topic)
                 return
 
-            if GROWATT_CLOUD_ENABLED and (
-                _cloud_lower == "true" or device_id in GROWATT_CLOUD_FILTER
-            ):
+            if _CLOUD_POLICY.allows_device(device_id):
                 try:
                     forward_client = self.__connect_to_growatt_server(device_id)
                     _publish_checked(
@@ -474,24 +465,21 @@ class Client:
             if LOG.isEnabledFor(logging.DEBUG):
                 LOG.debug("Received Growatt forward: %s %s", msg.topic, unscrambled.hex(" "))
 
-            if not GROWATT_CLOUD_ENABLED:
-                return
-            if _cloud_lower != "true" and device_id not in GROWATT_CLOUD_FILTER:
+            if not _CLOUD_POLICY.allows_device(device_id):
                 LOG.debug(
-                    "Dropping Growatt message for device %s not in GROWATT_CLOUD filter",
+                    "Dropping Growatt message for device %s not allowed by cloud policy",
                     device_id,
                 )
                 return
 
             # Cloud configuration filtering belongs in the Cloud -> device path.
-            if GROWATT_CLOUD_CONFIG_FILTER == "true":
-                cloud_msg_type = struct.unpack_from(">H", unscrambled, 6)[0]
-                if cloud_msg_type in (0x0118, 0x0110):
-                    LOG.warning(
-                        "Blocked configuration command from Growatt Cloud for %s",
-                        device_id,
-                    )
-                    return
+            cloud_msg_type = struct.unpack_from(">H", unscrambled, 6)[0]
+            if _CLOUD_POLICY.should_block_cloud_message(cloud_msg_type):
+                LOG.warning(
+                    "Blocked configuration command from Growatt Cloud for %s",
+                    device_id,
+                )
+                return
 
             LOG.debug("Forwarding message from Growatt for client %s", device_id)
             topic = msg.topic.split("/")[0] + "/33/" + device_id
