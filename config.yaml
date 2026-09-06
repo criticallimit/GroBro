@@ -1,6 +1,6 @@
-name: "GroBro Register Debug"
-description: "Growatt MQTT Message Broker with passive Modbus register logging"
-version: "3.0.1"
+name: "Better GroBro"
+description: "Growatt MQTT Message Broker for Home Assistant"
+version: "3.0.2"
 slug: "grobro_register_debug"
 init: false
 url: https://github.com/criticallimit/GroBro
@@ -37,10 +37,6 @@ options:
   LOG_LEVEL: ERROR
   DUMP_MESSAGES: false
   DUMP_DIR: "/share/GroBro/dump"
-  REGISTER_DEBUG: false
-  REGISTER_DEBUG_DIR: "/share/GroBro/register_debug"
-  REGISTER_DEBUG_MAX_REGISTER: 65535
-  REGISTER_DEBUG_CHANGES_ONLY: true
   PUBLISH_SENSORS_RETAINED: false
   MAX_SLOTS: 1
   MAX_BAT: "auto"
@@ -67,10 +63,6 @@ schema:
   LOG_LEVEL: list(INFO|ERROR|DEBUG)?
   DUMP_MESSAGES: bool
   DUMP_DIR: "str?"
-  REGISTER_DEBUG: bool
-  REGISTER_DEBUG_DIR: "str?"
-  REGISTER_DEBUG_MAX_REGISTER: int
-  REGISTER_DEBUG_CHANGES_ONLY: bool
   PUBLISH_SENSORS_RETAINED: bool
   DEVICE_TIMEOUT: "int?"
   MAX_SLOTS: "int?"
