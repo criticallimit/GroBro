@@ -28,12 +28,26 @@ def test_noah_heater_does_not_guess_unsupported_packets():
 
 
 def test_raw_dump_wrapper_delegates_to_centralized_dumper(monkeypatch):
-    monkeypatch.setattr(cleanup.grobro_client_module, "DUMP_DIR", "/tmp/grobro-dump")
+    from grobro.grobro import raw_dump_hook
 
-    with patch("grobro.grobro.cleanup.dump_message_jsonl") as dump:
+    monkeypatch.setattr(raw_dump_hook.grobro_client_module, "DUMP_DIR", "/tmp/grobro-dump")
+
+    with patch("grobro.grobro.raw_dump_hook.dump_message_jsonl") as dump:
         cleanup._dump_message_binary_safe("c/33/DEVICE", b"payload")
 
     dump.assert_called_once_with("/tmp/grobro-dump", "c/33/DEVICE", b"payload")
+
+
+def test_cleanup_bootstrap_installs_focused_hooks_once(monkeypatch):
+    calls = []
+    monkeypatch.setattr(cleanup, "_INSTALLED", False)
+    monkeypatch.setattr(cleanup, "install_raw_dump_hook", lambda: calls.append("raw_dump"))
+    monkeypatch.setattr(cleanup, "install_noah_heater_hook", lambda: calls.append("noah_heater"))
+
+    cleanup.install_grobro_cleanup_hook()
+    cleanup.install_grobro_cleanup_hook()
+
+    assert calls == ["raw_dump", "noah_heater"]
 
 
 def test_cleanup_no_longer_duplicates_core_config_packet_builders():
