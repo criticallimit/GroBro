@@ -46,6 +46,24 @@ imports/extensions. It is not part of the normal runtime installation path.
 These layers are considered product behavior rather than reverse-engineering
 diagnostics.
 
+## Home Assistant compatibility runtime
+
+`grobro/ha/cleanup.py` is now a thin, idempotent compatibility bootstrap rather
+than a monolithic implementation. It keeps historical helper names as aliases for
+older tests/extensions while installing focused modules in a stable order:
+
+- `battery_runtime.py` — family registry, cached battery-key parsing and MAX_BAT resolution,
+- `state_runtime.py` / `runtime_state.py` — per-client mutable runtime state,
+- `config_runtime.py` — config restore/persistence and sensitive-field cleanup,
+- `time_sync_runtime.py` — automatic 00:00/12:00 clock synchronization,
+- `pv_runtime.py` — dynamic PV-count capability gating,
+- `availability_runtime.py` / `availability.py` — retained availability and reconnect invalidation,
+- `timer_runtime.py` / `timers.py` — device timeout and shutdown timer lifecycle,
+- `discovery_runtime.py` — discovery cleanup, identity normalization and discovery caching.
+
+The bootstrap order is regression-tested. New HA compatibility behavior should be
+added to the narrowest applicable module instead of growing `ha/cleanup.py` again.
+
 ## Raw MQTT dumps
 
 `grobro/grobro/raw_dump.py` owns the actual append-only raw MQTT dump implementation.
