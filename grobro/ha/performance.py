@@ -1,20 +1,24 @@
 """Low-risk Home Assistant telemetry hot-path optimizations.
 
 This module deliberately changes no entity, topic, register or control semantics.
-It only combines repeated passes over one already-decoded telemetry payload into
-one pass before publishing the same Home Assistant state JSON.
+It combines repeated passes over one already-decoded telemetry payload into one
+pass and normalizes Home Assistant power sensors in watts to whole-watt values.
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import math
 
 from grobro.ha import client as ha_client_module
 
 LOG = logging.getLogger(__name__)
 _INSTALLED = False
-_REGISTER_RULES_CACHE: dict[int, tuple[dict, frozenset[str], frozenset[str], bool]] = {}
+_REGISTER_RULES_CACHE: dict[
+    int,
+    tuple[dict, frozenset[str], frozenset[str], frozenset[str], bool],
+] = {}
 _BAT_SERIAL_GROUPS = (
     (2, ("bat2_ser_part_1", "bat2_ser_part_2", "bat2_ser_part_3", "bat2_ser_part_4"), "bat2_serial"),
     (3, ("bat3_ser_part_1", "bat3_ser_part_2", "bat3_ser_part_3", "bat3_ser_part_4"), "bat3_serial"),
@@ -25,7 +29,7 @@ _BAT_SERIAL_GROUPS = (
 def _register_rules(known_registers):
     """Cache static per-register HA rules for one immutable runtime register map."""
     if known_registers is None:
-        return {}, frozenset(), frozenset(), False
+        return {}, frozenset(), frozenset(), frozenset(), False
 
     cache_key = id(known_registers)
     cached = _REGISTER_RULES_CACHE.get(cache_key)
@@ -35,14 +39,21 @@ def _register_rules(known_registers):
     enum_registers: dict = {}
     total_increasing: set[str] = set()
     invalid_battery_temps: set[str] = set()
+    whole_watt_power: set[str] = set()
     has_battery_serial_parts = False
 
     for name, reg in known_registers.input_registers.items():
         data = getattr(reg.growatt, "data", None)
         if data is not None and getattr(data, "data_type", None) == "ENUM":
             enum_registers[name] = reg
-        if getattr(reg.homeassistant, "state_class", None) == "total_increasing":
+        ha_reg = reg.homeassistant
+        if getattr(ha_reg, "state_class", None) == "total_increasing":
             total_increasing.add(name)
+        if (
+            getattr(ha_reg, "device_class", None) == "power"
+            and getattr(ha_reg, "unit_of_measurement", None) == "W"
+        ):
+            whole_watt_power.add(name)
         if name.startswith("bat") and name.endswith("_temp"):
             invalid_battery_temps.add(name)
         if name.startswith("bat") and "_ser_part_" in name:
@@ -52,6 +63,7 @@ def _register_rules(known_registers):
         enum_registers,
         frozenset(total_increasing),
         frozenset(invalid_battery_temps),
+        frozenset(whole_watt_power),
         has_battery_serial_parts,
     )
     _REGISTER_RULES_CACHE[cache_key] = rules
@@ -68,7 +80,13 @@ def _prepare_payload(
     """Apply the existing HA value rules in one pass over the source payload."""
     if rules is None:
         rules = _register_rules(known_registers)
-    enum_registers, total_increasing, invalid_battery_temps, _ = rules
+    (
+        enum_registers,
+        total_increasing,
+        invalid_battery_temps,
+        whole_watt_power,
+        _,
+    ) = rules
 
     get_bat_number = ha_client_module._get_bat_number
     map_enum_value = ha_client_module.map_enum_value
@@ -113,6 +131,18 @@ def _prepare_payload(
             else:
                 last_energy_values[device_key] = value
 
+        # Home Assistant power values in watts are intentionally published as
+        # whole numbers. This removes meaningless sub-watt display noise and,
+        # importantly, prevents negative zero (for example -0.4 W -> 0 W).
+        # Other measurements, including Wh/kWh energy counters, are untouched.
+        if (
+            key in whole_watt_power
+            and isinstance(value, (int, float))
+            and not isinstance(value, bool)
+            and (not isinstance(value, float) or math.isfinite(value))
+        ):
+            value = int(round(value))
+
         payload[key] = value
 
     return payload
@@ -152,7 +182,7 @@ def install_ha_performance_hook() -> None:
 
         # Only families whose static register map contains serial parts need the
         # legacy combine step. The key strings themselves are prebuilt as well.
-        if rules[3]:
+        if rules[4]:
             for _bat_num, part_keys, combined_key in _BAT_SERIAL_GROUPS:
                 parts = []
                 for key in part_keys:
