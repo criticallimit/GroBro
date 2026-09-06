@@ -16,12 +16,6 @@ from grobro.model.growatt_registers import (
     HomeAssistantInputRegister,
     HomeAssistantHoldingRegisterInput,
     GroBroRegisters,
-    KNOWN_NEO_REGISTERS,
-    KNOWN_NOAH_REGISTERS,
-    KNOWN_NEXA_REGISTERS,
-    KNOWN_SPF_REGISTERS,
-    KNOWN_XH2_REGISTERS,
-    KNOWN_MOD_REGISTERS,
 )
 from grobro.model.modbus_message import GrowattModbusFunction
 from grobro.model.modbus_function import (
@@ -73,44 +67,15 @@ def _resolve_max_bat(device_id: str, payload: dict | None = None) -> int:
         return c
     return _MAX_BAT_CACHE.get(device_id, 4)
 
+
 def get_known_registers(device_id: str) -> Optional[GroBroRegisters]:
-    """Ermittle passende Register-Sammlung anhand device_id-Präfix."""
-    if device_id.startswith("QMN"):
-        return KNOWN_NEO_REGISTERS
-    if device_id.startswith("0PVP"):
-        return KNOWN_NOAH_REGISTERS
-    if device_id.startswith("0HVR"):
-        return KNOWN_NEXA_REGISTERS
-    if device_id.startswith("HAQ"):
-        return KNOWN_SPF_REGISTERS
-    if device_id.startswith("RAQ") or device_id.startswith("PTQ"):
-        return KNOWN_NEO_REGISTERS
-    # MIN TL-XH2 hybrid inverters (ShineWiFi-X2 dongle, ZGQ prefix)
-    if device_id.startswith("ZGQ"):
-        return KNOWN_XH2_REGISTERS
-    # MOD-series 3-phase inverters
-    if device_id.startswith("VWQ"):
-        return KNOWN_MOD_REGISTERS
-    return None
+    """Compatibility wrapper around the central device-family registry."""
+    return model.get_known_registers(device_id)
 
 
 def get_device_type_name(device_id: str) -> str:
-    """Ermittle Klartext-Typname anhand der device_id."""
-    if device_id.startswith("QMN") or device_id.startswith("PTQ"):
-        return "NEO"
-    if device_id.startswith("0PVP"):
-        return "NOAH"
-    if device_id.startswith("0HVR"):
-        return "NEXA"
-    if device_id.startswith("HAQ"):
-        return "SPF"
-    if device_id.startswith("RAQ"):
-        return "ShineWeLink"
-    if device_id.startswith("ZGQ"):
-        return "MIN-XH2"
-    if device_id.startswith("VWQ"):
-        return "MOD"
-    return "UNKNOWN"
+    """Compatibility wrapper around the central device-family registry."""
+    return model.get_device_type_name(device_id)
 
 
 def map_enum_value(reg, value):
@@ -581,7 +546,7 @@ class Client:
             )
 
     def __detect_neo_pv_count(self, device_id: str, payload: dict) -> None:
-        if not (device_id.startswith("QMN") or device_id.startswith("PTQ") or device_id.startswith("VWQ")):
+        if not model.uses_dynamic_pv_count(device_id):
             return
         if device_id in self._neo_pv_count:
             return
