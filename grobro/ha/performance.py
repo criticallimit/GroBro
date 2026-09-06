@@ -2,7 +2,8 @@
 
 This module deliberately changes no entity, topic, register or control semantics.
 It combines repeated passes over one already-decoded telemetry payload into one
-pass and normalizes Home Assistant power sensors in watts to whole-watt values.
+pass, normalizes Home Assistant power sensors in watts to whole-watt values, and
+suppresses byte-identical repeated state payloads per device.
 """
 
 from __future__ import annotations
@@ -148,6 +149,29 @@ def _prepare_payload(
     return payload
 
 
+def _state_publish_cache(client) -> dict[str, str]:
+    cache = getattr(client, "_state_publish_cache", None)
+    if cache is None:
+        cache = {}
+        client._state_publish_cache = cache
+    return cache
+
+
+def _should_publish_state(client, device_id: str, payload_json: str) -> bool:
+    """Return True only when this device's HA state actually changed."""
+    cache = _state_publish_cache(client)
+    if cache.get(device_id) == payload_json:
+        return False
+    cache[device_id] = payload_json
+    return True
+
+
+def _clear_state_publish_cache(client) -> None:
+    cache = getattr(client, "_state_publish_cache", None)
+    if cache is not None:
+        cache.clear()
+
+
 def install_ha_performance_hook() -> None:
     """Replace only HA input-state preparation with an equivalent single pass."""
     global _INSTALLED
@@ -219,13 +243,27 @@ def install_ha_performance_hook() -> None:
                             )
             ha_client_module._LAST_BAT_SERIALS[device_id] = current_serials
 
+        payload_json = json.dumps(payload, separators=(",", ":"))
+        if not _should_publish_state(self, device_id, payload_json):
+            LOG.debug("HA state unchanged for %s, skipping publish", device_id)
+            return
+
         topic = f"{ha_client_module.HA_BASE_TOPIC}/grobro/{device_id}/state"
         self._client.publish(
             topic,
-            json.dumps(payload, separators=(",", ":")),
+            payload_json,
             retain=ha_client_module.PUBLISH_SENSORS_RETAINED,
         )
 
+    original_on_connect = client_cls._Client__on_connect
+
+    def on_connect_clear_state_cache(self, client, userdata, flags, reason_code, properties):
+        # A reconnect may mean the HA broker restarted and lost non-retained state.
+        # Force the next live telemetry frame to be published again.
+        _clear_state_publish_cache(self)
+        return original_on_connect(self, client, userdata, flags, reason_code, properties)
+
     client_cls.publish_input_register = publish_input_register_fast
+    client_cls._Client__on_connect = on_connect_clear_state_cache
     _INSTALLED = True
     LOG.info("Installed GroBro Home Assistant telemetry performance hook")
