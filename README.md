@@ -1,78 +1,81 @@
 # GroBro Register Debug
 
-> Enhanced fork of [robertzaage/GroBro](https://github.com/robertzaage/GroBro) focused on Home Assistant robustness, runtime efficiency, passive protocol diagnostics and validated NOAH 2000 behavior.
+> Fork of [robertzaage/GroBro](https://github.com/robertzaage/GroBro) with targeted Home Assistant, performance, NOAH and diagnostic improvements.
 
 GroBro is a bridge service that decodes Growatt MQTT packets and republishes device data and controls for Home Assistant.
 
-This fork keeps the existing GroBro architecture and entity compatibility where possible, while adding targeted hardening and diagnostics across the supported device families.
-
 ## Current fork release
 
-**2.8.0**
+**3.0.1**
 
-Reference upstream baseline for this release:
+Reference upstream baseline:
 
-`robertzaage/GroBro` main @ `4797f8419bd574bcebd32d1a859569f97b58b774` (2026-08-08)
+`robertzaage/GroBro` main @ `4797f8419bd574bcebd32d1a859569f97b58b774`
 
-For the detailed, evidence-level comparison with upstream, see:
+The list below contains only changes in this fork compared with Robert Zaage's GroBro.
 
-- [FORK_CHANGES.md](FORK_CHANGES.md)
+## Changes compared with robertzaage/GroBro
+
+### Home Assistant
+
+- Power entities with `device_class: power` and unit `W` are published as whole watts. Values such as `-0.4 W` therefore become `0 W` instead of appearing as `-0 W`.
+- Home Assistant discovery is cached and is not rebuilt and republished for unchanged telemetry.
+- Availability state is cached to reduce unnecessary MQTT traffic.
+- Device identity handling is hardened so placeholder serial numbers made only of `X` characters cannot replace a valid identity.
+- Persisted device configuration is restored by MQTT device ID.
+- The manual **Sync Time** button and exposed **System Time** config entity are removed.
+- Supported device clocks are synchronized automatically at 00:00 and 12:00 local time via config register 31.
+- If the add-on `TZ` option is empty, the Home Assistant Supervisor timezone is inherited where available. An explicitly configured `TZ` remains an override.
+
+### Runtime and performance
+
+- Added a central device-family registry for NOAH, NEXA, NEO/PTQ, ShineWeLink/RAQ, SPF, MIN-XH2 and MOD.
+- Added caching for device-family, MQTT topic/device-ID and Home Assistant battery-key resolution.
+- Reduced allocations in Growatt scramble/unscramble processing.
+- Added a fast path for the common single-Modbus-block telemetry case.
+- Reused precompiled `struct.Struct` decoders for register values and protocol messages.
+- Reduced repeated telemetry iteration and repeated Home Assistant rule evaluation.
+- Replaced the bridge's 100 ms polling loop with event-driven waiting.
+- Avoided DEBUG-only formatting work when DEBUG logging is disabled.
+
+### NOAH
+
+- Added validation based on real NOAH 2000 captures, including a three-module stack.
+- Added passive parsing/diagnostics for the embedded NOAH `0x0103` holding-register block covering `R250-R374`.
+- NOAH Battery Health / SOH is published as a whole-number percentage.
+- Experimental NOAH entities `Temperature PV1`, `Temperature PV2`, `System Temperature` and `MQTT IP` are not exposed by the effective map.
+- For validated NOAH `0PVP` status message `0x0104`, the existing Heater entity can use the validated heater byte from the status frame, with the previous register-derived value retained as fallback.
+
+### Protocol and persistence hardening
+
+- Added stricter validation for malformed or truncated Modbus and config traffic.
+- Added validation for config-write device IDs, register numbers, ASCII values and protocol length limits.
+- Invalid `TIME_HHMM` values are rejected instead of being published.
+- Device configuration is written atomically and sensitive password/raw fields are excluded from persistence.
+- Growatt Cloud configuration filtering is kept in the Growatt Cloud -> local device direction.
+- Local MQTT publish results are checked and forwarding clients are cleaned up explicitly on shutdown.
+
+### Diagnostics
+
+- Added passive register diagnostics written to `/share/GroBro/register_debug/registers.jsonl`.
+- Added optional raw MQTT capture to `/share/GroBro/dump/messages.jsonl` with exact Base64 payload preservation.
+- Register diagnostics are change-aware to reduce processing overhead.
+- Diagnostics are passive and do not actively scan register ranges.
+
+### Add-on and CI integration
+
+- Persistent `config_*.json` state is stored under `/data/GroBro`.
+- Home Assistant add-on options are exported with shell-safe quoting.
+- Fork images are published under `ghcr.io/criticallimit/grobro`.
+- Multi-architecture builds cover `linux/amd64`, `linux/arm64` and `linux/arm/v7`.
+- Fork CI runs Ruff and pytest across Python 3.11, 3.12 and 3.13.
+
+For the detailed comparison and validation notes, see:
+
 - [CHANGELOG.md](CHANGELOG.md)
-
-## Supported device-family routing
-
-The fork uses one central runtime registry for the currently known serial prefixes:
-
-- `0PVP` -> NOAH
-- `0HVR` -> NEXA
-- `QMN` / `PTQ` -> NEO
-- `RAQ` -> ShineWeLink gateway
-- `HAQ` -> SPF
-- `ZGQ` -> MIN-XH2
-- `VWQ` -> MOD
-
-This keeps Home Assistant and Growatt MQTT register-map selection consistent.
-
-## Main additions in this fork
-
-- Hardened Home Assistant discovery, availability and reconnect behavior.
-- Lower runtime allocation/timer/discovery overhead across device families.
-- Centralized device-family detection and capability handling.
-- Automatic clock synchronization at 00:00 and 12:00 local time for maps that expose `system_time` as config register 31.
-- Atomic/sanitized device config persistence.
-- Defensive Modbus/config parser validation.
-- Safer Growatt Cloud forwarding/filter behavior.
-- Passive register diagnostics and exact raw MQTT JSONL capture.
-- NOAH 2000 validation from real captures, including the embedded `0x0103` block.
-
-## Passive register diagnostics
-
-Register debugging observes only traffic already received by GroBro. The logger does **not** actively scan the configured register range.
-
-Register log:
-
-`/share/GroBro/register_debug/registers.jsonl`
-
-Optional raw MQTT log:
-
-`/share/GroBro/dump/messages.jsonl`
-
-Raw payloads are preserved exactly as Base64 inside JSONL records.
-
-See [REGISTER_DEBUG.md](REGISTER_DEBUG.md) for details.
-
-## NOAH validation
-
-The NOAH-specific reverse-engineering and evidence levels are documented separately in [NOAH_VALIDATION.md](NOAH_VALIDATION.md).
-
-The current NOAH map intentionally does not expose the experimental Home Assistant entities:
-
-- MQTT IP
-- Temperature PV1
-- Temperature PV2
-- System Temperature
-
-NOAH Battery Health/SOH is emitted as a whole-number percentage.
+- [FORK_CHANGES.md](FORK_CHANGES.md)
+- [NOAH_VALIDATION.md](NOAH_VALIDATION.md)
+- [REGISTER_DEBUG.md](REGISTER_DEBUG.md)
 
 ## Installation as Home Assistant add-on
 
@@ -86,41 +89,7 @@ Or add manually:
 
 Then refresh the add-on store and install/update **GroBro Register Debug**.
 
-Do not run two GroBro instances against the same Growatt MQTT source unless you deliberately configured separate MQTT client identities and understand the consequences.
-
-## Current relevant defaults
-
-```yaml
-DUMP_MESSAGES: false
-DUMP_DIR: /share/GroBro/dump
-REGISTER_DEBUG: true
-REGISTER_DEBUG_DIR: /share/GroBro/register_debug
-REGISTER_DEBUG_MAX_REGISTER: 65535
-REGISTER_DEBUG_CHANGES_ONLY: true
-PUBLISH_SENSORS_RETAINED: false
-MAX_SLOTS: 1
-MAX_BAT: auto
-AVAILABILITY_SENSOR: false
-```
-
-`REGISTER_DEBUG_MAX_REGISTER=65535` is only a passive capture filter. It does not cause GroBro to query registers `0-65535`.
-
-## Automatic time sync
-
-The old manual Sync Time button is not exposed by this fork.
-
-For supported register maps, system time is synchronized automatically twice daily at local:
-
-- 00:00
-- 12:00
-
-If `TZ` is left empty, the add-on launcher attempts to inherit the Home Assistant Supervisor timezone. A manually configured `TZ` remains an override.
-
-## Testing status
-
-The fork contains additional regression tests for parser validation, persistence safety, Home Assistant caching/reconnect behavior, device-family routing, time synchronization and NOAH diagnostics.
-
-At the time of this release, GitHub Actions shows no workflow runs in this fork. The tests therefore must not be interpreted as automatically CI-passed; real runtime testing remains important.
+Do not run two GroBro instances against the same Growatt MQTT source unless separate MQTT client identities are deliberately configured.
 
 ## Upstream and license
 
