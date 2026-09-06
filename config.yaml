@@ -1,6 +1,6 @@
 name: "Better GroBro"
 description: "Growatt MQTT Message Broker for Home Assistant"
-version: "3.0.3"
+version: "3.0.2"
 slug: "grobro_register_debug"
 init: false
 url: https://github.com/criticallimit/GroBro
@@ -20,18 +20,18 @@ build_from:
 map:
   - share:rw
 options:
-  SOURCE_MQTTHOST: homeassistant.local
-  SOURCE_MQTTBPORT: 7006
+  SOURCE_MQTT_HOST: homeassistant.local
+  SOURCE_MQTT_PORT: 7006
   SOURCE_MQTT_TLS: true
   SOURCE_MQTT_USER: ""
-  SOURCE_MQTTBPASS: ""
+  SOURCE_MQTT_PASS: ""
   TARGET_MQTT_HOST: homeassistant.local
-  TARGET_MQTTBPORT: 1883
+  TARGET_MQTT_PORT: 1883
   TARGET_MQTT_TLS: false
   TARGET_MQTT_USER: ""
   TARGET_MQTT_PASS: ""
   MQTT_CLIENT_SUFFIX: ""
-  HA_BASE_TOPI: "homeassistant"
+  HA_BASE_TOPIC: "homeassistant"
   GROWATT_CLOUD: false
   GROWATT_CLOUD_CONFIG_FILTER: false
   LOG_LEVEL: ERROR
@@ -51,12 +51,12 @@ schema:
   SOURCE_MQTT_TLS: bool
   SOURCE_MQTT_USER: str?
   SOURCE_MQTT_PASS: str?
-  TARGET_MQTTHOST: str
+  TARGET_MQTT_HOST: str
   TARGET_MQTT_PORT: int
   TARGET_MQTT_TLS: bool
-  TARGET_MQTT_USER: "str?"  
+  TARGET_MQTT_USER: "str?"
   TARGET_MQTT_PASS: "str?"
-  MQTTHCLIENT_SUFFIX: "str?"
+  MQTT_CLIENT_SUFFIX: "str?"
   HA_BASE_TOPIC: "str?"
   GROWATT_CLOUD: bool
   GROWATT_CLOUD_CONFIG_FILTER: bool
@@ -64,7 +64,7 @@ schema:
   DUMP_MESSAGES: bool
   DUMP_DIR: "str?"
   REGISTER_DEBUG: "bool?"
-  REGISTER_DEBUG_DIR: "str?"  
+  REGISTER_DEBUG_DIR: "str?"
   REGISTER_DEBUG_MAX_REGISTER: "int?"
   REGISTER_DEBUG_CHANGES_ONLY: "bool?"
   PUBLISH_SENSORS_RETAINED: bool
