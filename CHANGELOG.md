@@ -1,6 +1,6 @@
-# GroBro 3.0.0 — Differences from robertzaage/GroBro
+# GroBro 3.0.1 — Differences from robertzaage/GroBro
 
-This changelog intentionally contains no historical release log. It documents only the material differences between `criticallimit/GroBro` 3.0.0 and the current upstream baseline used for this release.
+This changelog intentionally contains no historical release log. It documents only the material differences between `criticallimit/GroBro` 3.0.1 and the current upstream baseline used for this release.
 
 Comparison baseline:
 
@@ -19,7 +19,7 @@ Comparison baseline:
 - Avoided redundant `bytes(...)` copies when register data is already immutable bytes.
 - Reduced repeated Pydantic attribute access in per-register decoding.
 - Added a single-pass Home Assistant telemetry preparation path instead of repeatedly iterating and allocating lists from the same payload.
-- Cached static Home Assistant register rules such as ENUM, `total_increasing` and battery-temperature handling per register map.
+- Cached static Home Assistant register rules such as ENUM, `total_increasing`, battery-temperature handling and whole-watt power classification per register map.
 - Skipped ENUM mapping calls entirely for non-ENUM sensors.
 - Added discovery-signature caching so unchanged Home Assistant discovery is not rebuilt and republished on every telemetry packet.
 - Added availability-state caching and lower-churn timeout handling.
@@ -30,6 +30,8 @@ Comparison baseline:
 
 ## Home Assistant behavior
 
+- Power entities whose Home Assistant metadata is exactly `device_class: power` with unit `W` are published as whole watts. Decimal watt values are rounded at the Home Assistant publish boundary, so values near zero such as `-0.4 W` become integer `0 W` instead of appearing as `-0 W`.
+- The whole-watt normalization does not modify raw Growatt register decoding and does not affect energy counters in `Wh`/`kWh`, voltage, current, SOC, temperature or other non-power measurements.
 - Preserves stable MQTT device identity and rejects placeholder serial values made only of `X` characters from replacing that identity.
 - Restores persisted device configuration by MQTT device ID and hardens device metadata publication.
 - Keeps the optional Online state retained and invalidates discovery/availability caches after reconnect so retained state can be recreated after broker restarts.
@@ -91,6 +93,6 @@ Comparison baseline:
 - Adds `FORK_CHANGES.md` as the detailed fork-vs-upstream comparison.
 - Adds `NOAH_VALIDATION.md` for NOAH capture evidence and validated register findings.
 - Adds `REGISTER_DEBUG.md` for passive diagnostics behavior.
-- Adds regression coverage for device-family resolution, malformed protocol handling, config persistence/security, discovery/availability caching, reconnect behavior, automatic clock sync, NOAH Heater handling, embedded `0x0103` parsing, register diagnostics and Home Assistant telemetry performance rules.
+- Adds regression coverage for device-family resolution, malformed protocol handling, config persistence/security, discovery/availability caching, reconnect behavior, automatic clock sync, NOAH Heater handling, embedded `0x0103` parsing, register diagnostics, Home Assistant telemetry performance rules and whole-watt power publication including negative-zero elimination.
 
 Existing Home Assistant entity IDs, unique IDs, MQTT state topics, device identifiers and protocol write limits are kept stable wherever possible; the performance changes above are intended to reduce CPU/allocation/idle overhead without changing the supported control semantics.
