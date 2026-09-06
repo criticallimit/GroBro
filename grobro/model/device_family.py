@@ -109,6 +109,12 @@ def is_known_device(device_id: str) -> bool:
     return get_device_family(device_id) is not None
 
 
+def is_family(device_id: str, family_key: str) -> bool:
+    """Return whether the serial belongs to the named registered family."""
+    family = get_device_family(device_id)
+    return bool(family and family.key == family_key)
+
+
 def is_gateway(device_id: str) -> bool:
     """Return whether the serial identifies a gateway rather than an endpoint."""
     family = get_device_family(device_id)
