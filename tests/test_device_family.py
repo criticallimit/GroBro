@@ -3,6 +3,7 @@ from grobro.model.device_family import (
     get_device_family,
     get_device_type_name,
     get_known_registers,
+    is_family,
     is_gateway,
     is_known_device,
     supports_time_sync,
@@ -41,9 +42,22 @@ def test_all_known_device_prefixes_resolve_consistently():
 def test_unknown_device_is_not_guessed():
     assert get_device_family("UNKNOWN") is None
     assert is_known_device("UNKNOWN") is False
+    assert is_family("UNKNOWN", "noah") is False
     assert is_gateway("UNKNOWN") is False
     assert get_device_type_name("UNKNOWN") == "UNKNOWN"
     assert get_known_registers("UNKNOWN") is None
+
+
+def test_family_predicate_uses_registry_keys():
+    assert is_family("0PVPTEST", "noah") is True
+    assert is_family("0HVRTEST", "nexa") is True
+    assert is_family("QMNTEST", "neo") is True
+    assert is_family("PTQTEST", "neo") is True
+    assert is_family("RAQTEST", "shinewelink") is True
+    assert is_family("HAQTEST", "spf") is True
+    assert is_family("ZGQTEST", "min_xh2") is True
+    assert is_family("VWQTEST", "mod") is True
+    assert is_family("0PVPTEST", "neo") is False
 
 
 def test_gateway_capability_is_explicit():
