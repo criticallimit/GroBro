@@ -1,7 +1,11 @@
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 from grobro.ha.availability import clear_reconnect_caches
-from grobro.ha.neo_power_runtime import request_initial_neo_inverter_power
+from grobro.ha.neo_power_runtime import (
+    _publish_retained_switch_state,
+    request_initial_neo_inverter_power,
+)
 from grobro.model.modbus_message import GrowattModbusFunction
 
 
@@ -50,3 +54,16 @@ def test_reconnect_allows_initial_neo_read_again():
 
     assert request_initial_neo_inverter_power(client, "QMNTEST") is True
     assert len(commands) == 1
+
+
+def test_neo_inverter_power_state_is_retained():
+    mqtt_client = MagicMock()
+    client = SimpleNamespace(_client=mqtt_client)
+
+    _publish_retained_switch_state(client, "QMNTEST", "ON")
+
+    mqtt_client.publish.assert_called_once_with(
+        "homeassistant/switch/grobro/QMNTEST/inverter_power/get",
+        "ON",
+        retain=True,
+    )
