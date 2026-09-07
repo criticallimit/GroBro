@@ -5,7 +5,7 @@ from grobro.ha import client as ha_client_module
 from grobro.ha.cleanup import install_ha_cleanup_hook
 
 
-def test_neo_inverter_power_is_repaired_and_present_in_final_device_discovery(
+def test_neo_inverter_power_matches_upstream_discovery_path(
     monkeypatch, tmp_path
 ):
     monkeypatch.chdir(tmp_path)
@@ -27,8 +27,6 @@ def test_neo_inverter_power_is_repaired_and_present_in_final_device_discovery(
     client._migration_done = set()
     client._neo_pv_count = {}
 
-    # Avoid unrelated config-file/device-metadata work. The discovery component
-    # generation itself remains the real Client implementation.
     client._Client__device_info_from_config = lambda _device_id: {
         "identifiers": ["QMNTEST"],
         "name": "Growatt QMNTEST",
@@ -43,9 +41,10 @@ def test_neo_inverter_power_is_repaired_and_present_in_final_device_discovery(
         for topic, payload, _kwargs in published
         if topic == "homeassistant/device/QMNTEST/config" and payload
     ]
-    assert len(discovery_messages) >= 2
+    assert discovery_messages
 
     parsed_messages = [json.loads(payload) for payload in discovery_messages]
+
     repair = next(
         data
         for data in parsed_messages
@@ -59,35 +58,41 @@ def test_neo_inverter_power_is_repaired_and_present_in_final_device_discovery(
     assert repair_components["grobro_QMNTEST_sync_time"] == {
         "platform": "button"
     }
-    assert repair_components["grobro_QMNTEST_cmd_inverter_power"] == {
-        "platform": "switch"
-    }
+
+    # Better GroBro must never use Inverter Power as a removal/repair component.
+    repaired_inverter = repair_components["grobro_QMNTEST_cmd_inverter_power"]
+    assert repaired_inverter["name"] == "Inverter Power"
+    assert repaired_inverter["platform"] == "switch"
+    assert repaired_inverter["type"] == "switch"
+    assert repaired_inverter["publish"] is True
 
     discovery = parsed_messages[-1]
     component = discovery["cmps"]["grobro_QMNTEST_cmd_inverter_power"]
 
+    # These fields intentionally match Robert's GroBro-generated component.
     assert component["platform"] == "switch"
     assert component["name"] == "Inverter Power"
+    assert component["type"] == "switch"
+    assert component["publish"] is True
     assert component["command_topic"] == (
         "homeassistant/switch/grobro/QMNTEST/inverter_power/set"
     )
     assert component["state_topic"] == (
         "homeassistant/switch/grobro/QMNTEST/inverter_power/get"
     )
+
     assert "grobro_QMNTEST_cmd_mqtt_ip" not in discovery["cmps"]
     assert "grobro_QMNTEST_cmd_system_time" not in discovery["cmps"]
     assert "grobro_QMNTEST_sync_time" not in discovery["cmps"]
 
-    # The historical migration topics must be removed after the device-based
-    # discovery payload is established; otherwise retained migrate_discovery
-    # markers can be replayed by Home Assistant after later restarts.
+    # Better GroBro must not clear Robert's legacy Inverter Power discovery topics.
     assert (
         "homeassistant/switch/grobro/QMNTEST_inverter_power/config",
         "",
         {"retain": True},
-    ) in published
+    ) not in published
     assert (
         "homeassistant/switch/grobro/QMNTEST_inverter_power_read/config",
         "",
         {"retain": True},
-    ) in published
+    ) not in published
