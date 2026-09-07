@@ -1,6 +1,6 @@
 name: "Better GroBro"
 description: "Robert Zaage's GroBro with Better GroBro stability, Home Assistant and validated NOAH improvements"
-version: "3.1.4"
+version: "3.1.5"
 slug: "grobro_register_debug"
 init: false
 url: https://github.com/criticallimit/GroBro
