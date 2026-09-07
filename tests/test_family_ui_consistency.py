@@ -37,7 +37,7 @@ def test_neo_inverter_power_remains_a_published_switch_command():
     assert "inverter_power" in command_names
 
 
-def test_shared_discovery_cleanup_keeps_neo_inverter_power_and_hides_manual_time():
+def test_shared_discovery_cleanup_keeps_upstream_neo_inverter_power_and_hides_manual_time():
     device_id = "QMNTEST"
     client = SimpleNamespace(_config_cache={})
     data = {
@@ -66,10 +66,11 @@ def test_shared_discovery_cleanup_keeps_neo_inverter_power_and_hides_manual_time
 
     inverter = components[f"grobro_{device_id}_cmd_inverter_power"]
     assert inverter["platform"] == "switch"
+    assert inverter["name"] == "Inverter Power"
     assert inverter["command_topic"].endswith("/inverter_power/set")
     assert inverter["state_topic"].endswith("/inverter_power/get")
-    assert "publish" not in inverter
-    assert "type" not in inverter
+    assert inverter["publish"] is True
+    assert inverter["type"] == "switch"
 
     assert f"grobro_{device_id}_sync_time" not in components
     assert f"grobro_{device_id}_cmd_system_time" not in components
