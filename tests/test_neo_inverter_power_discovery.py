@@ -45,11 +45,14 @@ def test_neo_inverter_power_is_repaired_and_present_in_final_device_discovery(
     ]
     assert len(discovery_messages) >= 2
 
-    repair = json.loads(discovery_messages[-2])
+    parsed_messages = [json.loads(payload) for payload in discovery_messages]
+    repair = next(
+        data
+        for data in parsed_messages
+        if data.get("cmps", {}).get("grobro_QMNTEST_cmd_mqtt_ip")
+        == {"platform": "text"}
+    )
     repair_components = repair["cmps"]
-    assert repair_components["grobro_QMNTEST_cmd_mqtt_ip"] == {
-        "platform": "text"
-    }
     assert repair_components["grobro_QMNTEST_cmd_system_time"] == {
         "platform": "text"
     }
@@ -60,7 +63,7 @@ def test_neo_inverter_power_is_repaired_and_present_in_final_device_discovery(
         "platform": "switch"
     }
 
-    discovery = json.loads(discovery_messages[-1])
+    discovery = parsed_messages[-1]
     component = discovery["cmps"]["grobro_QMNTEST_cmd_inverter_power"]
 
     assert component["platform"] == "switch"
