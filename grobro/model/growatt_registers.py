@@ -230,9 +230,16 @@ if _noah_soh is not None:
     _noah_soh.growatt.data.float_options = None
     _noah_soh.growatt.data.mult = None
 
+# MQTT IP is a low-level broker configuration field and is intentionally hidden
+# from the normal Home Assistant UI for all three primary Better GroBro families.
+# Protocol/config support remains available internally; only discovery exposure is
+# removed from the effective runtime maps.
+for _runtime_map in (KNOWN_NOAH_REGISTERS, KNOWN_NEO_REGISTERS, KNOWN_NEXA_REGISTERS):
+    _runtime_map.config_registers.pop("mqtt_ip", None)
+
 # These NOAH entities were experimental/debug additions and are intentionally
-# removed from the effective runtime map.
-KNOWN_NOAH_REGISTERS.config_registers.pop("mqtt_ip", None)
+# removed only from NOAH. They are not removed from other families without
+# family-specific validation.
 for _removed_noah_input in ("pv1Temp", "pv2Temp", "systemTemp"):
     KNOWN_NOAH_REGISTERS.input_registers.pop(_removed_noah_input, None)
 
