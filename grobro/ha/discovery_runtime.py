@@ -220,10 +220,12 @@ def install_discovery_runtime(resolve_max_bat) -> None:
 
             # The original HA client publishes the final device-discovery payload
             # after any migration markers. Once that final payload has been sent,
-            # clear the obsolete retained single-component discovery topics.
+            # clear obsolete retained single-component topics and publish the full
+            # device config once more as the last retained discovery state.
             if is_device_config and payload and device_id not in legacy_cleanup_done:
                 clear_legacy_component_discovery(original_publish, device_id)
                 legacy_cleanup_done.add(device_id)
+                original_publish(topic, payload, *args, **kwargs)
 
             return result
 
