@@ -27,4 +27,5 @@ def initialize_instance_state(client) -> None:
     client._config_read_timers = {}
     client._config_read_lock = Lock()
     client._migration_done = set()
+    client._neo_inverter_power_read_requested = set()
     client._time_sync_timer = None
