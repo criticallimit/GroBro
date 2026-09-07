@@ -4,14 +4,14 @@ Better GroBro is a fork of [robertzaage/GroBro](https://github.com/robertzaage/G
 
 This README intentionally lists **only the differences from Robert Zaage's GroBro**. Everything not listed here follows the upstream project.
 
-## Better GroBro 3.1.2
+## Better GroBro 3.1.3
 
 Compared with Robert's GroBro, Better GroBro adds:
 
 - **Lower Home Assistant/MQTT churn**: unchanged discovery, availability and identical telemetry states are not republished unnecessarily. Real value changes are still published immediately.
 - **Consistent Home Assistant cleanup across NOAH, NEO and NEXA**: low-level `MQTT IP` is hidden for all three families, while manual `Sync Time` and `System Time` controls are removed in favor of automatic synchronization.
 - **Discovery repair for existing installations**: stale retained MQTT discovery/migration topics are explicitly cleaned up during upgrade instead of relying on Home Assistant to infer removal from an omitted component.
-- **NEO Inverter Power repair**: the NEO `Inverter Power` switch is explicitly removed/re-created once during discovery repair and remains in the final device discovery.
+- **NEO Inverter Power left on Robert's original path**: Better GroBro no longer removes, re-creates, rewrites or clears discovery data for the NEO `Inverter Power` switch. Its discovery fields, command topic, state topic and migration path remain the same as in Robert's GroBro.
 - **Improved NOAH handling**: validated multi-battery telemetry behavior, corrected battery-count handling and a validated NOAH heater-state fallback from the cyclic status packet.
 - **Automatic clock synchronization** for supported devices at 00:00 and 12:00 local time.
 - **Cleaner Home Assistant values**: power sensors in watts are published as whole watts, including removal of `-0 W`, without changing raw register decoding or energy counters.
@@ -36,7 +36,7 @@ The add-on keeps the existing GroBro-compatible configuration and add-on slug so
 
 Base project: [robertzaage/GroBro](https://github.com/robertzaage/GroBro) by Robert Zaage and contributors.
 
-Upstream comparison baseline for Better GroBro 3.1.2: `4797f8419bd574bcebd32d1a859569f97b58b774`.
+Upstream comparison baseline for Better GroBro 3.1.3: `4797f8419bd574bcebd32d1a859569f97b58b774`.
 
 See [CHANGELOG.md](CHANGELOG.md) for the technical list of Better GroBro differences.
 
