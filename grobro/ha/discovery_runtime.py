@@ -43,8 +43,14 @@ def configuration_url_for_ip(ip_value: str) -> str:
     return f"http://{address}"
 
 
+def _is_upstream_neo_inverter_power(device_id: str, component_id: str) -> bool:
+    return model.is_family(device_id, "neo") and component_id == (
+        f"grobro_{device_id}_cmd_inverter_power"
+    )
+
+
 def clean_discovery_payload(client, device_id: str, data: dict) -> dict:
-    """Apply Better GroBro's family-independent HA discovery cleanup."""
+    """Apply Better GroBro cleanup without touching NEO Inverter Power."""
     origin = data.get("o")
     if isinstance(origin, dict):
         origin["url"] = FORK_URL
@@ -60,13 +66,14 @@ def clean_discovery_payload(client, device_id: str, data: dict) -> dict:
 
     components = data.get("cmps")
     if isinstance(components, dict):
-        # Manual clock controls are hidden for every supported family; automatic
-        # time sync remains active internally where the family supports it.
         components.pop(f"grobro_{device_id}_sync_time", None)
         components.pop(f"grobro_{device_id}_cmd_system_time", None)
 
-        for component in components.values():
+        for component_id, component in components.items():
             if not isinstance(component, dict):
+                continue
+            # Keep this component exactly as Robert's GroBro generated it.
+            if _is_upstream_neo_inverter_power(device_id, component_id):
                 continue
             component.pop("publish", None)
             component.pop("type", None)
@@ -76,36 +83,18 @@ def clean_discovery_payload(client, device_id: str, data: dict) -> dict:
 
 
 def build_discovery_repair_payload(device_id: str, clean_data: dict) -> dict:
-    """Build one explicit HA device-discovery component removal update.
-
-    Home Assistant device discovery requires a component that is being removed to
-    remain in ``cmps`` with only its platform. Omitting it from an update is not a
-    reliable deletion signal. For NEO we also remove/re-add Inverter Power once to
-    repair stale entity-registry/discovery state left by older migration payloads.
-    """
+    """Build an explicit removal update only for unwanted HA components."""
     repair = copy.deepcopy(clean_data)
     components = repair.setdefault("cmps", {})
 
     components[f"grobro_{device_id}_cmd_mqtt_ip"] = {"platform": "text"}
     components[f"grobro_{device_id}_cmd_system_time"] = {"platform": "text"}
     components[f"grobro_{device_id}_sync_time"] = {"platform": "button"}
-
-    if model.is_family(device_id, "neo"):
-        components[f"grobro_{device_id}_cmd_inverter_power"] = {
-            "platform": "switch"
-        }
-
     return repair
 
 
 def clear_legacy_component_discovery(original_publish, device_id: str) -> None:
-    """Clear retained single-component discovery topics after migration.
-
-    GroBro's historical migration publishes retained ``migrate_discovery`` markers
-    to the old per-component topics. Home Assistant requires those topics to be
-    cleared after the device-discovery configuration has been published; otherwise
-    the retained migration messages can be replayed after later MQTT/HA restarts.
-    """
+    """Clear obsolete retained component topics, except NEO Inverter Power."""
     known_registers = model.get_known_registers(device_id)
     if not known_registers:
         return
@@ -114,6 +103,10 @@ def clear_legacy_component_discovery(original_publish, device_id: str) -> None:
     topics = {f"{base}/number/grobro/{device_id}_set_wirk/config"}
 
     for name, register in known_registers.holding_registers.items():
+        # Robert's working NEO Inverter Power migration/discovery path must remain
+        # completely untouched by Better GroBro.
+        if model.is_family(device_id, "neo") and name == "inverter_power":
+            continue
         component_type = register.homeassistant.type
         topics.add(f"{base}/{component_type}/grobro/{device_id}_{name}/config")
         topics.add(
@@ -218,10 +211,6 @@ def install_discovery_runtime(resolve_max_bat) -> None:
 
             result = original_publish(topic, payload, *args, **kwargs)
 
-            # The original HA client publishes the final device-discovery payload
-            # after any migration markers. Once that final payload has been sent,
-            # clear obsolete retained single-component topics and publish the full
-            # device config once more as the last retained discovery state.
             if is_device_config and payload and device_id not in legacy_cleanup_done:
                 clear_legacy_component_discovery(original_publish, device_id)
                 legacy_cleanup_done.add(device_id)
