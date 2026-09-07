@@ -1,4 +1,4 @@
-# Better GroBro 3.1.1 — Changes compared with robertzaage/GroBro
+# Better GroBro 3.1.2 — Changes compared with robertzaage/GroBro
 
 This changelog intentionally lists **only the material differences from Robert Zaage's GroBro**. It is not a historical release log.
 
@@ -19,7 +19,9 @@ Comparison baseline:
 - Keeps Home Assistant device identity stable and avoids replacing it with invalid placeholder serials.
 - Hides the low-level `MQTT IP` configuration entity consistently for NOAH, NEO and NEXA.
 - Removes the manual `Sync Time` button and exposed `System Time` entity consistently in the actual final discovery path.
-- Preserves the NEO `Inverter Power` switch in final device discovery; this path is covered by an end-to-end regression test.
+- Repairs existing retained MQTT discovery state during upgrade: obsolete component-discovery migration topics are explicitly cleared after the new device-based discovery is established.
+- Uses Home Assistant's explicit component-removal update for stale `MQTT IP`, `System Time` and `Sync Time` components instead of only omitting them from later discovery payloads.
+- Repairs the NEO `Inverter Power` switch by explicitly removing any stale discovery component once and immediately re-publishing the complete switch definition; the full migration path is covered end to end.
 
 ## NOAH
 
