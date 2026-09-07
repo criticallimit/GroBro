@@ -42,6 +42,7 @@ def configuration_url_for_ip(ip_value: str) -> str:
 
 
 def clean_discovery_payload(client, device_id: str, data: dict) -> dict:
+    """Apply Better GroBro's family-independent HA discovery cleanup."""
     origin = data.get("o")
     if isinstance(origin, dict):
         origin["url"] = FORK_URL
@@ -57,7 +58,11 @@ def clean_discovery_payload(client, device_id: str, data: dict) -> dict:
 
     components = data.get("cmps")
     if isinstance(components, dict):
+        # Manual clock controls are hidden for every supported family; automatic
+        # time sync remains active internally where the family supports it.
         components.pop(f"grobro_{device_id}_sync_time", None)
+        components.pop(f"grobro_{device_id}_cmd_system_time", None)
+
         for component in components.values():
             if not isinstance(component, dict):
                 continue
