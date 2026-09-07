@@ -1,4 +1,4 @@
-# Better GroBro 3.1.2 — Changes compared with robertzaage/GroBro
+# Better GroBro 3.1.3 — Changes compared with robertzaage/GroBro
 
 This changelog intentionally lists **only the material differences from Robert Zaage's GroBro**. It is not a historical release log.
 
@@ -21,7 +21,7 @@ Comparison baseline:
 - Removes the manual `Sync Time` button and exposed `System Time` entity consistently in the actual final discovery path.
 - Repairs existing retained MQTT discovery state during upgrade: obsolete component-discovery migration topics are explicitly cleared after the new device-based discovery is established.
 - Uses Home Assistant's explicit component-removal update for stale `MQTT IP`, `System Time` and `Sync Time` components instead of only omitting them from later discovery payloads.
-- Repairs the NEO `Inverter Power` switch by explicitly removing any stale discovery component once and immediately re-publishing the complete switch definition; the full migration path is covered end to end.
+- Leaves the NEO `Inverter Power` switch on Robert's original GroBro path. Better GroBro does not remove/re-add it, does not strip its upstream discovery fields, and does not clear its legacy discovery topics. The final component retains Robert's `publish`, `type`, platform, command topic and state topic unchanged.
 
 ## NOAH
 
