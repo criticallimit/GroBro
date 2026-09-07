@@ -31,6 +31,7 @@ from grobro.ha.discovery_runtime import (
     install_discovery_runtime,
     migration_set,
 )
+from grobro.ha.neo_power_runtime import install_neo_power_runtime
 from grobro.ha.pv_runtime import install_pv_runtime
 from grobro.ha.runtime_state import initialize_instance_state
 from grobro.ha.state_runtime import install_state_runtime
@@ -84,6 +85,7 @@ def install_ha_cleanup_hook() -> None:
     install_pv_runtime()
     install_availability_runtime()
     install_timer_runtime()
+    install_neo_power_runtime()
     install_discovery_runtime(resolve_max_bat)
 
     _INSTALLED = True
