@@ -15,6 +15,7 @@ def clear_reconnect_caches(client) -> None:
     getattr(client, "_discovery_signature", {}).clear()
     getattr(client, "_discovery_payload_cache", {}).clear()
     getattr(client, "_last_state_payload", {}).clear()
+    getattr(client, "_neo_inverter_power_read_requested", set()).clear()
 
     discovery_cache = getattr(client, "_discovery_cache", None)
     if discovery_cache is not None:
