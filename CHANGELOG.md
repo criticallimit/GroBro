@@ -1,4 +1,4 @@
-# Better GroBro 3.1.0 — Changes compared with robertzaage/GroBro
+# Better GroBro 3.1.1 — Changes compared with robertzaage/GroBro
 
 This changelog intentionally lists **only the material differences from Robert Zaage's GroBro**. It is not a historical release log.
 
@@ -6,7 +6,7 @@ Comparison baseline:
 
 - Upstream: `robertzaage/GroBro`
 - Upstream `main`: `4797f8419bd574bcebd32d1a859569f97b58b774`
-- Comparison date: 2026-09-06
+- Comparison date: 2026-09-07
 
 ## Home Assistant
 
@@ -17,17 +17,20 @@ Comparison baseline:
 - Removes negative-zero presentation such as `-0 W`.
 - Uses conservative automatic battery-count handling instead of assuming the maximum battery count when unknown.
 - Keeps Home Assistant device identity stable and avoids replacing it with invalid placeholder serials.
+- Hides the low-level `MQTT IP` configuration entity consistently for NOAH, NEO and NEXA.
+- Removes the manual `Sync Time` button and exposed `System Time` entity consistently in the actual final discovery path.
+- Preserves the NEO `Inverter Power` switch in final device discovery; this path is covered by an end-to-end regression test.
 
 ## NOAH
 
 - Adds hardware-validated handling for NOAH multi-battery telemetry and battery count.
 - Preserves the existing Heater entity but can use the validated heater byte from NOAH `0x0104` cyclic status traffic when available; unsupported packets fall back to the existing register-derived state.
 - Adds passive decoding/observation support for NOAH holding/config traffic used during validation without active register scanning.
-- Removes fork-tested NOAH entities that were not useful/reliable enough for normal Home Assistant presentation: `Temperature PV1`, `Temperature PV2`, `System Temperature` and `MQTT IP`.
+- Removes fork-tested NOAH entities that were not useful/reliable enough for normal Home Assistant presentation: `Temperature PV1`, `Temperature PV2` and `System Temperature`.
+- Keeps NOAH-only removals NOAH-specific; NEO/NEXA telemetry is not removed without family-specific validation.
 
 ## Time synchronization
 
-- Removes the manual `Sync Time` button and exposed `System Time` entity.
 - Automatically synchronizes supported device clocks at 00:00 and 12:00 local time through config register 31.
 - Determines support from the active register map and does not write directly to RAQ/ShineWeLink gateways.
 - Uses the Home Assistant/Supervisor timezone when `TZ` is not explicitly configured.
