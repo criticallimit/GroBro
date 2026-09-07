@@ -5,7 +5,9 @@ from grobro.ha import client as ha_client_module
 from grobro.ha.cleanup import install_ha_cleanup_hook
 
 
-def test_neo_inverter_power_is_present_in_final_device_discovery(monkeypatch, tmp_path):
+def test_neo_inverter_power_is_repaired_and_present_in_final_device_discovery(
+    monkeypatch, tmp_path
+):
     monkeypatch.chdir(tmp_path)
     install_ha_cleanup_hook()
 
@@ -41,7 +43,22 @@ def test_neo_inverter_power_is_present_in_final_device_discovery(monkeypatch, tm
         for topic, payload, _kwargs in published
         if topic == "homeassistant/device/QMNTEST/config" and payload
     ]
-    assert discovery_messages
+    assert len(discovery_messages) >= 2
+
+    repair = json.loads(discovery_messages[-2])
+    repair_components = repair["cmps"]
+    assert repair_components["grobro_QMNTEST_cmd_mqtt_ip"] == {
+        "platform": "text"
+    }
+    assert repair_components["grobro_QMNTEST_cmd_system_time"] == {
+        "platform": "text"
+    }
+    assert repair_components["grobro_QMNTEST_sync_time"] == {
+        "platform": "button"
+    }
+    assert repair_components["grobro_QMNTEST_cmd_inverter_power"] == {
+        "platform": "switch"
+    }
 
     discovery = json.loads(discovery_messages[-1])
     component = discovery["cmps"]["grobro_QMNTEST_cmd_inverter_power"]
@@ -54,3 +71,20 @@ def test_neo_inverter_power_is_present_in_final_device_discovery(monkeypatch, tm
     assert component["state_topic"] == (
         "homeassistant/switch/grobro/QMNTEST/inverter_power/get"
     )
+    assert "grobro_QMNTEST_cmd_mqtt_ip" not in discovery["cmps"]
+    assert "grobro_QMNTEST_cmd_system_time" not in discovery["cmps"]
+    assert "grobro_QMNTEST_sync_time" not in discovery["cmps"]
+
+    # The historical migration topics must be removed after the device-based
+    # discovery payload is established; otherwise retained migrate_discovery
+    # markers can be replayed by Home Assistant after later restarts.
+    assert (
+        "homeassistant/switch/grobro/QMNTEST_inverter_power/config",
+        "",
+        {"retain": True},
+    ) in published
+    assert (
+        "homeassistant/switch/grobro/QMNTEST_inverter_power_read/config",
+        "",
+        {"retain": True},
+    ) in published
