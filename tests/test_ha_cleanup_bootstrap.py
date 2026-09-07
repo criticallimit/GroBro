@@ -20,6 +20,8 @@ def test_split_ha_cleanup_installs_in_stable_order():
     ), patch(
         "grobro.ha.cleanup.install_timer_runtime", side_effect=lambda: calls.append("timer")
     ), patch(
+        "grobro.ha.cleanup.install_neo_power_runtime", side_effect=lambda: calls.append("neo_power")
+    ), patch(
         "grobro.ha.cleanup.install_discovery_runtime", side_effect=lambda *_: calls.append("discovery")
     ):
         cleanup.install_ha_cleanup_hook()
@@ -33,5 +35,6 @@ def test_split_ha_cleanup_installs_in_stable_order():
         "pv",
         "availability",
         "timer",
+        "neo_power",
         "discovery",
     ]
