@@ -1,10 +1,15 @@
-"""Home Assistant client extension for combined NOAH firmware versions.
+"""Home Assistant client extension for combined NOAH/NEXA firmware versions.
 
-Growatt exposes the NOAH device firmware in ``fw_version_part_*`` input
-registers and the datalogger firmware as ``DeviceConfig.sw_version``.
-ShinePhone displays both as one version, e.g.::
+Growatt exposes device firmware in ``fw_version_part_*`` input registers and
+the datalogger firmware as ``DeviceConfig.sw_version``. ShinePhone presents
+those values as one version. Examples::
 
-    19.19.14 + 4.0.1.9 -> 19.19.14.4019
+    NOAH: 19.19.14 + 4.0.1.9 -> 19.19.14.4019
+    NEXA: 14.12.14.11 + 4.0.1.9 -> 14.12.14.11.4019
+
+Only values actually received from the device are used. In particular, no
+additional NEXA component such as ``9000`` is synthesized when it is not
+available as a decoded field.
 
 This module keeps the existing entity IDs and device metadata fields while
 presenting the same combined version in Home Assistant.
@@ -18,6 +23,8 @@ from grobro.model.growatt_registers import HomeAssistantInputRegister
 
 from .client import Client as _BaseClient
 from .client import HA_BASE_TOPIC
+
+_COMBINED_FIRMWARE_PREFIXES = ("0PVP", "0HVR")
 
 
 def _firmware_part_names(payload: dict) -> list[str]:
@@ -49,8 +56,8 @@ def _compact_datalogger_version(value: object) -> str | None:
     return "".join(parts)
 
 
-def compose_noah_firmware(payload: dict, datalogger_version: object) -> str | None:
-    """Build the ShinePhone-style NOAH firmware version from received values."""
+def compose_combined_firmware(payload: dict, datalogger_version: object) -> str | None:
+    """Build a ShinePhone-style firmware version from received values."""
     names = _firmware_part_names(payload)
     if not names:
         return None
@@ -67,14 +74,18 @@ def compose_noah_firmware(payload: dict, datalogger_version: object) -> str | No
     return f"{base_version}.{suffix}" if suffix else base_version
 
 
+# Backwards-compatible name for callers/tests that used the first implementation.
+compose_noah_firmware = compose_combined_firmware
+
+
 class Client(_BaseClient):
-    """GroBro HA client with ShinePhone-style NOAH firmware presentation."""
+    """GroBro HA client with ShinePhone-style NOAH/NEXA firmware presentation."""
 
     def publish_input_register(self, state: HomeAssistantInputRegister):
-        if state.device_id.startswith("0PVP"):
+        if state.device_id.startswith(_COMBINED_FIRMWARE_PREFIXES):
             config = getattr(self, "_config_cache", {}).get(state.device_id)
             datalogger_version = getattr(config, "sw_version", None) if config else None
-            firmware_version = compose_noah_firmware(
+            firmware_version = compose_combined_firmware(
                 state.payload,
                 datalogger_version,
             )
@@ -105,8 +116,8 @@ class Client(_BaseClient):
         device_id: str,
         effective_max_bat: int | None = None,
     ):
-        """Rewrite only NOAH firmware fields in the generated discovery payload."""
-        if not device_id.startswith("0PVP"):
+        """Rewrite only NOAH/NEXA firmware fields in generated discovery."""
+        if not device_id.startswith(_COMBINED_FIRMWARE_PREFIXES):
             return _BaseClient._Client__publish_device_discovery(
                 self,
                 device_id,
