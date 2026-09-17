@@ -7,7 +7,8 @@ ShinePhone displays both as one version, for example::
     19.19.14 + 4.0.1.9 -> 19.19.14.4019
 
 This runtime layer keeps the existing Home Assistant ``Firmware Version``
-entity and changes only its value. No firmware value is hard-coded.
+entity and also updates the device-info ``Firmware`` field to the same composed
+version. No firmware value is hard-coded.
 """
 
 from __future__ import annotations
@@ -72,8 +73,12 @@ def compose_noah_firmware(payload: dict, datalogger_version: object) -> str | No
     return base_version
 
 
-def _rewrite_firmware_discovery(device_id: str, payload: object) -> object:
-    """Point the existing Firmware Version sensor at the composed state field."""
+def _rewrite_firmware_discovery(
+    device_id: str,
+    payload: object,
+    firmware_version: str | None,
+) -> object:
+    """Use the composed firmware for both the sensor and HA device metadata."""
     if not payload or not isinstance(payload, (str, bytes, bytearray)):
         return payload
 
@@ -84,14 +89,16 @@ def _rewrite_firmware_discovery(device_id: str, payload: object) -> object:
         return payload
 
     components = data.get("cmps")
-    if not isinstance(components, dict):
-        return payload
+    if isinstance(components, dict):
+        component = components.get(f"grobro_{device_id}_fw_version")
+        if isinstance(component, dict):
+            component["value_template"] = "{{ value_json['fw_version'] }}"
 
-    component = components.get(f"grobro_{device_id}_fw_version")
-    if not isinstance(component, dict):
-        return payload
+    if firmware_version:
+        device_info = data.get("dev")
+        if isinstance(device_info, dict):
+            device_info["sw_version"] = firmware_version
 
-    component["value_template"] = "{{ value_json['fw_version'] }}"
     return json.dumps(data, sort_keys=True, separators=(",", ":"))
 
 
@@ -114,6 +121,12 @@ def install_firmware_runtime() -> None:
                 datalogger_version,
             )
             if firmware_version:
+                firmware_cache = getattr(self, "_composed_firmware_cache", None)
+                if firmware_cache is None:
+                    firmware_cache = {}
+                    self._composed_firmware_cache = firmware_cache
+                firmware_cache[state.device_id] = firmware_version
+
                 payload = dict(state.payload)
                 payload["fw_version"] = firmware_version
                 state = HomeAssistantInputRegister(
@@ -131,10 +144,15 @@ def install_firmware_runtime() -> None:
 
         mqtt_publish = self._client.publish
         discovery_topic = f"{ha_client_module.HA_BASE_TOPIC}/device/{device_id}/config"
+        firmware_version = getattr(self, "_composed_firmware_cache", {}).get(device_id)
 
         def publish(topic, payload=None, *publish_args, **publish_kwargs):
             if topic == discovery_topic and payload:
-                payload = _rewrite_firmware_discovery(device_id, payload)
+                payload = _rewrite_firmware_discovery(
+                    device_id,
+                    payload,
+                    firmware_version,
+                )
             return mqtt_publish(topic, payload, *publish_args, **publish_kwargs)
 
         self._client.publish = publish
