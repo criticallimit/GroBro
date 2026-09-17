@@ -4,6 +4,7 @@ from grobro.grobro.noah_heater_hook import install_noah_heater_hook
 from grobro.grobro.raw_dump_hook import install_raw_dump_hook
 from grobro.ha.cleanup import install_ha_cleanup_hook
 from grobro.ha.firmware_runtime import install_firmware_runtime
+from grobro.ha.mac_runtime import install_mac_runtime
 from grobro.ha.performance import install_ha_performance_hook
 
 
@@ -13,5 +14,6 @@ def install_runtime_layers() -> None:
     install_noah_heater_hook()
     install_ha_cleanup_hook()
     install_ha_performance_hook()
+    install_mac_runtime()
     # Install last because it must wrap the final HA publish/discovery paths.
     install_firmware_runtime()
