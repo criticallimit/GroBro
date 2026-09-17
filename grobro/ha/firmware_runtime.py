@@ -1,10 +1,12 @@
-"""NOAH firmware composition for Home Assistant.
+"""Combined NOAH/NEXA firmware composition for Home Assistant.
 
-Growatt exposes the NOAH storage firmware in three input-register parts while
-its datalogger firmware is already available as ``DeviceConfig.sw_version``.
-ShinePhone displays both as one version, for example::
+Growatt exposes storage/inverter firmware in ``fw_version_part_*`` input
+registers while the datalogger firmware is already available as
+``DeviceConfig.sw_version``. ShinePhone displays those values as one version,
+for example::
 
-    19.19.14 + 4.0.1.9 -> 19.19.14.4019
+    NOAH: 19.19.14 + 4.0.1.9 -> 19.19.14.4019
+    NEXA: 14.12.14.11 + 4.0.1.9 -> 14.12.14.11.4019
 
 This runtime layer keeps the existing Home Assistant ``Firmware Version``
 entity and also updates the device-info ``Firmware`` field to the same composed
@@ -22,6 +24,11 @@ from grobro.model.growatt_registers import HomeAssistantInputRegister
 
 LOG = logging.getLogger(__name__)
 _INSTALLED = False
+
+
+def _supports_combined_firmware(device_id: str) -> bool:
+    """Return whether this device family exposes firmware in multiple parts."""
+    return model.is_family(device_id, "noah") or model.is_family(device_id, "nexa")
 
 
 def _compact_datalogger_version(value: object) -> str | None:
@@ -53,8 +60,8 @@ def _firmware_part_names(payload: dict) -> list[str]:
     return sorted(names, key=part_number)
 
 
-def compose_noah_firmware(payload: dict, datalogger_version: object) -> str | None:
-    """Build the ShinePhone-style NOAH firmware version from live values."""
+def compose_combined_firmware(payload: dict, datalogger_version: object) -> str | None:
+    """Build the ShinePhone-style firmware version from live values."""
     names = _firmware_part_names(payload)
     if not names:
         return None
@@ -71,6 +78,10 @@ def compose_noah_firmware(payload: dict, datalogger_version: object) -> str | No
     if suffix:
         return f"{base_version}.{suffix}"
     return base_version
+
+
+# Backwards-compatible name for existing callers.
+compose_noah_firmware = compose_combined_firmware
 
 
 def _rewrite_firmware_discovery(
@@ -102,8 +113,23 @@ def _rewrite_firmware_discovery(
     return json.dumps(data, sort_keys=True, separators=(",", ":"))
 
 
+def _invalidate_discovery_for_firmware_change(client, device_id: str) -> None:
+    """Force HA discovery to be republished when the composed firmware changes."""
+    discovery_cache = getattr(client, "_discovery_cache", None)
+    if isinstance(discovery_cache, list) and device_id in discovery_cache:
+        discovery_cache.remove(device_id)
+
+    discovery_payload_cache = getattr(client, "_discovery_payload_cache", None)
+    if isinstance(discovery_payload_cache, dict):
+        discovery_payload_cache.pop(device_id, None)
+
+    discovery_signatures = getattr(client, "_discovery_signature", None)
+    if isinstance(discovery_signatures, dict):
+        discovery_signatures.pop(device_id, None)
+
+
 def install_firmware_runtime() -> None:
-    """Install dynamic NOAH firmware composition after the HA runtime hooks."""
+    """Install dynamic NOAH/NEXA firmware composition after the HA runtime hooks."""
     global _INSTALLED
     if _INSTALLED:
         return
@@ -113,10 +139,10 @@ def install_firmware_runtime() -> None:
     original_publish_input_register = client_cls.publish_input_register
 
     def publish_input_register_with_firmware(self, state):
-        if model.is_family(state.device_id, "noah"):
+        if _supports_combined_firmware(state.device_id):
             config = getattr(self, "_config_cache", {}).get(state.device_id)
             datalogger_version = getattr(config, "sw_version", None) if config else None
-            firmware_version = compose_noah_firmware(
+            firmware_version = compose_combined_firmware(
                 state.payload,
                 datalogger_version,
             )
@@ -125,7 +151,10 @@ def install_firmware_runtime() -> None:
                 if firmware_cache is None:
                     firmware_cache = {}
                     self._composed_firmware_cache = firmware_cache
-                firmware_cache[state.device_id] = firmware_version
+
+                if firmware_cache.get(state.device_id) != firmware_version:
+                    firmware_cache[state.device_id] = firmware_version
+                    _invalidate_discovery_for_firmware_change(self, state.device_id)
 
                 payload = dict(state.payload)
                 payload["fw_version"] = firmware_version
@@ -139,7 +168,7 @@ def install_firmware_runtime() -> None:
     original_publish_discovery = client_cls._Client__publish_device_discovery
 
     def publish_discovery_with_firmware(self, device_id: str, *args, **kwargs):
-        if not model.is_family(device_id, "noah"):
+        if not _supports_combined_firmware(device_id):
             return original_publish_discovery(self, device_id, *args, **kwargs)
 
         mqtt_publish = self._client.publish
@@ -165,4 +194,4 @@ def install_firmware_runtime() -> None:
     client_cls._Client__publish_device_discovery = publish_discovery_with_firmware
 
     _INSTALLED = True
-    LOG.info("Installed NOAH ShinePhone-style firmware composition")
+    LOG.info("Installed NOAH/NEXA ShinePhone-style firmware composition")
