@@ -1,1 +1,1 @@
-from .client import Client as Client
+from .firmware_client import Client as Client
