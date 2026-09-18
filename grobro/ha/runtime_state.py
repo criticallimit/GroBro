@@ -17,6 +17,7 @@ def initialize_instance_state(client) -> None:
     client._discovery_signature = {}
     client._discovery_payload_cache = {}
     client._last_state_payload = {}
+    client._last_holding_state = {}
     client._device_timers = {}
     client._device_last_seen = {}
     client._device_timer_lock = Lock()
