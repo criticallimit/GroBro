@@ -1,4 +1,4 @@
-# Better GroBro 3.1.18 — Changes compared with robertzaage/GroBro
+# Better GroBro 3.1.19 — Changes compared with robertzaage/GroBro
 
 This changelog intentionally lists **only the material differences from Robert Zaage's GroBro**. It is not a historical release log.
 
@@ -78,7 +78,8 @@ Comparison baseline:
 - Caches static firmware-part ordering per device/register layout to avoid repeated key scans, list allocation and sorting on every telemetry frame.
 - Suppresses repeated identical NOAH/NEXA Smart Meter `0x6F64` state publications and clears that cache after MQTT reconnect.
 - Prevents overlapping `Read All Values` cycles per device so repeated button presses cannot duplicate Modbus/config reads or helper timers.
-- Releases the Read All guard after normal completion, timeout or config-read callback failure.\n- Consolidates fourteen small bootstrap/runtime wrapper modules into their owning implementation modules or `ha_bridge.py`; behavior and installation order are preserved while reducing import depth and monkey-patch indirection.
+- Releases the Read All guard after normal completion, timeout or config-read callback failure.
+- Consolidates seventeen small bootstrap/runtime wrapper modules into their owning implementation modules or `ha_bridge.py`; behavior and installation order are preserved while reducing import depth and monkey-patch indirection.\n- Folds HA instance-state initialization and availability/reconnect caching into `cleanup.py`, and folds NOAH/NEXA MAC normalization into `discovery_runtime.py`.
 
 ## Optional diagnostics
 
