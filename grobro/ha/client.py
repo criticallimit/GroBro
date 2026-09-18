@@ -687,10 +687,14 @@ class Client:
                 "icon": state.homeassistant.icon,
             }
 
-        # Combined battery serial entities (NOAH only — has _ser_part_ registers)
-        has_bat_ser_parts = any(
-            name.startswith("bat") and "_ser_part_" in name
-            for name in known_registers.input_registers
+        # Combined battery serial entities remain a NOAH-only UI feature.
+        # NEXA serial fragments are decoded internally for stable slot mapping.
+        has_bat_ser_parts = (
+            model.is_family(device_id, "noah")
+            and any(
+                name.startswith("bat") and "_ser_part_" in name
+                for name in known_registers.input_registers
+            )
         )
         if has_bat_ser_parts:
             for bat_num in range(2, 5):
