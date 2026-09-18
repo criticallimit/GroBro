@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 from grobro.ha.battery_position import stabilize_battery_payload
+from grobro.model.growatt_registers import KNOWN_NEXA_REGISTERS
 
 
 def _payload(slot2_serial=None, slot3_serial=None, slot4_serial=None, **values):
@@ -181,3 +182,25 @@ def test_invalid_serial_fragments_never_create_slot_mapping(tmp_path, monkeypatc
     assert remapped == payload
     assert logical_max == 1
     assert client._battery_position_maps.get("0HVRTEST", {}) == {}
+
+
+def test_nexa_module_serial_registers_are_internal_only():
+    expected = {
+        "bat2_ser_part_1": 33,
+        "bat2_ser_part_2": 35,
+        "bat2_ser_part_3": 37,
+        "bat2_ser_part_4": 39,
+        "bat3_ser_part_1": 45,
+        "bat3_ser_part_2": 47,
+        "bat3_ser_part_3": 49,
+        "bat3_ser_part_4": 51,
+        "bat4_ser_part_1": 57,
+        "bat4_ser_part_2": 59,
+        "bat4_ser_part_3": 61,
+        "bat4_ser_part_4": 63,
+    }
+
+    for name, register_no in expected.items():
+        register = KNOWN_NEXA_REGISTERS.input_registers[name]
+        assert register.growatt.position.register_no == register_no
+        assert register.homeassistant.publish is False
