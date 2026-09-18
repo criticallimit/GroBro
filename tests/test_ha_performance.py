@@ -7,6 +7,7 @@ from grobro.ha.performance import (
     _prepare_payload,
     _register_rules,
     _should_publish_state,
+    _should_serialize_state,
 )
 from grobro.model.device_family import DEVICE_FAMILIES
 
@@ -253,3 +254,29 @@ def test_reconnect_cache_clear_forces_next_live_state_publish():
     _clear_state_publish_cache(client)
 
     assert _should_publish_state(client, "0PVPTEST", payload) is True
+
+
+def test_identical_prepared_payload_skips_json_serialization():
+    client = SimpleNamespace()
+    payload = {"power": 500, "soc": 80}
+
+    assert _should_serialize_state(client, "0PVPTEST", payload) is True
+    assert _should_serialize_state(client, "0PVPTEST", {"power": 500, "soc": 80}) is False
+
+
+def test_changed_prepared_payload_is_not_suppressed():
+    client = SimpleNamespace()
+
+    assert _should_serialize_state(client, "0PVPTEST", {"power": 500}) is True
+    assert _should_serialize_state(client, "0PVPTEST", {"power": 501}) is True
+
+
+def test_reconnect_clear_resets_prepared_payload_cache():
+    client = SimpleNamespace()
+
+    assert _should_serialize_state(client, "0PVPTEST", {"power": 500}) is True
+    assert _should_serialize_state(client, "0PVPTEST", {"power": 500}) is False
+
+    _clear_state_publish_cache(client)
+
+    assert _should_serialize_state(client, "0PVPTEST", {"power": 500}) is True
