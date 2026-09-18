@@ -1037,31 +1037,45 @@ class TestCombinedSerial:
 
 
 class TestBatteryPositionWatch:
-    def setup_method(self):
-        _LAST_BAT_SERIALS.clear()
-
-    def test_position_change_detected(self, ha_client, caplog):
+    def test_position_change_is_stabilized(self, ha_client, caplog, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
         caplog.set_level(logging.WARNING)
         with patch("grobro.ha.client.KEEP_BATTERY_POSITION", True):
             state1 = HomeAssistantInputRegister(
                 device_id="0PVP0000TEST0001",
-                payload={"bat2_ser_part_1": "SN002", "bat3_ser_part_1": "SN003"},
+                payload={
+                    "bat2_ser_part_1": "SN002",
+                    "bat3_ser_part_1": "SN003",
+                    "bat2_temp": 22.0,
+                    "bat3_temp": 23.0,
+                },
             )
             ha_client.publish_input_register(state1)
             caplog.clear()
 
             state2 = HomeAssistantInputRegister(
                 device_id="0PVP0000TEST0001",
-                payload={"bat2_ser_part_1": "SN003"},
+                payload={"bat2_ser_part_1": "SN003", "bat2_temp": 31.0},
             )
             ha_client.publish_input_register(state2)
 
+        published = None
+        for entry in reversed(ha_client._client.publish.call_args_list):
+            if entry.args[0] == "homeassistant/grobro/0PVP0000TEST0001/state":
+                published = json.loads(entry.args[1])
+                break
+
+        assert published is not None
+        assert "bat2_temp" not in published
+        assert published["bat3_temp"] == 31.0
+        assert published["bat3_serial"] == "SN003"
         assert "SN003" in caplog.text
-        assert "Bat3" in caplog.text
         assert "Bat2" in caplog.text
-        assert "re-enumeration" in caplog.text
+        assert "Bat3" in caplog.text
+        assert "kept at stable" in caplog.text
 
-    def test_no_warning_stable_positions(self, ha_client, caplog):
+    def test_no_warning_stable_positions(self, ha_client, caplog, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
         caplog.set_level(logging.WARNING)
         with patch("grobro.ha.client.KEEP_BATTERY_POSITION", True):
             state1 = HomeAssistantInputRegister(
@@ -1077,10 +1091,10 @@ class TestBatteryPositionWatch:
             )
             ha_client.publish_input_register(state2)
 
-        assert "moved" not in caplog.text
-        assert "re-enumeration" not in caplog.text
+        assert "kept at stable" not in caplog.text
 
-    def test_disabled_by_default(self, ha_client, caplog):
+    def test_disabled_by_default_does_not_remap(self, ha_client, caplog, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
         caplog.set_level(logging.WARNING)
         state1 = HomeAssistantInputRegister(
             device_id="0PVP0000TEST0001",
@@ -1091,9 +1105,17 @@ class TestBatteryPositionWatch:
 
         state2 = HomeAssistantInputRegister(
             device_id="0PVP0000TEST0001",
-            payload={"bat2_ser_part_1": "SN003"},
+            payload={"bat2_ser_part_1": "SN003", "bat2_temp": 31.0},
         )
         ha_client.publish_input_register(state2)
 
-        assert "moved" not in caplog.text
-        assert "re-enumeration" not in caplog.text
+        published = None
+        for entry in reversed(ha_client._client.publish.call_args_list):
+            if entry.args[0] == "homeassistant/grobro/0PVP0000TEST0001/state":
+                published = json.loads(entry.args[1])
+                break
+
+        assert published is not None
+        assert published["bat2_temp"] == 31.0
+        assert "bat3_temp" not in published
+        assert "kept at stable" not in caplog.text
