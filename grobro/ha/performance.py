@@ -193,6 +193,23 @@ def _clear_state_publish_cache(client) -> None:
     if payload_cache is not None:
         payload_cache.clear()
 
+    holding_cache = getattr(client, "_last_holding_state", None)
+    if holding_cache is not None:
+        holding_cache.clear()
+
+
+def _should_publish_holding_state(client, device_id: str, name: str, value) -> bool:
+    """Return True only when one holding-register state actually changed."""
+    cache = getattr(client, "_last_holding_state", None)
+    if cache is None:
+        cache = {}
+        client._last_holding_state = cache
+    key = (device_id, name)
+    if key in cache and cache[key] == value:
+        return False
+    cache[key] = value
+    return True
+
 
 def install_ha_performance_hook() -> None:
     """Replace only HA input-state preparation with an equivalent single pass."""
@@ -278,6 +295,30 @@ def install_ha_performance_hook() -> None:
             retain=ha_client_module.PUBLISH_SENSORS_RETAINED,
         )
 
+    def publish_holding_register_input_fast(self, ha_input):
+        try:
+            LOG.debug("HA: publish: %s", ha_input)
+            for value in ha_input.payload:
+                if not _should_publish_holding_state(
+                    self,
+                    ha_input.device_id,
+                    value.name,
+                    value.value,
+                ):
+                    continue
+                topic = (
+                    f"{ha_client_module.HA_BASE_TOPIC}/"
+                    f"{value.register_def.type}/grobro/"
+                    f"{ha_input.device_id}/{value.name}/get"
+                )
+                self._client.publish(
+                    topic,
+                    value.value,
+                    retain=ha_client_module.PUBLISH_SENSORS_RETAINED,
+                )
+        except Exception as exc:
+            LOG.error("HA: publish msg: %s", exc)
+
     original_on_connect = client_cls._Client__on_connect
 
     def on_connect_clear_state_cache(self, client, userdata, flags, reason_code, properties):
@@ -285,6 +326,7 @@ def install_ha_performance_hook() -> None:
         return original_on_connect(self, client, userdata, flags, reason_code, properties)
 
     client_cls.publish_input_register = publish_input_register_fast
+    client_cls.publish_holding_register_input = publish_holding_register_input_fast
     client_cls._Client__on_connect = on_connect_clear_state_cache
     _INSTALLED = True
     LOG.info("Installed GroBro Home Assistant telemetry performance hook")
