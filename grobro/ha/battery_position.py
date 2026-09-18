@@ -141,10 +141,13 @@ def stabilize_battery_payload(client, device_id: str, payload: dict) -> tuple[di
     Returns the remapped payload and the highest logical slot currently present.
     """
     current_serials = _serials_from_payload(payload)
+    # Initialize the per-client persistent map even when the current packet does
+    # not contain a valid serial. This keeps runtime state deterministic without
+    # creating any slot assignment from invalid/noisy serial fragments.
+    all_positions = _position_maps(client)
     if not current_serials:
         return payload, 1
 
-    all_positions = _position_maps(client)
     mapping = all_positions.setdefault(device_id, {})
     changed = False
 
