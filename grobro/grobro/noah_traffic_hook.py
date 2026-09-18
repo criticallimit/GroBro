@@ -6,7 +6,7 @@ import logging
 
 from grobro.grobro import client as client_module
 from grobro.grobro import parser
-from grobro.grobro.noah_traffic_debug import capture_noah_mqtt_traffic
+from grobro.grobro.noah_traffic_debug import REGISTER_DEBUG, capture_noah_mqtt_traffic
 
 LOG = logging.getLogger(__name__)
 _INSTALLED = False
@@ -29,11 +29,12 @@ def _safe_unscramble(payload):
 def install_noah_traffic_debug_hook() -> None:
     """Capture all NOAH traffic already flowing through GroBro."""
     global _INSTALLED
-    if _INSTALLED:
+    if _INSTALLED or not REGISTER_DEBUG:
         return
 
-    # REGISTER_DEBUG is checked again by the writer, so this hook is inert for
-    # normal users while remaining available in the diagnostic fork.
+    # Do not wrap the normal MQTT hot paths unless diagnostics are actually
+    # enabled. Otherwise every NOAH packet would pay for topic handling and an
+    # additional unscramble pass even though the writer immediately discards it.
     original_device_message = client_module.Client._Client__on_message
     original_cloud_message = client_module.Client._Client__on_message_forward_client
     original_publish_checked = client_module._publish_checked
