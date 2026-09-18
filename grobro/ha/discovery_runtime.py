@@ -5,11 +5,60 @@ from __future__ import annotations
 import copy
 import ipaddress
 import json
+import logging
 
 import grobro.model as model
 from grobro.ha import client as ha_client_module
 
 FORK_URL = "https://github.com/criticallimit/GroBro"
+LOG = logging.getLogger(__name__)
+_MAC_RUNTIME_INSTALLED = False
+_MAC_TARGET_PREFIXES = ("0PVP", "0HVR")
+
+
+def normalize_mac_address(value: object) -> str | None:
+    """Return a canonical lower-case MAC address or None if invalid."""
+    if value is None:
+        return None
+
+    text = str(value).strip().lower()
+    if not text:
+        return None
+
+    compact = text.replace(":", "").replace("-", "").replace(".", "")
+    if len(compact) != 12 or any(ch not in "0123456789abcdef" for ch in compact):
+        return None
+
+    return ":".join(compact[index : index + 2] for index in range(0, 12, 2))
+
+
+def install_mac_runtime() -> None:
+    """Install robust MAC handling for NOAH/NEXA HA device metadata."""
+    global _MAC_RUNTIME_INSTALLED
+    if _MAC_RUNTIME_INSTALLED:
+        return
+
+    client_cls = ha_client_module.Client
+    original_device_info = client_cls._Client__device_info_from_config
+
+    def device_info_with_normalized_mac(self, device_id: str):
+        device_info = original_device_info(self, device_id)
+
+        if device_id.startswith(_MAC_TARGET_PREFIXES):
+            config = getattr(self, "_config_cache", {}).get(device_id)
+            mac = normalize_mac_address(
+                getattr(config, "mac_address", None) if config else None
+            )
+            if mac:
+                device_info["connections"] = [["mac", mac]]
+
+        return device_info
+
+    client_cls._Client__device_info_from_config = device_info_with_normalized_mac
+    _MAC_RUNTIME_INSTALLED = True
+    LOG.info("Installed normalized NOAH/NEXA MAC device-info handling")
+
+
 
 
 def configured_serial(client, device_id: str) -> str:

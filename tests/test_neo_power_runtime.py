@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from grobro.ha.availability import clear_reconnect_caches
+from grobro.ha.cleanup import clear_reconnect_caches
 from grobro.ha.neo_power_runtime import (
     _publish_retained_switch_state,
     request_initial_neo_inverter_power,

@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from grobro.ha.runtime_state import initialize_instance_state
+from grobro.ha.cleanup import initialize_instance_state
 
 
 def test_runtime_state_is_created_per_instance():

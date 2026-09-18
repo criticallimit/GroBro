@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from grobro.ha import availability
+from grobro.ha import cleanup as availability
 
 
 def _client():
