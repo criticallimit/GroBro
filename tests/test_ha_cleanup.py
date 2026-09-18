@@ -1,5 +1,6 @@
 from datetime import datetime
 from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
 from grobro.ha.cleanup import (
     _clean_discovery_payload,
@@ -128,6 +129,34 @@ def test_clean_discovery_payload_keeps_identity_and_removes_internal_fields():
     assert "type" not in sensor
     number = cleaned["cmps"]["grobro_0PVPTEST_cmd_mqtt_port"]
     assert number["command_topic"] == "homeassistant/config/grobro/0PVPTEST/18/set"
+
+
+def test_identical_config_does_not_rebuild_existing_discovery():
+    install_ha_cleanup_hook()
+    device_id = "0PVPTEST"
+    config = ha_client_module.model.DeviceConfig(
+        serial_number=device_id,
+        local_ip="192.168.1.50",
+        sw_version="4.0.1.9",
+    )
+
+    client = object.__new__(ha_client_module.Client)
+    client._config_cache = {device_id: config}
+    client._discovery_cache = [device_id]
+    client._discovery_signature = {device_id: (1, None)}
+    client._migration_done = {device_id}
+    publish_discovery = MagicMock()
+    client._Client__publish_device_discovery = publish_discovery
+
+    with patch.object(
+        ha_client_module.model.DeviceConfig,
+        "from_file",
+        return_value=config,
+    ):
+        client.set_config(device_id, config)
+
+    publish_discovery.assert_not_called()
+    assert client._discovery_cache == [device_id]
 
 
 def test_availability_and_online_are_retained(monkeypatch):
