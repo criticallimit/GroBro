@@ -4,7 +4,7 @@ Better GroBro is a fork of [robertzaage/GroBro](https://github.com/robertzaage/G
 
 This README intentionally lists **only the differences from Robert Zaage's GroBro**. Everything not listed here follows the upstream project.
 
-## Better GroBro 3.1.18
+## Better GroBro 3.1.19
 
 Compared with Robert's GroBro, Better GroBro adds:
 
@@ -32,7 +32,8 @@ Compared with Robert's GroBro, Better GroBro adds:
 - **Lower firmware-processing overhead**: static `fw_version_part_*` layouts are cached instead of searched and sorted on every telemetry frame.
 - **Lower Smart Meter MQTT churn**: identical NOAH/NEXA `0x6F64` Smart Meter states are not republished repeatedly; reconnect clears the cache so fresh state is sent again.
 - **Protected Read All cycles**: repeated `Read All Values` presses while a read sequence is already running are ignored, preventing duplicate Modbus/config traffic and timer buildup.
-- **Runtime performance improvements** that reduce repeated parsing, allocations and idle work while preserving supported GroBro behavior.\n- **Simpler production structure**: fourteen tiny bootstrap/runtime wrapper modules were consolidated into their owning feature modules or `ha_bridge.py`, reducing import/patch indirection without removing any 3.1.17 functionality.
+- **Runtime performance improvements** that reduce repeated parsing, allocations and idle work while preserving supported GroBro behavior.
+- **Simpler production structure**: seventeen tiny bootstrap/runtime wrapper modules are now consolidated into their owning feature modules or `ha_bridge.py`, reducing import/patch indirection without changing supported behavior.
 
 ## Installation
 
@@ -48,7 +49,7 @@ The add-on keeps the existing GroBro-compatible configuration and add-on slug so
 
 Base project: [robertzaage/GroBro](https://github.com/robertzaage/GroBro) by Robert Zaage and contributors.
 
-Upstream comparison baseline for Better GroBro 3.1.18: `e4d59b20ba472853ae6ec0b7a17cf15cd774cb23`.
+Upstream comparison baseline for Better GroBro 3.1.19: `e4d59b20ba472853ae6ec0b7a17cf15cd774cb23`.
 
 See [CHANGELOG.md](CHANGELOG.md) for the technical list of Better GroBro differences.
 
