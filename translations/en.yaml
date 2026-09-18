@@ -85,4 +85,4 @@ configuration:
     description: Local timezone used for correct timestamps in logs and system events.
   KEEP_BATTERY_POSITION:
     name: KEEP_BATTERY_POSITION
-    description: Track NOAH battery serial numbers across slot changes and log a warning when a module moves to a different position.
+    description: Keep NOAH battery modules on stable Home Assistant slots by serial number, even when NOAH re-enumerates the stack after a module disappears. The mapping persists across restarts.
