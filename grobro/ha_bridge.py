@@ -18,7 +18,7 @@ from grobro.grobro.register_debug import install_register_debug_hook
 from grobro.grobro.signals import SignalHandler
 from grobro.ha.cleanup import install_ha_cleanup_hook
 from grobro.ha.firmware_runtime import install_firmware_runtime
-from grobro.ha.mac_runtime import install_mac_runtime
+from grobro.ha.discovery_runtime import install_mac_runtime
 from grobro.ha.performance import install_ha_performance_hook
 
 _LOG_FORMAT = "%(asctime)s [%(levelname)s] %(message)s"
