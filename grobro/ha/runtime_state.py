@@ -26,6 +26,7 @@ def initialize_instance_state(client) -> None:
     client._config_read_queues = {}
     client._config_read_inflight = {}
     client._config_read_timers = {}
+    client._read_all_active = set()
     client._config_read_lock = Lock()
     client._migration_done = set()
     client._neo_inverter_power_read_requested = set()
