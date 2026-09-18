@@ -8,13 +8,9 @@ from __future__ import annotations
 
 import logging
 from functools import lru_cache
+from threading import Lock
 
 from grobro.ha import client as ha_client_module
-from grobro.ha.availability import (
-    clear_reconnect_caches,
-    install_availability_runtime,
-    publish_availability,
-)
 from grobro.ha.config_runtime import (
     install_config_runtime,
     persisted_config_data,
@@ -30,7 +26,6 @@ from grobro.ha.discovery_runtime import (
     migration_set,
 )
 from grobro.ha.neo_power_runtime import install_neo_power_runtime
-from grobro.ha.runtime_state import initialize_instance_state, install_state_runtime
 from grobro.ha.time_sync_runtime import (
     install_time_sync_runtime,
     schedule_next_time_sync,
@@ -108,6 +103,98 @@ def install_pv_runtime() -> None:
         return original_detect_pv_count(self, device_id, payload)
 
     client_cls._Client__detect_neo_pv_count = detect_pv_count_clean
+
+
+def initialize_instance_state(client) -> None:
+    """Create all mutable runtime caches per HA client instance."""
+    client._config_cache = {}
+    client._discovery_cache = []
+    client._discovery_signature = {}
+    client._discovery_payload_cache = {}
+    client._last_state_payload = {}
+    client._last_holding_state = {}
+    client._device_timers = {}
+    client._device_last_seen = {}
+    client._device_timer_lock = Lock()
+    client._last_availability = {}
+    client._last_energy_values = {}
+    client._config_read_queues = {}
+    client._config_read_inflight = {}
+    client._config_read_timers = {}
+    client._read_all_active = set()
+    client._config_read_lock = Lock()
+    client._migration_done = set()
+    client._neo_inverter_power_read_requested = set()
+    client._time_sync_timer = None
+
+
+def install_state_runtime() -> None:
+    """Initialize mutable HA runtime state for every client instance."""
+    client_cls = ha_client_module.Client
+    original_init = client_cls.__init__
+
+    def init_with_state(self, *args, **kwargs):
+        initialize_instance_state(self)
+        return original_init(self, *args, **kwargs)
+
+    client_cls.__init__ = init_with_state
+
+
+def clear_reconnect_caches(client) -> None:
+    """Invalidate caches that must be rebuilt after an MQTT reconnect."""
+    getattr(client, "_last_availability", {}).clear()
+    getattr(client, "_discovery_signature", {}).clear()
+    getattr(client, "_discovery_payload_cache", {}).clear()
+    getattr(client, "_last_state_payload", {}).clear()
+    getattr(client, "_last_holding_state", {}).clear()
+    getattr(client, "_neo_inverter_power_read_requested", set()).clear()
+
+    discovery_cache = getattr(client, "_discovery_cache", None)
+    if discovery_cache is not None:
+        discovery_cache.clear()
+
+
+def publish_availability(client, device_id: str, online: bool) -> bool:
+    """Publish availability only when the state actually changes."""
+    availability = getattr(client, "_last_availability", None)
+    if availability is None:
+        availability = {}
+        client._last_availability = availability
+
+    if availability.get(device_id) is online:
+        return False
+
+    client._client.publish(
+        f"{ha_client_module.HA_BASE_TOPIC}/grobro/{device_id}/availability",
+        "online" if online else "offline",
+        retain=True,
+    )
+    if ha_client_module.AVAILABILITY_SENSOR:
+        client._client.publish(
+            f"{ha_client_module.HA_BASE_TOPIC}/grobro/{device_id}/online",
+            "ON" if online else "OFF",
+            retain=True,
+        )
+
+    availability[device_id] = online
+    return True
+
+
+def install_availability_runtime() -> None:
+    """Install reconnect-cache and availability behavior on the HA client."""
+    client_cls = ha_client_module.Client
+    original_on_connect = client_cls._Client__on_connect
+
+    def on_connect_clean(self, client, userdata, flags, reason_code, properties):
+        clear_reconnect_caches(self)
+        return original_on_connect(self, client, userdata, flags, reason_code, properties)
+
+    client_cls._Client__on_connect = on_connect_clean
+
+    def publish_availability_clean(self, device_id: str, online: bool):
+        return publish_availability(self, device_id, online)
+
+    client_cls._Client__publish_availability = publish_availability_clean
 
 
 # Backwards-compatible helper aliases retained intentionally.
