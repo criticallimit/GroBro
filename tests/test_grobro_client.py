@@ -113,8 +113,10 @@ class TestClientLifecycle:
         assert client._forward_clients == {}
 
     def test_on_connect(self, client):
+        client._smart_meter_state_cache["dev"] = "{\"power\":1}"
         client._client.on_connect(client._client, None, None, 0, None)
         client._client.subscribe.assert_called_once_with("c/#")
+        assert client._smart_meter_state_cache == {}
 
 
 class TestClientSend:
