@@ -92,15 +92,15 @@ def run_clients(ha_client, grobro_client, signal_handler) -> None:
 
 
 LOG_LEVEL, LOG = configure_logging()
-
-# Install permanent runtime hardening first, then optional passive diagnostics.
-install_runtime_layers()
-install_optional_diagnostics()
-
 GROBRO_MQTT_CONFIG, HA_MQTT_CONFIG, FORWARD_MQTT_CONFIG = load_bridge_mqtt_configs()
 
 
 if __name__ == "__main__":
+    # Runtime patching is deliberately deferred until the executable starts.
+    # Importing ha_bridge for tests/tools must not mutate Client classes globally.
+    install_runtime_layers()
+    install_optional_diagnostics()
+
     ha_client = ha.Client(HA_MQTT_CONFIG)
     grobro_client = grobro.Client(GROBRO_MQTT_CONFIG, FORWARD_MQTT_CONFIG)
     wire_clients(ha_client, grobro_client)
