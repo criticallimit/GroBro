@@ -19,6 +19,16 @@ def detect_bat_count(payload: dict) -> int:
     bat_cnt = payload.get("bat_cnt")
     if isinstance(bat_cnt, int) and 1 <= bat_cnt <= 4:
         return bat_cnt
+
+    nexa_count = payload.get("batteryPackageQuantity")
+    if (
+        isinstance(nexa_count, (int, float))
+        and not isinstance(nexa_count, bool)
+        and float(nexa_count).is_integer()
+        and 1 <= int(nexa_count) <= 4
+    ):
+        return int(nexa_count)
+
     count = 1
     for bat_num in range(2, 5):
         value = payload.get(f"bat{bat_num}_ser_part_1")
