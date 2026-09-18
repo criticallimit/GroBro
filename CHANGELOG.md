@@ -1,4 +1,4 @@
-# Better GroBro 3.1.10 — Changes compared with robertzaage/GroBro
+# Better GroBro 3.1.11 — Changes compared with robertzaage/GroBro
 
 This changelog intentionally lists **only the material differences from Robert Zaage's GroBro**. It is not a historical release log.
 
@@ -64,6 +64,7 @@ Comparison baseline:
 - Uses event-driven shutdown waiting instead of a 100 ms polling loop.
 - Uses daemon helper timers with explicit cleanup and lower timeout timer churn.
 - Restores persisted device configuration by MQTT device ID.
+- Batches the unchanged Home Assistant command subscriptions into one MQTT SUBSCRIBE operation instead of twelve separate subscribe calls.
 
 ## Optional diagnostics
 
@@ -76,6 +77,8 @@ Comparison baseline:
 - Uses the Better GroBro add-on name while retaining the existing add-on slug for in-place updates.
 - Persists runtime configuration data under the add-on data directory.
 - Adds fork CI on Python 3.11, 3.12 and 3.13 with Ruff, pytest and coverage checks.
+- Separates runtime dependencies from development/test tooling so production images install only required runtime Python packages.
+- Keeps pytest, coverage, pylint, rope and Ruff available through `requirements-dev.txt` for CI/development without shipping them in the add-on image.
 - Publishes Better GroBro container builds through the fork's own GHCR pipeline.
 
 All other functionality is inherited from Robert Zaage's GroBro and is intentionally not duplicated in this changelog.
