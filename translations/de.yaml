@@ -85,4 +85,4 @@ configuration:
     description: Lokale Zeitzone für korrekte Zeitstempel in Logs und Systemereignissen.
   KEEP_BATTERY_POSITION:
     name: KEEP_BATTERY_POSITION
-    description: Hält NOAH-Batteriemodule anhand ihrer Seriennummer dauerhaft auf festen Home-Assistant-Slots, auch wenn NOAH die Batterie-Reihenfolge nach einem Ausfall neu nummeriert. Die Zuordnung bleibt über Neustarts erhalten.
+    description: Hält NOAH- und NEXA-Batteriemodule anhand ihrer Seriennummer dauerhaft auf festen Home-Assistant-Slots. Bei einer Neunummerierung bleiben alle erkannten Werte eines Moduls gemeinsam seiner ursprünglichen logischen Batterie zugeordnet. Die Zuordnung bleibt über Neustarts erhalten.
