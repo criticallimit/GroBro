@@ -37,18 +37,15 @@ def restore_config_cache_by_filename(client) -> None:
 
 def install_config_runtime(migration_set) -> None:
     client_cls = ha_client_module.Client
-    original_init = client_cls.__init__
-
-    def init_with_restore(self, *args, **kwargs):
-        result = original_init(self, *args, **kwargs)
-        restore_config_cache_by_filename(self)
-        return result
-
-    client_cls.__init__ = init_with_restore
 
     def set_config_clean(self, device_id, config):
         config_path = f"config_{device_id}.json"
         existing_config = ha_client_module.model.DeviceConfig.from_file(config_path)
+        previous_config = self._config_cache.get(device_id)
+        previous_discovery_data = persisted_config_data(previous_config)
+        current_discovery_data = persisted_config_data(config)
+        discovery_changed = previous_discovery_data != current_discovery_data
+
         needs_sensitive_cleanup = bool(
             existing_config
             and (
@@ -59,7 +56,7 @@ def install_config_runtime(migration_set) -> None:
         if (
             existing_config is None
             or needs_sensitive_cleanup
-            or persisted_config_data(existing_config) != persisted_config_data(config)
+            or persisted_config_data(existing_config) != current_discovery_data
         ):
             LOG.info("Saving updated config for %s", device_id)
             config.to_file(config_path)
@@ -67,6 +64,13 @@ def install_config_runtime(migration_set) -> None:
             LOG.debug("No persisted config change for %s", device_id)
 
         self._config_cache[device_id] = config
+
+        # Rebuild discovery only for a real discovery-relevant config change, or
+        # when this device has not been discovered yet in the current broker session.
+        if not discovery_changed and device_id in self._discovery_cache:
+            LOG.debug("No discovery-relevant config change for %s", device_id)
+            return
+
         if device_id in self._discovery_cache:
             self._discovery_cache.remove(device_id)
         getattr(self, "_discovery_signature", {}).pop(device_id, None)
