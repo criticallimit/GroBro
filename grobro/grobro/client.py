@@ -155,6 +155,7 @@ class Client:
         self._forward_mqtt_config = forward_mqtt
         self._forward_clients: dict[str, mqtt.Client] = {}
         self._ptq_for_raq: dict[str, str] = {}
+        self._smart_meter_state_cache: dict[str, str] = {}
 
     def start(self):
         LOG.debug("GroBro: Start")
@@ -212,6 +213,7 @@ class Client:
 
     def __on_connect(self, client, userdata, flags, reason_code, properties):
         LOG.debug("Connected to GroBro MQTT server with result code %s", reason_code)
+        self._smart_meter_state_cache.clear()
         client.subscribe("c/#")
 
     def __on_message(self, client, userdata, msg: MQTTMessage):
@@ -345,21 +347,32 @@ class Client:
             # NOAH/NEXA Smart Meter (EcoTracker, Shelly etc.) JSON data (0x6F64)
             if msg_type == 0x6F64:
                 smart_meter = parser.parse_noah_6f64(unscrambled)
+                smart_meter_device_id = smart_meter["device_id"]
+                smart_meter_data = smart_meter["data"]
                 LOG.debug(
                     "Smart Meter data for %s: %s",
-                    smart_meter["device_id"],
-                    smart_meter["data"],
+                    smart_meter_device_id,
+                    smart_meter_data,
                 )
+
+                if self._smart_meter_state_cache.get(smart_meter_device_id) == smart_meter_data:
+                    LOG.debug(
+                        "Smart Meter state unchanged for %s, skipping publish",
+                        smart_meter_device_id,
+                    )
+                    return
+
                 topic = (
                     f"{HA_BASE_TOPIC}/sensor/grobro/"
-                    f"{smart_meter['device_id']}/smart_meter/state"
+                    f"{smart_meter_device_id}/smart_meter/state"
                 )
                 _publish_checked(
                     self._client,
                     topic,
-                    smart_meter["data"],
+                    smart_meter_data,
                     retain=PUBLISH_SENSORS_RETAINED,
                 )
+                self._smart_meter_state_cache[smart_meter_device_id] = smart_meter_data
                 return
 
             # NOAH/NEXA-specific message types (FE19 config, 0103 holding regs, etc.)
