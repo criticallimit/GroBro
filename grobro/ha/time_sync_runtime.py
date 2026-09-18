@@ -6,7 +6,7 @@ import logging
 from datetime import datetime, timedelta
 
 from grobro.ha import client as ha_client_module
-from grobro.ha.timers import daemon_timer
+from grobro.ha.timer_runtime import daemon_timer
 from grobro.model.device_family import supports_time_sync
 
 LOG = logging.getLogger(__name__)
