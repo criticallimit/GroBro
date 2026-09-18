@@ -1,4 +1,4 @@
-# Better GroBro 3.1.14 — Changes compared with robertzaage/GroBro
+# Better GroBro 3.1.15 — Changes compared with robertzaage/GroBro
 
 This changelog intentionally lists **only the material differences from Robert Zaage's GroBro**. It is not a historical release log.
 
@@ -23,16 +23,19 @@ Comparison baseline:
 - Uses Home Assistant's explicit component-removal update for stale `MQTT IP`, `System Time` and `Sync Time` components instead of only omitting them from later discovery payloads.
 - Leaves the NEO `Inverter Power` switch on Robert's original GroBro path. Better GroBro does not remove/re-add it, does not strip its upstream discovery fields, and does not clear its legacy discovery topics. The final component retains Robert's `publish`, `type`, platform, command topic and state topic unchanged.
 
-## NOAH
+## NOAH / NEXA
 
 - Adds hardware-validated handling for NOAH multi-battery telemetry and battery count.
 - Preserves the existing Heater entity but can use the validated heater byte from NOAH `0x0104` cyclic status traffic when available; unsupported packets fall back to the existing register-derived state.
 - Adds passive decoding/observation support for NOAH holding/config traffic used during validation without active register scanning.
 - Removes fork-tested NOAH entities that were not useful/reliable enough for normal Home Assistant presentation: `Temperature PV1`, `Temperature PV2` and `System Temperature`.
 - Keeps NOAH-only removals NOAH-specific; NEO/NEXA telemetry is not removed without family-specific validation.
-- Extends Robert's `KEEP_BATTERY_POSITION` behavior from warning-only detection to actual serial-based slot stabilization: Bat2/Bat3/Bat4 telemetry is remapped to persistent logical positions when NOAH re-enumerates the stack.
-- Persists NOAH serial-to-slot assignments in `battery_positions.json` so stable battery identities survive add-on/Home Assistant restarts.
+- Extends Robert's `KEEP_BATTERY_POSITION` behavior from warning-only detection to actual serial-based slot stabilization for NOAH and NEXA: Bat2/Bat3/Bat4 telemetry is remapped to persistent logical positions when the stack is re-enumerated.
+- Persists NOAH/NEXA serial-to-slot assignments in `battery_positions.json` so stable battery identities survive add-on/Home Assistant restarts.
 - Reserves absent battery slots so a remaining or newly seen module cannot silently steal the logical identity of a temporarily missing battery.
+- Decodes NEXA Bat2/Bat3/Bat4 module serial fragments internally at registers 33–39, 45–51 and 57–63 with `publish:false`; no additional serial entities are added to Home Assistant.
+- Remaps all recognized slot-specific values together (for example NEXA `battery2Soc`/`battery3Soc`) so one module's values cannot be split across different logical batteries.
+- Prefers NEXA's own `batteryPackageQuantity` for automatic battery-count detection before falling back to serial fragments.
 
 ## Time synchronization
 
