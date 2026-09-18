@@ -1,0 +1,6 @@
+-r requirements.txt
+rope
+pylint
+pytest
+pytest-cov
+ruff
