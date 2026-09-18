@@ -1,4 +1,4 @@
-from grobro.grobro.wiring import wire_clients
+from grobro.ha_bridge import wire_clients
 
 
 class _HAClient:
