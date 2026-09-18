@@ -24,6 +24,13 @@ def _clean_serial_part(value) -> str:
     return str(value).strip().strip("\x00").strip()
 
 
+def _is_plausible_serial(value: str) -> bool:
+    """Reject empty/noisy register data before it can define a stable slot."""
+    if not (8 <= len(value) <= 40):
+        return False
+    return all(char.isalnum() or char in "._-" for char in value)
+
+
 def _serials_from_payload(payload: dict) -> dict[int, str]:
     """Build the currently reported serial number for physical slots 2..4."""
     serials: dict[int, str] = {}
@@ -33,7 +40,7 @@ def _serials_from_payload(payload: dict) -> dict[int, str]:
             for index in range(1, 5)
         ]
         serial = "".join(part for part in parts if part).strip()
-        if serial:
+        if _is_plausible_serial(serial):
             serials[slot] = serial
     return serials
 
