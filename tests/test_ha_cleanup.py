@@ -58,9 +58,11 @@ def test_instance_state_is_not_shared():
     first._config_cache["a"] = 1
     first._discovery_cache.append("a")
     first._config_read_queues["a"] = [1]
+    first._read_all_active.add("a")
     assert second._config_cache == {}
     assert second._discovery_cache == []
     assert second._config_read_queues == {}
+    assert second._read_all_active == set()
     assert first._config_read_lock is not second._config_read_lock
     assert first._device_timer_lock is not second._device_timer_lock
 
