@@ -1,4 +1,4 @@
-# Better GroBro 3.1.16 — Changes compared with robertzaage/GroBro
+# Better GroBro 3.1.17 — Changes compared with robertzaage/GroBro
 
 This changelog intentionally lists **only the material differences from Robert Zaage's GroBro**. It is not a historical release log.
 
@@ -74,6 +74,11 @@ Comparison baseline:
 - Suppresses repeated unchanged holding-register state publishes while clearing the cache on reconnect so fresh state is sent again.
 - Avoids rebuilding Home Assistant discovery for identical repeated device configuration packets once the device is already discovered.
 - Restores persisted device configuration in one startup pass, keyed by MQTT device ID from the config filename.
+- Uses the shared NOAH/NEXA protocol capability for common runtime behavior instead of duplicated family checks.
+- Caches static firmware-part ordering per device/register layout to avoid repeated key scans, list allocation and sorting on every telemetry frame.
+- Suppresses repeated identical NOAH/NEXA Smart Meter `0x6F64` state publications and clears that cache after MQTT reconnect.
+- Prevents overlapping `Read All Values` cycles per device so repeated button presses cannot duplicate Modbus/config reads or helper timers.
+- Releases the Read All guard after normal completion, timeout or config-read callback failure.
 
 ## Optional diagnostics
 
