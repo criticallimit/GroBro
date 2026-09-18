@@ -11,6 +11,7 @@ def _client():
         _discovery_signature={"dev": (1, None)},
         _discovery_payload_cache={"dev": "cached"},
         _last_state_payload={"dev": "payload"},
+        _last_holding_state={("dev", "switch"): "ON"},
         _discovery_cache=["dev"],
     )
 
@@ -46,4 +47,5 @@ def test_reconnect_caches_are_invalidated():
     assert client._discovery_signature == {}
     assert client._discovery_payload_cache == {}
     assert client._last_state_payload == {}
+    assert client._last_holding_state == {}
     assert client._discovery_cache == []
