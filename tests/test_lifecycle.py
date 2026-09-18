@@ -1,6 +1,6 @@
 import pytest
 
-from grobro.grobro.lifecycle import run_clients
+from grobro.ha_bridge import run_clients
 
 
 class _Client:
