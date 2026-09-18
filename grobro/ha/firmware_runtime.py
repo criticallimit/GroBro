@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import logging
+from functools import lru_cache
 
 import grobro.model as model
 from grobro.ha import client as ha_client_module
@@ -27,8 +28,8 @@ _INSTALLED = False
 
 
 def _supports_combined_firmware(device_id: str) -> bool:
-    """Return whether this device family exposes firmware in multiple parts."""
-    return model.is_family(device_id, "noah") or model.is_family(device_id, "nexa")
+    """Return whether this device uses the shared NOAH/NEXA protocol surface."""
+    return model.uses_noah_protocol(device_id)
 
 
 def _compact_datalogger_version(value: object) -> str | None:
@@ -47,22 +48,48 @@ def _compact_datalogger_version(value: object) -> str | None:
     return "".join(parts)
 
 
-def _firmware_part_names(payload: dict) -> list[str]:
+def _part_number(name: str) -> int:
+    try:
+        return int(name.rsplit("_", 1)[1])
+    except (TypeError, ValueError):
+        return 9999
+
+
+def _firmware_part_names(payload: dict) -> tuple[str, ...]:
     """Return firmware part keys in numeric part order."""
-    names = [name for name in payload if name.startswith("fw_version_part_")]
-
-    def part_number(name: str) -> int:
-        try:
-            return int(name.rsplit("_", 1)[1])
-        except (TypeError, ValueError):
-            return 9999
-
-    return sorted(names, key=part_number)
+    return tuple(
+        sorted(
+            (name for name in payload if name.startswith("fw_version_part_")),
+            key=_part_number,
+        )
+    )
 
 
-def compose_combined_firmware(payload: dict, datalogger_version: object) -> str | None:
+@lru_cache(maxsize=16)
+def _firmware_part_names_for_device(device_id: str) -> tuple[str, ...]:
+    """Cache the static firmware register layout per device family/serial."""
+    registers = model.get_known_registers(device_id)
+    if registers is None:
+        return ()
+    return tuple(
+        sorted(
+            (
+                name
+                for name in registers.input_registers
+                if name.startswith("fw_version_part_")
+            ),
+            key=_part_number,
+        )
+    )
+
+
+def compose_combined_firmware(
+    payload: dict,
+    datalogger_version: object,
+    part_names: tuple[str, ...] | None = None,
+) -> str | None:
     """Build the ShinePhone-style firmware version from live values."""
-    names = _firmware_part_names(payload)
+    names = part_names if part_names is not None else _firmware_part_names(payload)
     if not names:
         return None
 
@@ -145,6 +172,7 @@ def install_firmware_runtime() -> None:
             firmware_version = compose_combined_firmware(
                 state.payload,
                 datalogger_version,
+                _firmware_part_names_for_device(state.device_id),
             )
             if firmware_version:
                 firmware_cache = getattr(self, "_composed_firmware_cache", None)
