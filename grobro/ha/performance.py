@@ -273,17 +273,22 @@ def install_ha_performance_hook() -> None:
         )
 
         if rules[4]:
+            expose_combined_battery_serials = ha_client_module.model.is_family(
+                device_id,
+                "noah",
+            )
             for _bat_num, part_keys, combined_key in _BAT_SERIAL_GROUPS:
                 parts = []
                 for key in part_keys:
                     value = payload.pop(key, None)
                     if value is not None:
                         parts.append(str(value))
-                combined = "".join(parts).strip()
-                if combined:
-                    payload[combined_key] = combined
-                else:
-                    payload.pop(combined_key, None)
+                if expose_combined_battery_serials:
+                    combined = "".join(parts).strip()
+                    if combined:
+                        payload[combined_key] = combined
+                    else:
+                        payload.pop(combined_key, None)
 
         if not _should_serialize_state(self, device_id, payload):
             LOG.debug("HA state unchanged for %s, skipping serialization and publish", device_id)
