@@ -404,6 +404,19 @@ class TestClientOnMessage:
         ha_client.on_command.assert_called()
         assert mock_timer.called
 
+    def test_duplicate_read_all_is_ignored_while_cycle_is_active(self, ha_client):
+        msg = _msg("homeassistant/button/grobro/QMN000ABC1D2E3FG/read_all/read")
+        with patch("grobro.ha.client.Timer") as mock_timer:
+            mock_timer.return_value = MagicMock()
+            ha_client._client.on_message(None, None, msg)
+            first_command_count = ha_client.on_command.call_count
+            ha_client._client.on_message(None, None, msg)
+
+        assert first_command_count > 0
+        assert ha_client.on_command.call_count == first_command_count
+        assert "QMN000ABC1D2E3FG" in ha_client._read_all_active
+
+
     def test_button_read_single(self, ha_client):
         msg = _msg("homeassistant/button/grobro/QMN000ABC1D2E3FG/output_power_limit/read")
         ha_client._client.on_message(None, None, msg)
@@ -815,15 +828,15 @@ class TestMaxBat:
         assert _detect_bat_count(payload) == 1
 
     def test_detect_bat_count_bat_cnt_overrides_serials(self):
-        payload = {"bat_cnt": 1, "bat2_ser_part_1": "SN002"}
+        payload = {"bat_cnt": 1, "bat2_ser_part_1": "SN00200000000001"}
         assert _detect_bat_count(payload) == 1
 
     def test_detect_bat_count_bat_cnt_2(self):
-        payload = {"bat_cnt": 2, "bat2_ser_part_1": "SN002"}
+        payload = {"bat_cnt": 2, "bat2_ser_part_1": "SN00200000000001"}
         assert _detect_bat_count(payload) == 2
 
     def test_detect_bat_count_serial_fallback(self):
-        payload = {"bat2_ser_part_1": "SN002"}
+        payload = {"bat2_ser_part_1": "SN00200000000001"}
         assert _detect_bat_count(payload) == 2
 
     def test_detect_bat_count_serial_multi(self):
@@ -872,7 +885,7 @@ class TestMaxBat:
         from grobro.model.growatt_registers import HomeAssistantInputRegister
         payload = {
             "bat1_temp": 24, "bat2_temp": 25, "bat3_temp": 26,
-            "bat2_ser_part_1": "SN002",
+            "bat2_ser_part_1": "SN00200000000001",
         }
         with patch("grobro.ha.client.MAX_BAT", "auto"):
             state = HomeAssistantInputRegister(device_id="0PVP0000TEST0002", payload=dict(payload))
@@ -1001,9 +1014,9 @@ class TestCombinedSerial:
         from grobro.model.growatt_registers import HomeAssistantInputRegister
         payload = {
             "bat1_temp": 24,
-            "bat2_ser_part_1": "SN002",
+            "bat2_ser_part_1": "SN00200000000001",
             "bat2_ser_part_2": "ABCD",
-            "bat3_ser_part_1": "SN003",
+            "bat3_ser_part_1": "SN00300000000002",
         }
         with patch("grobro.ha.client.MAX_BAT", 1):
             state = HomeAssistantInputRegister(device_id="0PVP0000TEST0001", payload=dict(payload))
@@ -1043,8 +1056,8 @@ class TestBatteryPositionWatch:
             state1 = HomeAssistantInputRegister(
                 device_id="0PVP0000TEST0001",
                 payload={
-                    "bat2_ser_part_1": "SN002",
-                    "bat3_ser_part_1": "SN003",
+                    "bat2_ser_part_1": "SN00200000000001",
+                    "bat3_ser_part_1": "SN00300000000002",
                     "bat2_temp": 22.0,
                     "bat3_temp": 23.0,
                 },
@@ -1054,7 +1067,7 @@ class TestBatteryPositionWatch:
 
             state2 = HomeAssistantInputRegister(
                 device_id="0PVP0000TEST0001",
-                payload={"bat2_ser_part_1": "SN003", "bat2_temp": 31.0},
+                payload={"bat2_ser_part_1": "SN00300000000002", "bat2_temp": 31.0},
             )
             ha_client.publish_input_register(state2)
 
@@ -1067,8 +1080,8 @@ class TestBatteryPositionWatch:
         assert published is not None
         assert "bat2_temp" not in published
         assert published["bat3_temp"] == 31.0
-        assert published["bat3_serial"] == "SN003"
-        assert "SN003" in caplog.text
+        assert published["bat3_serial"] == "SN00300000000002"
+        assert "SN00300000000002" in caplog.text
         assert "Bat2" in caplog.text
         assert "Bat3" in caplog.text
         assert "kept at stable" in caplog.text
@@ -1079,14 +1092,14 @@ class TestBatteryPositionWatch:
         with patch("grobro.ha.client.KEEP_BATTERY_POSITION", True):
             state1 = HomeAssistantInputRegister(
                 device_id="0PVP0000TEST0001",
-                payload={"bat2_ser_part_1": "SN002", "bat3_ser_part_1": "SN003"},
+                payload={"bat2_ser_part_1": "SN00200000000001", "bat3_ser_part_1": "SN00300000000002"},
             )
             ha_client.publish_input_register(state1)
             caplog.clear()
 
             state2 = HomeAssistantInputRegister(
                 device_id="0PVP0000TEST0001",
-                payload={"bat2_ser_part_1": "SN002", "bat3_ser_part_1": "SN003"},
+                payload={"bat2_ser_part_1": "SN00200000000001", "bat3_ser_part_1": "SN00300000000002"},
             )
             ha_client.publish_input_register(state2)
 
@@ -1097,14 +1110,14 @@ class TestBatteryPositionWatch:
         caplog.set_level(logging.WARNING)
         state1 = HomeAssistantInputRegister(
             device_id="0PVP0000TEST0001",
-            payload={"bat2_ser_part_1": "SN002", "bat3_ser_part_1": "SN003"},
+            payload={"bat2_ser_part_1": "SN00200000000001", "bat3_ser_part_1": "SN00300000000002"},
         )
         ha_client.publish_input_register(state1)
         caplog.clear()
 
         state2 = HomeAssistantInputRegister(
             device_id="0PVP0000TEST0001",
-            payload={"bat2_ser_part_1": "SN003", "bat2_temp": 31.0},
+            payload={"bat2_ser_part_1": "SN00300000000002", "bat2_temp": 31.0},
         )
         ha_client.publish_input_register(state2)
 
