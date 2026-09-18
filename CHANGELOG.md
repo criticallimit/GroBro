@@ -1,4 +1,4 @@
-# Better GroBro 3.1.13 — Changes compared with robertzaage/GroBro
+# Better GroBro 3.1.14 — Changes compared with robertzaage/GroBro
 
 This changelog intentionally lists **only the material differences from Robert Zaage's GroBro**. It is not a historical release log.
 
@@ -30,6 +30,9 @@ Comparison baseline:
 - Adds passive decoding/observation support for NOAH holding/config traffic used during validation without active register scanning.
 - Removes fork-tested NOAH entities that were not useful/reliable enough for normal Home Assistant presentation: `Temperature PV1`, `Temperature PV2` and `System Temperature`.
 - Keeps NOAH-only removals NOAH-specific; NEO/NEXA telemetry is not removed without family-specific validation.
+- Extends Robert's `KEEP_BATTERY_POSITION` behavior from warning-only detection to actual serial-based slot stabilization: Bat2/Bat3/Bat4 telemetry is remapped to persistent logical positions when NOAH re-enumerates the stack.
+- Persists NOAH serial-to-slot assignments in `battery_positions.json` so stable battery identities survive add-on/Home Assistant restarts.
+- Reserves absent battery slots so a remaining or newly seen module cannot silently steal the logical identity of a temporarily missing battery.
 
 ## Time synchronization
 
