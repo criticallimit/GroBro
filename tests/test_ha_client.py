@@ -251,6 +251,16 @@ class TestClientLifecycle:
                     c = Client(cfg)
                     assert "QMN000ABC1D2E3FG" in c._config_cache
 
+    def test_init_keys_restored_config_by_mqtt_filename(self):
+        with patch("grobro.ha.client.mqtt.Client") as mc:
+            mc.return_value = MagicMock()
+            with patch("grobro.ha.client.os.listdir", return_value=["config_RAQ0E8H042.json"]):
+                with patch("grobro.model.device_config.DeviceConfig.from_file") as from_file:
+                    from_file.return_value = DeviceConfig(serial_number="PTQ1234567890")
+                    c = Client(MQTTConfig(host="localhost", port=1883))
+                    assert "RAQ0E8H042" in c._config_cache
+                    assert "PTQ1234567890" not in c._config_cache
+
     def test_start_stop(self, ha_client):
         ha_client.start()
         ha_client._client.loop_start.assert_called_once()
