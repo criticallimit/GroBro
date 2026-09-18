@@ -31,3 +31,17 @@ def initialize_instance_state(client) -> None:
     client._migration_done = set()
     client._neo_inverter_power_read_requested = set()
     client._time_sync_timer = None
+
+
+def install_state_runtime() -> None:
+    """Initialize mutable HA runtime state for every client instance."""
+    from grobro.ha import client as ha_client_module
+
+    client_cls = ha_client_module.Client
+    original_init = client_cls.__init__
+
+    def init_with_state(self, *args, **kwargs):
+        initialize_instance_state(self)
+        return original_init(self, *args, **kwargs)
+
+    client_cls.__init__ = init_with_state
