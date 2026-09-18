@@ -132,10 +132,6 @@ def _prepare_payload(
             else:
                 last_energy_values[device_key] = value
 
-        # Home Assistant power values in watts are intentionally published as
-        # whole numbers. This removes meaningless sub-watt display noise and,
-        # importantly, prevents negative zero (for example -0.4 W -> 0 W).
-        # Other measurements, including Wh/kWh energy counters, are untouched.
         if (
             key in whole_watt_power
             and isinstance(value, (int, float))
@@ -157,6 +153,28 @@ def _state_publish_cache(client) -> dict[str, str]:
     return cache
 
 
+def _payload_compare_cache(client) -> dict[str, dict]:
+    """Return the prepared-payload cache used before JSON serialization."""
+    cache = getattr(client, "_last_state_payload", None)
+    if cache is None:
+        cache = {}
+        client._last_state_payload = cache
+    return cache
+
+
+def _should_serialize_state(client, device_id: str, payload: dict) -> bool:
+    """Return False when the prepared payload is unchanged.
+
+    Comparing dictionaries before JSON encoding avoids repeated serialization and
+    temporary string allocations for the common unchanged-telemetry case.
+    """
+    cache = _payload_compare_cache(client)
+    if cache.get(device_id) == payload:
+        return False
+    cache[device_id] = payload.copy()
+    return True
+
+
 def _should_publish_state(client, device_id: str, payload_json: str) -> bool:
     """Return True only when this device's HA state actually changed."""
     cache = _state_publish_cache(client)
@@ -170,6 +188,10 @@ def _clear_state_publish_cache(client) -> None:
     cache = getattr(client, "_state_publish_cache", None)
     if cache is not None:
         cache.clear()
+
+    payload_cache = getattr(client, "_last_state_payload", None)
+    if payload_cache is not None:
+        payload_cache.clear()
 
 
 def install_ha_performance_hook() -> None:
@@ -204,8 +226,6 @@ def install_ha_performance_hook() -> None:
             rules,
         )
 
-        # Only families whose static register map contains serial parts need the
-        # legacy combine step. The key strings themselves are prebuilt as well.
         if rules[4]:
             for _bat_num, part_keys, combined_key in _BAT_SERIAL_GROUPS:
                 parts = []
@@ -219,7 +239,6 @@ def install_ha_performance_hook() -> None:
                 else:
                     payload.pop(combined_key, None)
 
-        # Preserve optional battery-position tracking exactly as before.
         if ha_client_module.KEEP_BATTERY_POSITION:
             current_serials: dict[int, str] = {}
             for bat_num in range(2, 5):
@@ -243,6 +262,10 @@ def install_ha_performance_hook() -> None:
                             )
             ha_client_module._LAST_BAT_SERIALS[device_id] = current_serials
 
+        if not _should_serialize_state(self, device_id, payload):
+            LOG.debug("HA state unchanged for %s, skipping serialization and publish", device_id)
+            return
+
         payload_json = json.dumps(payload, separators=(",", ":"))
         if not _should_publish_state(self, device_id, payload_json):
             LOG.debug("HA state unchanged for %s, skipping publish", device_id)
@@ -258,8 +281,6 @@ def install_ha_performance_hook() -> None:
     original_on_connect = client_cls._Client__on_connect
 
     def on_connect_clear_state_cache(self, client, userdata, flags, reason_code, properties):
-        # A reconnect may mean the HA broker restarted and lost non-retained state.
-        # Force the next live telemetry frame to be published again.
         _clear_state_publish_cache(self)
         return original_on_connect(self, client, userdata, flags, reason_code, properties)
 
