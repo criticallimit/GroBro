@@ -202,12 +202,19 @@ class Client:
         self._client.on_message = self.__on_message
         self._client.on_connect = self.__on_connect
 
-        # Configs laden (Cache aus Dateien)
+        # Restore persisted device configs once, keyed by MQTT device id from
+        # the filename. This preserves gateway/device identity across restarts.
+        prefix = "config_"
+        suffix = ".json"
         for fname in os.listdir("."):
-            if fname.startswith("config_") and fname.endswith(".json"):
-                config = model.DeviceConfig.from_file(fname)
-                if config:
-                    self._config_cache[config.device_id] = config
+            if not (fname.startswith(prefix) and fname.endswith(suffix)):
+                continue
+            mqtt_device_id = fname[len(prefix) : -len(suffix)]
+            if not mqtt_device_id:
+                continue
+            config = model.DeviceConfig.from_file(fname)
+            if config:
+                self._config_cache[mqtt_device_id] = config
 
         self._discovery_payload_cache: dict[str, str] = {}
         self._neo_pv_count: dict[str, int] = {}
