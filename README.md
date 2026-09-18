@@ -4,7 +4,7 @@ Better GroBro is a fork of [robertzaage/GroBro](https://github.com/robertzaage/G
 
 This README intentionally lists **only the differences from Robert Zaage's GroBro**. Everything not listed here follows the upstream project.
 
-## Better GroBro 3.1.16
+## Better GroBro 3.1.17
 
 Compared with Robert's GroBro, Better GroBro adds:
 
@@ -28,6 +28,10 @@ Compared with Robert's GroBro, Better GroBro adds:
 - **Lower holding-state MQTT churn**: unchanged switch/number/time/select register states are not republished repeatedly; reconnect clears the cache so Home Assistant receives fresh state again.
 - **Less repeated discovery work**: identical device configuration packets no longer rebuild Home Assistant discovery after the device is already discovered; real config changes still invalidate and republish discovery.
 - **Single config restore pass**: persisted device configs are loaded once at startup and remain keyed by the MQTT device ID from the filename, including gateway/inverter combinations.
+- **Shared NOAH/NEXA protocol handling**: common features now use the central protocol capability instead of duplicated family checks, reducing the chance of one family drifting from the other.
+- **Lower firmware-processing overhead**: static `fw_version_part_*` layouts are cached instead of searched and sorted on every telemetry frame.
+- **Lower Smart Meter MQTT churn**: identical NOAH/NEXA `0x6F64` Smart Meter states are not republished repeatedly; reconnect clears the cache so fresh state is sent again.
+- **Protected Read All cycles**: repeated `Read All Values` presses while a read sequence is already running are ignored, preventing duplicate Modbus/config traffic and timer buildup.
 - **Runtime performance improvements** that reduce repeated parsing, allocations and idle work while preserving supported GroBro behavior.
 
 ## Installation
@@ -44,7 +48,7 @@ The add-on keeps the existing GroBro-compatible configuration and add-on slug so
 
 Base project: [robertzaage/GroBro](https://github.com/robertzaage/GroBro) by Robert Zaage and contributors.
 
-Upstream comparison baseline for Better GroBro 3.1.16: `e4d59b20ba472853ae6ec0b7a17cf15cd774cb23`.
+Upstream comparison baseline for Better GroBro 3.1.17: `e4d59b20ba472853ae6ec0b7a17cf15cd774cb23`.
 
 See [CHANGELOG.md](CHANGELOG.md) for the technical list of Better GroBro differences.
 
