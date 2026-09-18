@@ -1200,8 +1200,8 @@
         "data": {
           "data_type": "FLOAT",
           "float_options": {
-            "delta": -30000.0,
-            "multiplier": 1.0
+            "delta": -30000,
+            "multiplier": 1
           }
         }
       },
@@ -1224,8 +1224,8 @@
         "data": {
           "data_type": "FLOAT",
           "float_options": {
-            "delta": 0.0,
-            "multiplier": 1.0
+            "delta": 0,
+            "multiplier": 1
           }
         }
       },
@@ -1298,8 +1298,8 @@
         "data": {
           "data_type": "FLOAT",
           "float_options": {
-            "delta": -30000.0,
-            "multiplier": 1.0
+            "delta": -30000,
+            "multiplier": 1
           }
         }
       },
@@ -1339,8 +1339,8 @@
         "data": {
           "data_type": "FLOAT",
           "float_options": {
-            "delta": 0.0,
-            "multiplier": 1.0
+            "delta": 0,
+            "multiplier": 1
           }
         }
       },
@@ -1363,8 +1363,8 @@
         "data": {
           "data_type": "SIGNED_FLOAT",
           "float_options": {
-            "delta": 0.0,
-            "multiplier": 1.0
+            "delta": 0,
+            "multiplier": 1
           }
         }
       },
@@ -1387,8 +1387,8 @@
         "data": {
           "data_type": "SIGNED_FLOAT",
           "float_options": {
-            "delta": 0.0,
-            "multiplier": 1.0
+            "delta": 0,
+            "multiplier": 1
           }
         }
       },
@@ -1479,8 +1479,8 @@
         "data": {
           "data_type": "FLOAT",
           "float_options": {
-            "delta": 0.0,
-            "multiplier": 1.0
+            "delta": 0,
+            "multiplier": 1
           }
         }
       },
@@ -1493,6 +1493,98 @@
         "icon": "mdi:percent"
       }
     },
+    "battery1Temp": {
+      "growatt": {
+        "position": {
+          "register_no": 30,
+          "offset": 0,
+          "size": 2
+        },
+        "data": {
+          "data_type": "FLOAT",
+          "float_options": {
+            "delta": -273.1,
+            "multiplier": 0.1
+          }
+        }
+      },
+      "homeassistant": {
+        "name": "Battery 1 Temperature",
+        "publish": true,
+        "state_class": "measurement",
+        "device_class": "temperature",
+        "unit_of_measurement": "°C",
+        "icon": "mdi:thermometer"
+      }
+    },
+    "bat2_ser_part_1": {
+      "growatt": {
+        "position": {
+          "register_no": 33,
+          "offset": 0,
+          "size": 4
+        },
+        "data": {
+          "data_type": "STRING"
+        }
+      },
+      "homeassistant": {
+        "name": "Battery 2 Serial Part 1",
+        "publish": false,
+        "icon": "mdi:identifier"
+      }
+    },
+    "bat2_ser_part_2": {
+      "growatt": {
+        "position": {
+          "register_no": 35,
+          "offset": 0,
+          "size": 4
+        },
+        "data": {
+          "data_type": "STRING"
+        }
+      },
+      "homeassistant": {
+        "name": "Battery 2 Serial Part 2",
+        "publish": false,
+        "icon": "mdi:identifier"
+      }
+    },
+    "bat2_ser_part_3": {
+      "growatt": {
+        "position": {
+          "register_no": 37,
+          "offset": 0,
+          "size": 4
+        },
+        "data": {
+          "data_type": "STRING"
+        }
+      },
+      "homeassistant": {
+        "name": "Battery 2 Serial Part 3",
+        "publish": false,
+        "icon": "mdi:identifier"
+      }
+    },
+    "bat2_ser_part_4": {
+      "growatt": {
+        "position": {
+          "register_no": 39,
+          "offset": 0,
+          "size": 4
+        },
+        "data": {
+          "data_type": "STRING"
+        }
+      },
+      "homeassistant": {
+        "name": "Battery 2 Serial Part 4",
+        "publish": false,
+        "icon": "mdi:identifier"
+      }
+    },
     "battery2Soc": {
       "growatt": {
         "position": {
@@ -1503,8 +1595,8 @@
         "data": {
           "data_type": "FLOAT",
           "float_options": {
-            "delta": 0.0,
-            "multiplier": 1.0
+            "delta": 0,
+            "multiplier": 1
           }
         }
       },
@@ -1517,6 +1609,74 @@
         "icon": "mdi:percent"
       }
     },
+    "bat3_ser_part_1": {
+      "growatt": {
+        "position": {
+          "register_no": 45,
+          "offset": 0,
+          "size": 4
+        },
+        "data": {
+          "data_type": "STRING"
+        }
+      },
+      "homeassistant": {
+        "name": "Battery 3 Serial Part 1",
+        "publish": false,
+        "icon": "mdi:identifier"
+      }
+    },
+    "bat3_ser_part_2": {
+      "growatt": {
+        "position": {
+          "register_no": 47,
+          "offset": 0,
+          "size": 4
+        },
+        "data": {
+          "data_type": "STRING"
+        }
+      },
+      "homeassistant": {
+        "name": "Battery 3 Serial Part 2",
+        "publish": false,
+        "icon": "mdi:identifier"
+      }
+    },
+    "bat3_ser_part_3": {
+      "growatt": {
+        "position": {
+          "register_no": 49,
+          "offset": 0,
+          "size": 4
+        },
+        "data": {
+          "data_type": "STRING"
+        }
+      },
+      "homeassistant": {
+        "name": "Battery 3 Serial Part 3",
+        "publish": false,
+        "icon": "mdi:identifier"
+      }
+    },
+    "bat3_ser_part_4": {
+      "growatt": {
+        "position": {
+          "register_no": 51,
+          "offset": 0,
+          "size": 4
+        },
+        "data": {
+          "data_type": "STRING"
+        }
+      },
+      "homeassistant": {
+        "name": "Battery 3 Serial Part 4",
+        "publish": false,
+        "icon": "mdi:identifier"
+      }
+    },
     "battery3Soc": {
       "growatt": {
         "position": {
@@ -1527,8 +1687,8 @@
         "data": {
           "data_type": "FLOAT",
           "float_options": {
-            "delta": 0.0,
-            "multiplier": 1.0
+            "delta": 0,
+            "multiplier": 1
           }
         }
       },
@@ -1541,6 +1701,74 @@
         "icon": "mdi:percent"
       }
     },
+    "bat4_ser_part_1": {
+      "growatt": {
+        "position": {
+          "register_no": 57,
+          "offset": 0,
+          "size": 4
+        },
+        "data": {
+          "data_type": "STRING"
+        }
+      },
+      "homeassistant": {
+        "name": "Battery 4 Serial Part 1",
+        "publish": false,
+        "icon": "mdi:identifier"
+      }
+    },
+    "bat4_ser_part_2": {
+      "growatt": {
+        "position": {
+          "register_no": 59,
+          "offset": 0,
+          "size": 4
+        },
+        "data": {
+          "data_type": "STRING"
+        }
+      },
+      "homeassistant": {
+        "name": "Battery 4 Serial Part 2",
+        "publish": false,
+        "icon": "mdi:identifier"
+      }
+    },
+    "bat4_ser_part_3": {
+      "growatt": {
+        "position": {
+          "register_no": 61,
+          "offset": 0,
+          "size": 4
+        },
+        "data": {
+          "data_type": "STRING"
+        }
+      },
+      "homeassistant": {
+        "name": "Battery 4 Serial Part 3",
+        "publish": false,
+        "icon": "mdi:identifier"
+      }
+    },
+    "bat4_ser_part_4": {
+      "growatt": {
+        "position": {
+          "register_no": 63,
+          "offset": 0,
+          "size": 4
+        },
+        "data": {
+          "data_type": "STRING"
+        }
+      },
+      "homeassistant": {
+        "name": "Battery 4 Serial Part 4",
+        "publish": false,
+        "icon": "mdi:identifier"
+      }
+    },
     "battery4Soc": {
       "growatt": {
         "position": {
@@ -1551,8 +1779,8 @@
         "data": {
           "data_type": "FLOAT",
           "float_options": {
-            "delta": 0.0,
-            "multiplier": 1.0
+            "delta": 0,
+            "multiplier": 1
           }
         }
       },
@@ -1575,8 +1803,8 @@
         "data": {
           "data_type": "FLOAT",
           "float_options": {
-            "delta": 0.0,
-            "multiplier": 1.0
+            "delta": 0,
+            "multiplier": 1
           }
         }
       },
@@ -1596,7 +1824,7 @@
         "data": {
           "data_type": "FLOAT",
           "float_options": {
-            "delta": 0.0,
+            "delta": 0,
             "multiplier": 0.1
           }
         }
@@ -1620,7 +1848,7 @@
         "data": {
           "data_type": "FLOAT",
           "float_options": {
-            "delta": 0.0,
+            "delta": 0,
             "multiplier": 0.1
           }
         }
@@ -1644,7 +1872,7 @@
         "data": {
           "data_type": "FLOAT",
           "float_options": {
-            "delta": 0.0,
+            "delta": 0,
             "multiplier": 0.1
           }
         }
@@ -1668,7 +1896,7 @@
         "data": {
           "data_type": "FLOAT",
           "float_options": {
-            "delta": 0.0,
+            "delta": 0,
             "multiplier": 0.1
           }
         }
@@ -1682,29 +1910,6 @@
         "icon": "mdi:solar-power"
       }
     },
-    "dischargeSocLimit": {
-      "growatt": {
-        "position": {
-          "register_no": 91,
-          "offset": 0,
-          "size": 2
-        },
-        "data": {
-          "data_type": "FLOAT",
-          "float_options": {
-            "delta": 0.0,
-            "multiplier": 1.0
-          }
-        }
-      },
-      "homeassistant": {
-        "name": "Discharge Limit",
-        "publish": true,
-        "state_class": "measurement",
-        "unit_of_measurement": "%",
-        "icon": "mdi:percent"
-      }
-    },
     "chargeSocLimit": {
       "growatt": {
         "position": {
@@ -1715,13 +1920,36 @@
         "data": {
           "data_type": "FLOAT",
           "float_options": {
-            "delta": 0.0,
-            "multiplier": 1.0
+            "delta": 0,
+            "multiplier": 1
           }
         }
       },
       "homeassistant": {
         "name": "Charge Limit",
+        "publish": true,
+        "state_class": "measurement",
+        "unit_of_measurement": "%",
+        "icon": "mdi:percent"
+      }
+    },
+    "dischargeSocLimit": {
+      "growatt": {
+        "position": {
+          "register_no": 91,
+          "offset": 0,
+          "size": 2
+        },
+        "data": {
+          "data_type": "FLOAT",
+          "float_options": {
+            "delta": 0,
+            "multiplier": 1
+          }
+        }
+      },
+      "homeassistant": {
+        "name": "Discharge Limit",
         "publish": true,
         "state_class": "measurement",
         "unit_of_measurement": "%",
@@ -1738,7 +1966,7 @@
         "data": {
           "data_type": "FLOAT",
           "float_options": {
-            "delta": 0.0,
+            "delta": 0,
             "multiplier": 0.01
           }
         }
@@ -1762,7 +1990,7 @@
         "data": {
           "data_type": "FLOAT",
           "float_options": {
-            "delta": 0.0,
+            "delta": 0,
             "multiplier": 0.01
           }
         }
@@ -1786,7 +2014,7 @@
         "data": {
           "data_type": "FLOAT",
           "float_options": {
-            "delta": 0.0,
+            "delta": 0,
             "multiplier": 0.01
           }
         }
@@ -1810,7 +2038,7 @@
         "data": {
           "data_type": "FLOAT",
           "float_options": {
-            "delta": 0.0,
+            "delta": 0,
             "multiplier": 0.01
           }
         }
@@ -1834,7 +2062,7 @@
         "data": {
           "data_type": "FLOAT",
           "float_options": {
-            "delta": 0.0,
+            "delta": 0,
             "multiplier": 0.01
           }
         }
@@ -1858,7 +2086,7 @@
         "data": {
           "data_type": "FLOAT",
           "float_options": {
-            "delta": 0.0,
+            "delta": 0,
             "multiplier": 0.01
           }
         }
@@ -1882,7 +2110,7 @@
         "data": {
           "data_type": "FLOAT",
           "float_options": {
-            "delta": 0.0,
+            "delta": 0,
             "multiplier": 0.01
           }
         }
@@ -1906,7 +2134,7 @@
         "data": {
           "data_type": "FLOAT",
           "float_options": {
-            "delta": 0.0,
+            "delta": 0,
             "multiplier": 0.001
           }
         }
@@ -1930,7 +2158,7 @@
         "data": {
           "data_type": "FLOAT",
           "float_options": {
-            "delta": 0.0,
+            "delta": 0,
             "multiplier": 0.001
           }
         }
@@ -1971,8 +2199,8 @@
         "data": {
           "data_type": "FLOAT",
           "float_options": {
-            "delta": 0.0,
-            "multiplier": 1.0
+            "delta": 0,
+            "multiplier": 1
           }
         }
       },
@@ -1994,7 +2222,7 @@
         "data": {
           "data_type": "FLOAT",
           "float_options": {
-            "delta": 0.0,
+            "delta": 0,
             "multiplier": 0.01
           }
         }
@@ -2018,7 +2246,7 @@
         "data": {
           "data_type": "FLOAT",
           "float_options": {
-            "delta": 0.0,
+            "delta": 0,
             "multiplier": 0.01
           }
         }
@@ -2042,7 +2270,7 @@
         "data": {
           "data_type": "FLOAT",
           "float_options": {
-            "delta": 0.0,
+            "delta": 0,
             "multiplier": 0.01
           }
         }
@@ -2066,7 +2294,7 @@
         "data": {
           "data_type": "FLOAT",
           "float_options": {
-            "delta": 0.0,
+            "delta": 0,
             "multiplier": 0.01
           }
         }
@@ -2090,7 +2318,7 @@
         "data": {
           "data_type": "FLOAT",
           "float_options": {
-            "delta": 0.0,
+            "delta": 0,
             "multiplier": 0.01
           }
         }
@@ -2114,7 +2342,7 @@
         "data": {
           "data_type": "FLOAT",
           "float_options": {
-            "delta": 0.0,
+            "delta": 0,
             "multiplier": 0.01
           }
         }
@@ -2138,8 +2366,8 @@
         "data": {
           "data_type": "FLOAT",
           "float_options": {
-            "delta": -30000.0,
-            "multiplier": 1.0
+            "delta": -30000,
+            "multiplier": 1
           }
         }
       },
@@ -2160,8 +2388,8 @@
         "data": {
           "data_type": "FLOAT",
           "float_options": {
-            "delta": -30000.0,
-            "multiplier": 1.0
+            "delta": -30000,
+            "multiplier": 1
           }
         }
       },
@@ -2182,8 +2410,8 @@
         "data": {
           "data_type": "FLOAT",
           "float_options": {
-            "delta": 0.0,
-            "multiplier": 1.0
+            "delta": 0,
+            "multiplier": 1
           }
         }
       },
@@ -2191,30 +2419,6 @@
         "name": "Register No 112",
         "publish": true,
         "state_class": "measurement",
-        "icon": "mdi:thermometer"
-      }
-    },
-    "battery1Temp": {
-      "growatt": {
-        "position": {
-          "register_no": 30,
-          "offset": 0,
-          "size": 2
-        },
-        "data": {
-          "data_type": "FLOAT",
-          "float_options": {
-            "delta": -273.1,
-            "multiplier": 0.1
-          }
-        }
-      },
-      "homeassistant": {
-        "name": "Battery 1 Temperature",
-        "publish": true,
-        "state_class": "measurement",
-        "device_class": "temperature",
-        "unit_of_measurement": "°C",
         "icon": "mdi:thermometer"
       }
     },
@@ -2228,8 +2432,8 @@
         "data": {
           "data_type": "FLOAT",
           "float_options": {
-            "delta": 0.0,
-            "multiplier": 1.0
+            "delta": 0,
+            "multiplier": 1
           }
         }
       },
@@ -2250,7 +2454,7 @@
         "data": {
           "data_type": "FLOAT",
           "float_options": {
-            "delta": 0.0,
+            "delta": 0,
             "multiplier": 0.01
           }
         }
@@ -2274,8 +2478,8 @@
         "data": {
           "data_type": "FLOAT",
           "float_options": {
-            "delta": 0.0,
-            "multiplier": 1.0
+            "delta": 0,
+            "multiplier": 1
           }
         }
       },
@@ -2298,8 +2502,8 @@
         "data": {
           "data_type": "FLOAT",
           "float_options": {
-            "delta": -30000.0,
-            "multiplier": 1.0
+            "delta": -30000,
+            "multiplier": 1
           }
         }
       },
