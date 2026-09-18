@@ -191,11 +191,14 @@ class Client:
             self._client.tls_insecure_set(True)
         self._client.connect(mqtt_config.host, mqtt_config.port, 60)
 
-        # Subscriptions
-        for cmd_type in ["number", "time", "button", "switch", "select", "config"]:
-            for action in ["set", "read"]:
-                topic = f"{HA_BASE_TOPIC}/{cmd_type}/grobro/+/+/{action}"
-                self._client.subscribe(topic)
+        # Subscribe to the complete command surface in one MQTT SUBSCRIBE packet.
+        # This keeps the exact same topics/QoS while reducing startup round-trips.
+        subscriptions = [
+            (f"{HA_BASE_TOPIC}/{cmd_type}/grobro/+/+/{action}", 0)
+            for cmd_type in ("number", "time", "button", "switch", "select", "config")
+            for action in ("set", "read")
+        ]
+        self._client.subscribe(subscriptions)
         self._client.on_message = self.__on_message
         self._client.on_connect = self.__on_connect
 
