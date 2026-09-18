@@ -1,4 +1,4 @@
-# Better GroBro 3.1.11 — Changes compared with robertzaage/GroBro
+# Better GroBro 3.1.13 — Changes compared with robertzaage/GroBro
 
 This changelog intentionally lists **only the material differences from Robert Zaage's GroBro**. It is not a historical release log.
 
@@ -65,6 +65,9 @@ Comparison baseline:
 - Uses daemon helper timers with explicit cleanup and lower timeout timer churn.
 - Restores persisted device configuration by MQTT device ID.
 - Batches the unchanged Home Assistant command subscriptions into one MQTT SUBSCRIBE operation instead of twelve separate subscribe calls.
+- Suppresses repeated unchanged holding-register state publishes while clearing the cache on reconnect so fresh state is sent again.
+- Avoids rebuilding Home Assistant discovery for identical repeated device configuration packets once the device is already discovered.
+- Restores persisted device configuration in one startup pass, keyed by MQTT device ID from the config filename.
 
 ## Optional diagnostics
 
