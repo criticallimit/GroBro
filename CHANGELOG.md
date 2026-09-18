@@ -1,12 +1,12 @@
-# Better GroBro 3.1.3 — Changes compared with robertzaage/GroBro
+# Better GroBro 3.1.10 — Changes compared with robertzaage/GroBro
 
 This changelog intentionally lists **only the material differences from Robert Zaage's GroBro**. It is not a historical release log.
 
 Comparison baseline:
 
 - Upstream: `robertzaage/GroBro`
-- Upstream `main`: `4797f8419bd574bcebd32d1a859569f97b58b774`
-- Comparison date: 2026-09-07
+- Upstream `main`: `e4d59b20ba472853ae6ec0b7a17cf15cd774cb23`
+- Comparison date: 2026-09-18
 
 ## Home Assistant
 
@@ -57,6 +57,8 @@ Comparison baseline:
 - Adds cached device-family and device-ID resolution instead of repeating equivalent prefix/topic parsing across hot paths.
 - Reduces repeated allocations and parsing work in Growatt scramble/unscramble, Modbus decoding and Home Assistant telemetry preparation.
 - Uses a single-pass HA telemetry preparation path and cached static register rules.
+- Skips JSON serialization for unchanged prepared Home Assistant telemetry states.
+- Installs NOAH full-traffic diagnostic wrappers only when `REGISTER_DEBUG=true`, avoiding duplicate unscrambling and diagnostic hot-path work during normal operation.
 - Avoids DEBUG-only payload formatting work unless DEBUG logging is enabled.
 - Uses direct MQTT v5 `UserProperty` access on the common path.
 - Uses event-driven shutdown waiting instead of a 100 ms polling loop.
