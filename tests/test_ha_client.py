@@ -24,6 +24,8 @@ from grobro.model.mqtt_config import MQTTConfig
 from grobro.model.device_config import DeviceConfig
 from grobro.model.growatt_registers import HomeAssistantInputRegister
 from grobro.grobro.parser import unscramble
+from grobro.ha.cleanup import install_ha_cleanup_hook
+from grobro.ha.performance import install_ha_performance_hook
 
 
 DATA_DIR = __file__[: __file__.rfind("/")] + "/model/data"
@@ -202,6 +204,11 @@ def mock_mqtt():
 
 @pytest.fixture
 def ha_client(mock_mqtt):
+    # These tests exercise the Better GroBro runtime behavior, not the bare
+    # upstream-compatible Client class. Install the layers explicitly so the
+    # suite does not depend on another test importing ha_bridge first.
+    install_ha_cleanup_hook()
+    install_ha_performance_hook()
     with patch("grobro.ha.client.os.listdir", return_value=[]):
         cfg = MQTTConfig(host="localhost", port=1883)
         c = Client(cfg)
