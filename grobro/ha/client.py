@@ -903,7 +903,14 @@ class Client:
             self._config_read_inflight[device_id] = register_no
 
         if self.on_config_read:
-            self.on_config_read(device_id, register_no)
+            try:
+                self.on_config_read(device_id, register_no)
+            except Exception:
+                with self._config_read_lock:
+                    self._config_read_inflight.pop(device_id, None)
+                    self._config_read_queues.pop(device_id, None)
+                    getattr(self, "_read_all_active", set()).discard(device_id)
+                raise
 
         # start 1 minute timeout
         timer = Timer(
