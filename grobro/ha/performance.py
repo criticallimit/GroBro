@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import logging
 import math
+from types import SimpleNamespace
 
 from grobro.ha import client as ha_client_module
 from grobro.ha.battery_position import stabilize_battery_payload
@@ -255,9 +256,10 @@ def install_ha_performance_hook() -> None:
         if state_payload is state.payload:
             prepared_state = state
         else:
-            prepared_state = type("StableState", (), {})()
-            prepared_state.device_id = device_id
-            prepared_state.payload = state_payload
+            prepared_state = SimpleNamespace(
+                device_id=device_id,
+                payload=state_payload,
+            )
 
         payload = _prepare_payload(
             self,
