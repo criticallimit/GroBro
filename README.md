@@ -4,7 +4,7 @@ Better GroBro is a fork of [robertzaage/GroBro](https://github.com/robertzaage/G
 
 This README intentionally lists **only the differences from Robert Zaage's GroBro**. Everything not listed here follows the upstream project.
 
-## Better GroBro 3.1.14
+## Better GroBro 3.1.15
 
 Compared with Robert's GroBro, Better GroBro adds:
 
@@ -14,7 +14,7 @@ Compared with Robert's GroBro, Better GroBro adds:
 - **Discovery repair for existing installations**: stale retained MQTT discovery/migration topics are explicitly cleaned up during upgrade instead of relying on Home Assistant to infer removal from an omitted component.
 - **NEO Inverter Power left on Robert's original path**: Better GroBro no longer removes, re-creates, rewrites or clears discovery data for the NEO `Inverter Power` switch. Its discovery fields, command topic, state topic and migration path remain the same as in Robert's GroBro.
 - **Improved NOAH handling**: validated multi-battery telemetry behavior, corrected battery-count handling and a validated NOAH heater-state fallback from the cyclic status packet.
-- **Stable NOAH battery identities**: with `KEEP_BATTERY_POSITION=true`, battery serial numbers are persistently bound to logical Bat2/Bat3/Bat4 slots. If NOAH re-enumerates the stack after a module drops out, all slot-specific values are remapped back to the original Home Assistant battery instead of Bat2/Bat3 swapping.
+- **Stable NOAH/NEXA battery identities**: with `KEEP_BATTERY_POSITION=true`, battery serial numbers are persistently bound to logical Bat2/Bat3/Bat4 slots. If a stack is re-enumerated after a module drops out, all slot-specific values of that module are remapped together to the original Home Assistant battery instead of Bat2/Bat3 swapping. NEXA module serials are decoded internally and are not exposed as additional HA entities.
 - **Automatic clock synchronization** for supported devices at 00:00 and 12:00 local time.
 - **Cleaner Home Assistant values**: power sensors in watts are published as whole watts, including removal of `-0 W`, without changing raw register decoding or energy counters.
 - **Stronger protocol validation** for malformed/truncated Growatt Modbus and configuration packets.
@@ -44,7 +44,7 @@ The add-on keeps the existing GroBro-compatible configuration and add-on slug so
 
 Base project: [robertzaage/GroBro](https://github.com/robertzaage/GroBro) by Robert Zaage and contributors.
 
-Upstream comparison baseline for Better GroBro 3.1.14: `e4d59b20ba472853ae6ec0b7a17cf15cd774cb23`.
+Upstream comparison baseline for Better GroBro 3.1.15: `e4d59b20ba472853ae6ec0b7a17cf15cd774cb23`.
 
 See [CHANGELOG.md](CHANGELOG.md) for the technical list of Better GroBro differences.
 
