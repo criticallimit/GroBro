@@ -4,7 +4,7 @@ Better GroBro is a fork of [robertzaage/GroBro](https://github.com/robertzaage/G
 
 This README intentionally lists **only the differences from Robert Zaage's GroBro**. Everything not listed here follows the upstream project.
 
-## Better GroBro 3.1.10
+## Better GroBro 3.1.11
 
 Compared with Robert's GroBro, Better GroBro adds:
 
@@ -22,6 +22,8 @@ Compared with Robert's GroBro, Better GroBro adds:
 - **Improved Growatt Cloud forwarding controls** with consistent enable/allowlist behavior and optional blocking of cloud configuration commands.
 - **Optional passive diagnostics** for register and raw MQTT analysis without active register scanning or additional device writes.
 - **Diagnostics removed from the normal hot path**: NOAH traffic-capture wrappers are installed only when `REGISTER_DEBUG=true`, avoiding diagnostic topic handling and duplicate unscrambling in normal operation.
+- **Smaller production add-on**: runtime dependencies are separated from test/lint tooling, so the Home Assistant image no longer installs pytest, coverage, pylint or rope.
+- **Lower MQTT startup overhead**: the unchanged Home Assistant command topic set is subscribed in one MQTT SUBSCRIBE operation instead of twelve separate calls.
 - **Runtime performance improvements** that reduce repeated parsing, allocations and idle work while preserving supported GroBro behavior.
 
 ## Installation
@@ -38,7 +40,7 @@ The add-on keeps the existing GroBro-compatible configuration and add-on slug so
 
 Base project: [robertzaage/GroBro](https://github.com/robertzaage/GroBro) by Robert Zaage and contributors.
 
-Upstream comparison baseline for Better GroBro 3.1.10: `e4d59b20ba472853ae6ec0b7a17cf15cd774cb23`.
+Upstream comparison baseline for Better GroBro 3.1.11: `e4d59b20ba472853ae6ec0b7a17cf15cd774cb23`.
 
 See [CHANGELOG.md](CHANGELOG.md) for the technical list of Better GroBro differences.
 
