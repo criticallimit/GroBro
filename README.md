@@ -9,6 +9,7 @@ This README intentionally lists **only the differences from Robert Zaage's GroBr
 Compared with Robert's GroBro, Better GroBro adds:
 
 - **Lower Home Assistant/MQTT churn**: unchanged discovery, availability and identical telemetry states are not republished unnecessarily. Real value changes are still published immediately.
+- **Lower telemetry CPU/allocation load**: unchanged prepared Home Assistant states are detected before JSON serialization, avoiding unnecessary `json.dumps()` work and temporary strings.
 - **Consistent Home Assistant cleanup across NOAH, NEO and NEXA**: low-level `MQTT IP` is hidden for all three families, while manual `Sync Time` and `System Time` controls are removed in favor of automatic synchronization.
 - **Discovery repair for existing installations**: stale retained MQTT discovery/migration topics are explicitly cleaned up during upgrade instead of relying on Home Assistant to infer removal from an omitted component.
 - **NEO Inverter Power left on Robert's original path**: Better GroBro no longer removes, re-creates, rewrites or clears discovery data for the NEO `Inverter Power` switch. Its discovery fields, command topic, state topic and migration path remain the same as in Robert's GroBro.
@@ -20,6 +21,7 @@ Compared with Robert's GroBro, Better GroBro adds:
 - **More robust reconnect/runtime behavior**: cached state is invalidated correctly after reconnect, timers are cleaned up on shutdown, and device configuration is restored by MQTT device ID.
 - **Improved Growatt Cloud forwarding controls** with consistent enable/allowlist behavior and optional blocking of cloud configuration commands.
 - **Optional passive diagnostics** for register and raw MQTT analysis without active register scanning or additional device writes.
+- **Diagnostics removed from the normal hot path**: NOAH traffic-capture wrappers are installed only when `REGISTER_DEBUG=true`, avoiding diagnostic topic handling and duplicate unscrambling in normal operation.
 - **Runtime performance improvements** that reduce repeated parsing, allocations and idle work while preserving supported GroBro behavior.
 
 ## Installation
