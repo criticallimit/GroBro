@@ -1,6 +1,6 @@
 from unittest.mock import patch
 
-from grobro.grobro.configuration import load_bridge_mqtt_configs
+from grobro.ha_bridge import load_bridge_mqtt_configs
 from grobro.model import MQTTConfig
 
 
