@@ -264,6 +264,28 @@ class TestClientOnMessage:
         msg = _msg("c/33/0PVP0000TEST0001", data)
         client._client.on_message(None, None, msg)
 
+    def test_identical_smart_meter_state_is_published_once(self, client):
+        fake_packet = b"\x00\x00\x00\x00\x00\x00\x6f\x64"
+        smart_meter = {
+            "message_type": 0x6F64,
+            "device_id": "0PVP0000TEST0001",
+            "data": '{"power":123}',
+        }
+        msg = _msg("c/33/0PVP0000TEST0001", b"raw")
+
+        with patch("grobro.grobro.client.parser.unscramble", return_value=fake_packet):
+            with patch(
+                "grobro.grobro.client.parser.parse_noah_6f64",
+                return_value=smart_meter,
+            ):
+                client._client.on_message(None, None, msg)
+                first_count = client._client.publish.call_count
+                client._client.on_message(None, None, msg)
+
+        assert first_count == 1
+        assert client._client.publish.call_count == first_count
+
+
     def test_shinewelink_fe19_fullconfig(self, client):
         data = (Path(DATA_DIR) / "ShineWeLinkFE19_FullConfig.bin").read_bytes()
         msg = _msg("c/33/RAQ0E8H042", data)
