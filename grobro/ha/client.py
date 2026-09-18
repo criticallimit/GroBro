@@ -368,38 +368,58 @@ class Client:
         # Buttons
         if cmd_type == "button":
             if cmd_name == "read_all":
-                # Send all modbus reads first
-                for name, register in known_registers.holding_registers.items():
-                    if name.startswith("slot"):
-                        try:
-                            if int(name[4]) > MAX_SLOTS:
-                                continue
-                        except ValueError:
-                            continue
-
-                    pos = register.growatt.position
-                    self.on_command(
-                        make_modbus_command(
+                with self._config_read_lock:
+                    active = getattr(self, "_read_all_active", None)
+                    if active is None:
+                        active = set()
+                        self._read_all_active = active
+                    if device_id in active:
+                        LOG.debug(
+                            "Read All already active for %s, ignoring duplicate request",
                             device_id,
-                            GrowattModbusFunction.READ_SINGLE_REGISTER,
-                            pos.register_no,
                         )
-                    )
+                        return
+                    active.add(device_id)
 
-                # Queue config reads
-                if self.on_config_read:
+                try:
+                    # Send all modbus reads first
+                    for name, register in known_registers.holding_registers.items():
+                        if name.startswith("slot"):
+                            try:
+                                if int(name[4]) > MAX_SLOTS:
+                                    continue
+                            except ValueError:
+                                continue
+
+                        pos = register.growatt.position
+                        self.on_command(
+                            make_modbus_command(
+                                device_id,
+                                GrowattModbusFunction.READ_SINGLE_REGISTER,
+                                pos.register_no,
+                            )
+                        )
+
+                    # Queue config reads
+                    if self.on_config_read and known_registers.config_registers:
+                        with self._config_read_lock:
+                            q = self._config_read_queues.setdefault(device_id, deque())
+                            for cfg in known_registers.config_registers.values():
+                                q.append(cfg.growatt.register_no)
+
+                        # give the datalogger time to answer modbus reads
+                        Timer(
+                            3.0,
+                            self.__kickoff_next_config_read,
+                            args=(device_id,),
+                        ).start()
+                    else:
+                        with self._config_read_lock:
+                            self._read_all_active.discard(device_id)
+                except Exception:
                     with self._config_read_lock:
-                        q = self._config_read_queues.setdefault(device_id, deque())
-
-                        for cfg in known_registers.config_registers.values():
-                            q.append(cfg.growatt.register_no)
-
-                    # give the datalogger time to answer modbus reads
-                    Timer(
-                        3.0,
-                        self.__kickoff_next_config_read,
-                        args=(device_id,),
-                    ).start()
+                        self._read_all_active.discard(device_id)
+                    raise
 
                 return
 
@@ -876,6 +896,7 @@ class Client:
 
             q = self._config_read_queues.get(device_id)
             if not q:
+                getattr(self, "_read_all_active", set()).discard(device_id)
                 return
 
             register_no = q.popleft()
