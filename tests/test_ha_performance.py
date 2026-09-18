@@ -7,6 +7,7 @@ from grobro.ha.performance import (
     _prepare_payload,
     _register_rules,
     _should_publish_state,
+    _should_publish_holding_state,
     _should_serialize_state,
 )
 from grobro.model.device_family import DEVICE_FAMILIES
@@ -280,3 +281,22 @@ def test_reconnect_clear_resets_prepared_payload_cache():
     _clear_state_publish_cache(client)
 
     assert _should_serialize_state(client, "0PVPTEST", {"power": 500}) is True
+
+
+def test_identical_holding_state_is_published_only_once():
+    client = SimpleNamespace()
+
+    assert _should_publish_holding_state(client, "QMNTEST", "inverter_power", "ON") is True
+    assert _should_publish_holding_state(client, "QMNTEST", "inverter_power", "ON") is False
+    assert _should_publish_holding_state(client, "QMNTEST", "inverter_power", "OFF") is True
+
+
+def test_holding_state_cache_is_cleared_with_reconnect_cache():
+    client = SimpleNamespace()
+
+    assert _should_publish_holding_state(client, "QMNTEST", "inverter_power", "ON") is True
+    assert _should_publish_holding_state(client, "QMNTEST", "inverter_power", "ON") is False
+
+    _clear_state_publish_cache(client)
+
+    assert _should_publish_holding_state(client, "QMNTEST", "inverter_power", "ON") is True
