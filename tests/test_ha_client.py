@@ -217,6 +217,18 @@ class TestClientLifecycle:
     def test_init(self, ha_client):
         assert ha_client._client is not None
         ha_client._client.connect.assert_called_once_with("localhost", 1883, 60)
+        ha_client._client.subscribe.assert_called_once()
+        subscriptions = ha_client._client.subscribe.call_args.args[0]
+        assert len(subscriptions) == 12
+        assert all(qos == 0 for _, qos in subscriptions)
+        assert (
+            "homeassistant/number/grobro/+/+/set",
+            0,
+        ) in subscriptions
+        assert (
+            "homeassistant/config/grobro/+/+/read",
+            0,
+        ) in subscriptions
 
     def test_init_with_auth_tls(self):
         with patch("grobro.ha.client.mqtt.Client") as mc:
