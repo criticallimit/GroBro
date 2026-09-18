@@ -88,3 +88,95 @@ def capture_noah_mqtt_traffic(
                 handle.write("\n")
     except (OSError, TypeError, ValueError, struct.error) as exc:
         LOG.warning("NOAH MQTT traffic capture failed: %s", exc)
+
+
+_INSTALLED = False
+
+
+def _device_id_from_topic(topic: str) -> str:
+    from grobro.grobro import client as client_module
+
+    try:
+        return client_module._extract_device_id(str(topic))
+    except Exception:
+        return ""
+
+
+def _safe_unscramble(payload):
+    from grobro.grobro import parser
+
+    try:
+        return parser.unscramble(payload)
+    except Exception:
+        return None
+
+
+def install_noah_traffic_debug_hook() -> None:
+    """Capture all NOAH traffic already flowing through GroBro when enabled."""
+    global _INSTALLED
+    if _INSTALLED or not REGISTER_DEBUG:
+        return
+
+    from grobro.grobro import client as client_module
+
+    original_device_message = client_module.Client._Client__on_message
+    original_cloud_message = client_module.Client._Client__on_message_forward_client
+    original_publish_checked = client_module._publish_checked
+
+    def device_message(self, client, userdata, msg):
+        device_id = _device_id_from_topic(msg.topic)
+        if device_id.startswith("0PVP"):
+            capture_noah_mqtt_traffic(
+                device_id=device_id,
+                direction="device_to_grobro",
+                topic=msg.topic,
+                payload=msg.payload,
+                decoded=_safe_unscramble(msg.payload),
+                qos=getattr(msg, "qos", None),
+                retain=getattr(msg, "retain", None),
+                forwarded_for=client_module.get_property(msg, "forwarded-for"),
+            )
+        return original_device_message(self, client, userdata, msg)
+
+    def cloud_message(self, client, userdata, msg):
+        device_id = _device_id_from_topic(msg.topic)
+        if device_id.startswith("0PVP"):
+            capture_noah_mqtt_traffic(
+                device_id=device_id,
+                direction="cloud_to_grobro",
+                topic=msg.topic,
+                payload=msg.payload,
+                decoded=_safe_unscramble(msg.payload),
+                qos=getattr(msg, "qos", None),
+                retain=getattr(msg, "retain", None),
+                forwarded_for=client_module.get_property(msg, "forwarded-for"),
+            )
+        return original_cloud_message(self, client, userdata, msg)
+
+    def publish_checked(client, topic: str, payload=None, **kwargs):
+        device_id = _device_id_from_topic(topic)
+        if device_id.startswith("0PVP") and payload is not None and "/33/" in str(topic):
+            properties = kwargs.get("properties")
+            if properties is client_module.MQTT_PROP_FORWARD_GROWATT:
+                direction = "grobro_to_device_from_cloud"
+            elif properties is client_module.MQTT_PROP_FORWARD_HA:
+                direction = "grobro_to_device_from_ha"
+            else:
+                direction = "grobro_to_cloud_or_device"
+            capture_noah_mqtt_traffic(
+                device_id=device_id,
+                direction=direction,
+                topic=topic,
+                payload=payload,
+                decoded=_safe_unscramble(payload),
+                qos=kwargs.get("qos"),
+                retain=kwargs.get("retain"),
+                forwarded_for=None,
+            )
+        return original_publish_checked(client, topic, payload, **kwargs)
+
+    client_module.Client._Client__on_message = device_message
+    client_module.Client._Client__on_message_forward_client = cloud_message
+    client_module._publish_checked = publish_checked
+    _INSTALLED = True
+    LOG.warning("Passive full NOAH MQTT traffic capture hook installed")

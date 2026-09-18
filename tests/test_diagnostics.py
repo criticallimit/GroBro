@@ -1,4 +1,4 @@
-from grobro.grobro import diagnostics
+from grobro import ha_bridge as diagnostics
 
 
 def test_install_optional_diagnostics_installs_both_observers(monkeypatch):

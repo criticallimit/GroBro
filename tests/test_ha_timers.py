@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from grobro.ha.timers import cancel_runtime_timers, daemon_timer
+from grobro.ha.timer_runtime import cancel_runtime_timers, daemon_timer
 
 
 def test_daemon_timer_is_daemon():
