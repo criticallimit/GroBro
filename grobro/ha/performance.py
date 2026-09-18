@@ -229,7 +229,10 @@ def install_ha_performance_hook() -> None:
         stable_logical_max = 1
         if (
             ha_client_module.KEEP_BATTERY_POSITION
-            and ha_client_module.model.is_family(device_id, "noah")
+            and (
+                ha_client_module.model.is_family(device_id, "noah")
+                or ha_client_module.model.is_family(device_id, "nexa")
+            )
         ):
             state_payload, stable_logical_max = stabilize_battery_payload(
                 self,
