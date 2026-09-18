@@ -4,7 +4,7 @@ Better GroBro is a fork of [robertzaage/GroBro](https://github.com/robertzaage/G
 
 This README intentionally lists **only the differences from Robert Zaage's GroBro**. Everything not listed here follows the upstream project.
 
-## Better GroBro 3.1.15
+## Better GroBro 3.1.16
 
 Compared with Robert's GroBro, Better GroBro adds:
 
@@ -44,7 +44,7 @@ The add-on keeps the existing GroBro-compatible configuration and add-on slug so
 
 Base project: [robertzaage/GroBro](https://github.com/robertzaage/GroBro) by Robert Zaage and contributors.
 
-Upstream comparison baseline for Better GroBro 3.1.15: `e4d59b20ba472853ae6ec0b7a17cf15cd774cb23`.
+Upstream comparison baseline for Better GroBro 3.1.16: `e4d59b20ba472853ae6ec0b7a17cf15cd774cb23`.
 
 See [CHANGELOG.md](CHANGELOG.md) for the technical list of Better GroBro differences.
 
