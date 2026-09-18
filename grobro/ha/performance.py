@@ -13,6 +13,7 @@ import logging
 import math
 
 from grobro.ha import client as ha_client_module
+from grobro.ha.battery_position import stabilize_battery_payload
 
 LOG = logging.getLogger(__name__)
 _INSTALLED = False
@@ -223,10 +224,25 @@ def install_ha_performance_hook() -> None:
         LOG.debug("HA: publish: %s", state)
         device_id = state.device_id
         state_payload = state.payload
+
+        stable_logical_max = 1
+        if (
+            ha_client_module.KEEP_BATTERY_POSITION
+            and ha_client_module.model.is_family(device_id, "noah")
+        ):
+            state_payload, stable_logical_max = stabilize_battery_payload(
+                self,
+                device_id,
+                state_payload,
+            )
+
         effective_max_bat = ha_client_module._resolve_max_bat(
             device_id,
             state_payload,
         )
+        if stable_logical_max > effective_max_bat:
+            effective_max_bat = stable_logical_max
+
         self._Client__detect_neo_pv_count(device_id, state_payload)
         self._Client__publish_device_discovery(device_id, effective_max_bat)
         self._Client__publish_availability(device_id, True)
@@ -235,9 +251,17 @@ def install_ha_performance_hook() -> None:
 
         known_registers = ha_client_module.get_known_registers(device_id)
         rules = _register_rules(known_registers)
+        # Use the stabilized payload without mutating the source state object.
+        if state_payload is state.payload:
+            prepared_state = state
+        else:
+            prepared_state = type("StableState", (), {})()
+            prepared_state.device_id = device_id
+            prepared_state.payload = state_payload
+
         payload = _prepare_payload(
             self,
-            state,
+            prepared_state,
             effective_max_bat,
             known_registers,
             rules,
@@ -255,29 +279,6 @@ def install_ha_performance_hook() -> None:
                     payload[combined_key] = combined
                 else:
                     payload.pop(combined_key, None)
-
-        if ha_client_module.KEEP_BATTERY_POSITION:
-            current_serials: dict[int, str] = {}
-            for bat_num in range(2, 5):
-                key = f"bat{bat_num}_serial"
-                if key in payload and payload[key]:
-                    current_serials[bat_num] = str(payload[key])
-            previous_serials = ha_client_module._LAST_BAT_SERIALS.get(
-                device_id,
-                {},
-            )
-            if previous_serials and current_serials:
-                for pos, serial in current_serials.items():
-                    for previous_pos, previous_serial in previous_serials.items():
-                        if serial == previous_serial and pos != previous_pos:
-                            LOG.warning(
-                                "Battery %s moved from Bat%d to Bat%d for device %s — inverter re-enumeration detected",
-                                serial,
-                                previous_pos,
-                                pos,
-                                device_id,
-                            )
-            ha_client_module._LAST_BAT_SERIALS[device_id] = current_serials
 
         if not _should_serialize_state(self, device_id, payload):
             LOG.debug("HA state unchanged for %s, skipping serialization and publish", device_id)
