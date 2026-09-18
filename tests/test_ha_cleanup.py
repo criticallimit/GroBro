@@ -32,6 +32,16 @@ def test_detect_bat_count_falls_back_conservatively():
     assert _detect_bat_count({"bat3_ser_part_1": "BAT3"}) == 3
 
 
+def test_detect_bat_count_prefers_nexa_reported_quantity():
+    payload = {
+        "batteryPackageQuantity": 3.0,
+        "bat2_ser_part_1": "NOISY",
+        "bat3_ser_part_1": "NOISY",
+        "bat4_ser_part_1": "NOISY",
+    }
+    assert _detect_bat_count(payload) == 3
+
+
 def test_resolve_max_bat_does_not_assume_four(monkeypatch):
     monkeypatch.setattr(ha_client_module, "MAX_BAT", "auto")
     ha_client_module._MAX_BAT_CACHE.clear()
