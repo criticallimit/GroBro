@@ -1,4 +1,4 @@
-# Better GroBro 3.1.15 — Changes compared with robertzaage/GroBro
+# Better GroBro 3.1.16 — Changes compared with robertzaage/GroBro
 
 This changelog intentionally lists **only the material differences from Robert Zaage's GroBro**. It is not a historical release log.
 
