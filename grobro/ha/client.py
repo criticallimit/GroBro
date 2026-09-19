@@ -375,7 +375,10 @@ class Client:
 
         # MQTT subscriptions are session state. Home Assistant/Mosquitto restarts
         # drop them, so they must be renewed on every successful reconnect.
-        client.subscribe(_command_subscriptions())
+        # Paho always supplies the client here; the guard also keeps direct/test
+        # callback invocations harmless.
+        if client is not None:
+            client.subscribe(_command_subscriptions())
 
         # Any Read All sequence that was in progress when MQTT disappeared can no
         # longer be trusted. Start clean so the button works immediately again.
