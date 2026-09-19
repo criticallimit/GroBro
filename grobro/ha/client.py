@@ -152,6 +152,15 @@ def iter_command_registers(known_registers: GroBroRegisters):
             "is_config": True,
         }
 
+def _command_subscriptions() -> list[tuple[str, int]]:
+    """Return the complete Home Assistant command subscription surface."""
+    return [
+        (f"{HA_BASE_TOPIC}/{cmd_type}/grobro/+/+/{action}", 0)
+        for cmd_type in ("number", "time", "button", "switch", "select", "config")
+        for action in ("set", "read")
+    ]
+
+
 # ------------------- Client-Class -------------------
 
 class Client:
@@ -189,18 +198,12 @@ class Client:
         if mqtt_config.use_tls:
             self._client.tls_set(cert_reqs=ssl.CERT_NONE)
             self._client.tls_insecure_set(True)
-        self._client.connect(mqtt_config.host, mqtt_config.port, 60)
 
-        # Subscribe to the complete command surface in one MQTT SUBSCRIBE packet.
-        # This keeps the exact same topics/QoS while reducing startup round-trips.
-        subscriptions = [
-            (f"{HA_BASE_TOPIC}/{cmd_type}/grobro/+/+/{action}", 0)
-            for cmd_type in ("number", "time", "button", "switch", "select", "config")
-            for action in ("set", "read")
-        ]
-        self._client.subscribe(subscriptions)
+        # Register callbacks before connecting so the initial connect and every
+        # later reconnect use exactly the same subscription/bootstrap path.
         self._client.on_message = self.__on_message
         self._client.on_connect = self.__on_connect
+        self._client.connect(mqtt_config.host, mqtt_config.port, 60)
 
         # Restore persisted device configs once, keyed by MQTT device id from
         # the filename. This preserves gateway/device identity across restarts.
@@ -349,8 +352,34 @@ class Client:
 
     # ------------------- MQTT Callback -------------------
 
+    def __reset_config_read_state(self) -> None:
+        """Cancel an interrupted Read All/config-read cycle.
+
+        MQTT/HA restarts can interrupt a sequence after _read_all_active was set.
+        Clearing the transient queue/inflight state on reconnect prevents the
+        next Read All press from being treated as a duplicate forever.
+        """
+        with self._config_read_lock:
+            for timer in list(self._config_read_timers.values()):
+                try:
+                    timer.cancel()
+                except Exception:  # pragma: no cover
+                    pass
+            self._config_read_timers.clear()
+            self._config_read_queues.clear()
+            self._config_read_inflight.clear()
+            getattr(self, "_read_all_active", set()).clear()
+
     def __on_connect(self, client, userdata, flags, reason_code, properties):
-        LOG.debug(f"Connected to HA MQTT server with result code {reason_code}")
+        LOG.debug("Connected to HA MQTT server with result code %s", reason_code)
+
+        # MQTT subscriptions are session state. Home Assistant/Mosquitto restarts
+        # drop them, so they must be renewed on every successful reconnect.
+        client.subscribe(_command_subscriptions())
+
+        # Any Read All sequence that was in progress when MQTT disappeared can no
+        # longer be trusted. Start clean so the button works immediately again.
+        self.__reset_config_read_state()
 
     def __on_message(self, client, userdata, msg: mqtt.MQTTMessage):
         parts = msg.topic.removeprefix(f"{HA_BASE_TOPIC}/").split("/")
