@@ -153,12 +153,14 @@ def iter_command_registers(known_registers: GroBroRegisters):
         }
 
 def _command_subscriptions() -> list[tuple[str, int]]:
-    """Return the complete Home Assistant command subscription surface."""
-    return [
+    """Return command topics plus the Home Assistant birth/status topic."""
+    subscriptions = [
         (f"{HA_BASE_TOPIC}/{cmd_type}/grobro/+/+/{action}", 0)
         for cmd_type in ("number", "time", "button", "switch", "select", "config")
         for action in ("set", "read")
     ]
+    subscriptions.append((f"{HA_BASE_TOPIC}/status", 0))
+    return subscriptions
 
 
 # ------------------- Client-Class -------------------
@@ -370,21 +372,39 @@ class Client:
             self._config_read_inflight.clear()
             getattr(self, "_read_all_active", set()).clear()
 
-    def __on_connect(self, client, userdata, flags, reason_code, properties):
-        LOG.debug("Connected to HA MQTT server with result code %s", reason_code)
+    def __recover_after_home_assistant_restart(self, client) -> None:
+        """Restore command handling after HA Core restarts while MQTT stays up."""
+        self.__reset_config_read_state()
 
-        # MQTT subscriptions are session state. Home Assistant/Mosquitto restarts
-        # drop them, so they must be renewed on every successful reconnect.
-        # Paho always supplies the client here; the guard also keeps direct/test
-        # callback invocations harmless.
         if client is not None:
             client.subscribe(_command_subscriptions())
 
-        # Any Read All sequence that was in progress when MQTT disappeared can no
-        # longer be trusted. Start clean so the button works immediately again.
-        self.__reset_config_read_state()
+        # Force the next live telemetry/config packet to rebuild discovery and
+        # publish fresh state instead of being suppressed by pre-restart caches.
+        getattr(self, "_discovery_cache", []).clear()
+        getattr(self, "_discovery_signature", {}).clear()
+        getattr(self, "_discovery_payload_cache", {}).clear()
+        getattr(self, "_last_state_payload", {}).clear()
+        getattr(self, "_last_holding_state", {}).clear()
+        getattr(self, "_last_availability", {}).clear()
+
+        LOG.info("Home Assistant restart detected; GroBro command state recovered")
+
+    def __on_connect(self, client, userdata, flags, reason_code, properties):
+        LOG.debug("Connected to HA MQTT server with result code %s", reason_code)
+        self.__recover_after_home_assistant_restart(client)
 
     def __on_message(self, client, userdata, msg: mqtt.MQTTMessage):
+        # A normal HA Core restart often leaves Mosquitto running, so Paho never
+        # reconnects and __on_connect is not called. Home Assistant publishes its
+        # MQTT birth message on <discovery-prefix>/status instead. Treat that
+        # "online" message as an explicit command/discovery recovery trigger.
+        if msg.topic == f"{HA_BASE_TOPIC}/status":
+            payload = msg.payload.decode(errors="ignore").strip().lower()
+            if payload == "online":
+                self.__recover_after_home_assistant_restart(client)
+            return
+
         parts = msg.topic.removeprefix(f"{HA_BASE_TOPIC}/").split("/")
         if len(parts) != 5 or parts[0] not in {"number", "time", "button", "switch", "select", "config"}:
             return

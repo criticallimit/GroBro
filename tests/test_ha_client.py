@@ -233,10 +233,11 @@ class TestClientLifecycle:
 
     def test_command_subscription_surface(self):
         subscriptions = _command_subscriptions()
-        assert len(subscriptions) == 12
+        assert len(subscriptions) == 13
         assert all(qos == 0 for _, qos in subscriptions)
         assert ("homeassistant/number/grobro/+/+/set", 0) in subscriptions
         assert ("homeassistant/config/grobro/+/+/read", 0) in subscriptions
+        assert ("homeassistant/status", 0) in subscriptions
 
     def test_on_connect_resubscribes_after_broker_restart(self, ha_client):
         ha_client._client.subscribe.reset_mock()
@@ -292,6 +293,54 @@ class TestClientLifecycle:
         with patch("grobro.ha.client.Timer") as mock_timer:
             mock_timer.return_value = MagicMock()
             ha_client._client.on_message(None, None, msg)
+
+        assert ha_client.on_command.call_count > 0
+        assert device_id in ha_client._read_all_active
+
+    def test_ha_birth_online_recovers_without_mqtt_reconnect(self, ha_client):
+        device_id = "QMN000ABC1D2E3FG"
+        pending_timer = MagicMock()
+        ha_client._read_all_active.add(device_id)
+        ha_client._config_read_queues[device_id] = deque([1, 2])
+        ha_client._config_read_inflight[device_id] = 1
+        ha_client._config_read_timers[device_id] = pending_timer
+        ha_client._discovery_cache.append(device_id)
+        ha_client._discovery_signature[device_id] = (1, None)
+        ha_client._discovery_payload_cache[device_id] = "cached"
+        ha_client._last_state_payload[device_id] = {"Ppv": 1}
+        ha_client._last_holding_state[(device_id, "x")] = "ON"
+        ha_client._last_availability[device_id] = True
+        ha_client._client.subscribe.reset_mock()
+
+        status = _msg("homeassistant/status", b"online")
+        ha_client._client.on_message(ha_client._client, None, status)
+
+        pending_timer.cancel.assert_called_once()
+        assert ha_client._read_all_active == set()
+        assert ha_client._config_read_queues == {}
+        assert ha_client._config_read_inflight == {}
+        assert ha_client._config_read_timers == {}
+        assert ha_client._discovery_cache == []
+        assert ha_client._discovery_signature == {}
+        assert ha_client._discovery_payload_cache == {}
+        assert ha_client._last_state_payload == {}
+        assert ha_client._last_holding_state == {}
+        assert ha_client._last_availability == {}
+        ha_client._client.subscribe.assert_called_once_with(_command_subscriptions())
+
+    def test_read_all_works_after_ha_birth_without_broker_reconnect(self, ha_client):
+        device_id = "QMN000ABC1D2E3FG"
+        ha_client._read_all_active.add(device_id)
+
+        status = _msg("homeassistant/status", b"online")
+        ha_client._client.on_message(ha_client._client, None, status)
+
+        read_all = _msg(
+            f"homeassistant/button/grobro/{device_id}/read_all/read"
+        )
+        with patch("grobro.ha.client.Timer") as mock_timer:
+            mock_timer.return_value = MagicMock()
+            ha_client._client.on_message(ha_client._client, None, read_all)
 
         assert ha_client.on_command.call_count > 0
         assert device_id in ha_client._read_all_active

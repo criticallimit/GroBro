@@ -4,7 +4,7 @@ Better GroBro is a Home Assistant focused fork of [robertzaage/GroBro](https://g
 
 This README lists only the relevant differences from Robert's GroBro.
 
-## Better GroBro 3.1.20
+## Better GroBro 3.1.21
 
 Compared with Robert's GroBro, Better GroBro adds:
 
@@ -13,7 +13,7 @@ Compared with Robert's GroBro, Better GroBro adds:
 - Improved NOAH/NEXA handling, including combined firmware display, validated NOAH heater-state handling and shared family/protocol behavior.
 - Automatic device clock synchronization at 00:00 and 12:00 local time for supported devices.
 - Cleaner Home Assistant presentation, including removal of low-level/manual controls that are no longer needed and whole-watt power values.
-- More robust reconnect, timer, config persistence, packet validation and Growatt Cloud forwarding behavior, including automatic MQTT command re-subscription after Home Assistant/MQTT restarts.
+- More robust reconnect, timer, config persistence, packet validation and Growatt Cloud forwarding behavior, including recovery from Home Assistant Core restarts even when the MQTT broker remains running.
 - Optional passive diagnostics for register/raw MQTT analysis without additional device polling or writes.
 
 Everything else follows Robert's GroBro.
