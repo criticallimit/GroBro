@@ -1,6 +1,7 @@
 import os
 import json
 import logging
+from collections import deque
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -17,6 +18,7 @@ from grobro.ha.client import (
     _detect_bat_count,
     _resolve_max_bat,
     _MAX_BAT_CACHE,
+    _command_subscriptions,
 )
 from grobro.model.modbus_message import GrowattModbusFunction, GrowattModbusMessage
 from grobro.model.modbus_function import GrowattModbusFunctionSingle
@@ -223,18 +225,76 @@ class TestClientLifecycle:
     def test_init(self, ha_client):
         assert ha_client._client is not None
         ha_client._client.connect.assert_called_once_with("localhost", 1883, 60)
-        ha_client._client.subscribe.assert_called_once()
-        subscriptions = ha_client._client.subscribe.call_args.args[0]
+        # Subscriptions are intentionally installed by on_connect so they are
+        # renewed after every broker/Home Assistant restart.
+        ha_client._client.subscribe.assert_not_called()
+        assert ha_client._client.on_connect is not None
+        assert ha_client._client.on_message is not None
+
+    def test_command_subscription_surface(self):
+        subscriptions = _command_subscriptions()
         assert len(subscriptions) == 12
         assert all(qos == 0 for _, qos in subscriptions)
-        assert (
-            "homeassistant/number/grobro/+/+/set",
+        assert ("homeassistant/number/grobro/+/+/set", 0) in subscriptions
+        assert ("homeassistant/config/grobro/+/+/read", 0) in subscriptions
+
+    def test_on_connect_resubscribes_after_broker_restart(self, ha_client):
+        ha_client._client.subscribe.reset_mock()
+
+        ha_client._Client__on_connect(
+            ha_client._client,
+            None,
+            None,
             0,
-        ) in subscriptions
-        assert (
-            "homeassistant/config/grobro/+/+/read",
+            None,
+        )
+
+        ha_client._client.subscribe.assert_called_once_with(_command_subscriptions())
+
+    def test_on_connect_clears_interrupted_read_all_state(self, ha_client):
+        device_id = "QMN000ABC1D2E3FG"
+        pending_timer = MagicMock()
+        ha_client._read_all_active.add(device_id)
+        ha_client._config_read_queues[device_id] = deque([1, 2, 3])
+        ha_client._config_read_inflight[device_id] = 1
+        ha_client._config_read_timers[device_id] = pending_timer
+
+        ha_client._Client__on_connect(
+            ha_client._client,
+            None,
+            None,
             0,
-        ) in subscriptions
+            None,
+        )
+
+        pending_timer.cancel.assert_called_once()
+        assert device_id not in ha_client._read_all_active
+        assert ha_client._config_read_queues == {}
+        assert ha_client._config_read_inflight == {}
+        assert ha_client._config_read_timers == {}
+
+    def test_read_all_works_again_after_reconnect(self, ha_client):
+        device_id = "QMN000ABC1D2E3FG"
+        msg = _msg(
+            f"homeassistant/button/grobro/{device_id}/read_all/read"
+        )
+
+        # Simulate an interrupted cycle left active when HA/MQTT restarts.
+        ha_client._read_all_active.add(device_id)
+        ha_client._Client__on_connect(
+            ha_client._client,
+            None,
+            None,
+            0,
+            None,
+        )
+
+        with patch("grobro.ha.client.Timer") as mock_timer:
+            mock_timer.return_value = MagicMock()
+            ha_client._client.on_message(None, None, msg)
+
+        assert ha_client.on_command.call_count > 0
+        assert device_id in ha_client._read_all_active
 
     def test_init_with_auth_tls(self):
         with patch("grobro.ha.client.mqtt.Client") as mc:
