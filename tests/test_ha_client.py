@@ -1,6 +1,7 @@
 import os
 import json
 import logging
+from collections import deque
 from unittest.mock import MagicMock, patch
 
 import pytest
