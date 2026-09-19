@@ -1,4 +1,4 @@
-# Better GroBro 3.1.19 — Differences from robertzaage/GroBro
+# Better GroBro 3.1.20 — Differences from robertzaage/GroBro
 
 Comparison baseline: `robertzaage/GroBro` main at `e4d59b20ba472853ae6ec0b7a17cf15cd774cb23` (2026-09-18).
 
@@ -26,7 +26,7 @@ Comparison baseline: `robertzaage/GroBro` main at `e4d59b20ba472853ae6ec0b7a17cf
 
 - Adds stricter validation for malformed/truncated Growatt packets and config commands.
 - Avoids persisting/logging sensitive config data unnecessarily.
-- Improves reconnect cleanup, timer cleanup, config restore and protection against overlapping Read All cycles.
+- Improves reconnect cleanup, timer cleanup, config restore and protection against overlapping Read All cycles.\n- Re-subscribes the complete Home Assistant command surface after every MQTT reconnect and clears interrupted Read All/config-read state, so commands continue working after Home Assistant/MQTT restarts.
 - Improves Growatt Cloud forwarding/allowlist behavior and optional cloud configuration filtering.
 
 ## Runtime efficiency
