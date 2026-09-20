@@ -319,10 +319,14 @@ def install_ha_performance_hook() -> None:
                     f"{value.register_def.type}/grobro/"
                     f"{ha_input.device_id}/{value.name}/get"
                 )
+                # Holding-register values back Home Assistant controls
+                # (number/switch/time/select). Keep their last confirmed state
+                # retained so entity reloads/re-discovery do not make the value
+                # disappear until the next manual Read All.
                 self._client.publish(
                     topic,
                     value.value,
-                    retain=ha_client_module.PUBLISH_SENSORS_RETAINED,
+                    retain=True,
                 )
         except Exception as exc:
             LOG.error("HA: publish msg: %s", exc)

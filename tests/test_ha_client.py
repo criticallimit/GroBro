@@ -1042,6 +1042,55 @@ class TestMaxBat:
         assert "bat3_temp" not in published
 
 
+    def test_holding_control_states_are_retained(self, ha_client):
+        from grobro.model.growatt_registers import (
+            HomeAssistantHoldingRegisterInput,
+            HomeAssistantHoldingRegisterValue,
+        )
+
+        registers = get_known_registers("0PVP0000TEST0001")
+        state = HomeAssistantHoldingRegisterInput(
+            device_id="0PVP0000TEST0001",
+            payload=[
+                HomeAssistantHoldingRegisterValue(
+                    name="default_power",
+                    value=400,
+                    register=registers.holding_registers["default_power"].homeassistant,
+                ),
+                HomeAssistantHoldingRegisterValue(
+                    name="slot1_power",
+                    value=350,
+                    register=registers.holding_registers["slot1_power"].homeassistant,
+                ),
+                HomeAssistantHoldingRegisterValue(
+                    name="charge_limit",
+                    value=95,
+                    register=registers.holding_registers["charge_limit"].homeassistant,
+                ),
+                HomeAssistantHoldingRegisterValue(
+                    name="discharge_limit",
+                    value=10,
+                    register=registers.holding_registers["discharge_limit"].homeassistant,
+                ),
+            ],
+        )
+
+        ha_client.publish_holding_register_input(state)
+
+        published = {
+            call.args[0]: call
+            for call in ha_client._client.publish.call_args_list
+            if "/get" in call.args[0]
+        }
+        expected = {
+            "homeassistant/number/grobro/0PVP0000TEST0001/default_power/get",
+            "homeassistant/number/grobro/0PVP0000TEST0001/slot1_power/get",
+            "homeassistant/number/grobro/0PVP0000TEST0001/charge_limit/get",
+            "homeassistant/number/grobro/0PVP0000TEST0001/discharge_limit/get",
+        }
+        assert expected <= published.keys()
+        assert all(published[topic].kwargs["retain"] is True for topic in expected)
+
 class TestEdgeCases:
     def test_map_enum_bitfield(self):
         from grobro.ha.client import map_enum_value
