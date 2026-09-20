@@ -385,6 +385,7 @@ class Client:
         getattr(self, "_discovery_signature", {}).clear()
         getattr(self, "_discovery_payload_cache", {}).clear()
         getattr(self, "_last_state_payload", {}).clear()
+        getattr(self, "_state_publish_cache", {}).clear()
         getattr(self, "_last_holding_state", {}).clear()
         getattr(self, "_last_availability", {}).clear()
 
