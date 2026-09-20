@@ -328,6 +328,31 @@ class TestClientLifecycle:
         assert ha_client._last_availability == {}
         ha_client._client.subscribe.assert_called_once_with(_command_subscriptions())
 
+    def test_same_telemetry_is_republished_after_ha_birth(self, ha_client):
+        from grobro.model.growatt_registers import HomeAssistantInputRegister
+
+        device_id = "QMN000ABC1D2E3FG"
+        state = HomeAssistantInputRegister(
+            device_id=device_id,
+            payload={"Ppv": 123},
+        )
+
+        ha_client.publish_input_register(state)
+        first_count = ha_client._client.publish.call_count
+
+        # Unchanged telemetry is normally suppressed.
+        ha_client.publish_input_register(state)
+        assert ha_client._client.publish.call_count == first_count
+
+        # HA Core restart must invalidate both telemetry caches so the same
+        # value is sent once again and HA can rebuild the entity state.
+        status = _msg("homeassistant/status", b"online")
+        ha_client._client.on_message(ha_client._client, None, status)
+        after_birth = ha_client._client.publish.call_count
+
+        ha_client.publish_input_register(state)
+        assert ha_client._client.publish.call_count > after_birth
+
     def test_read_all_works_after_ha_birth_without_broker_reconnect(self, ha_client):
         device_id = "QMN000ABC1D2E3FG"
         ha_client._read_all_active.add(device_id)
