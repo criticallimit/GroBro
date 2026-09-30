@@ -1,4 +1,4 @@
-# Better GroBro 3.1.41 — Differences from robertzaage/GroBro
+# Better GroBro 3.1.42 — Differences from robertzaage/GroBro
 
 Comparison baseline: `robertzaage/GroBro` main at `e4d59b20ba472853ae6ec0b7a17cf15cd774cb23` (2026-09-18).
 
