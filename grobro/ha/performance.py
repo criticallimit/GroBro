@@ -19,6 +19,7 @@ from grobro.ha.battery_position import (
     observe_battery_serials,
     stabilize_battery_payload,
 )
+from grobro.ha.device_inventory import observe_device
 from grobro.ha.firmware_runtime import (
     _firmware_part_names_for_device,
     _invalidate_discovery_for_firmware_change,
@@ -237,6 +238,7 @@ def install_ha_performance_hook() -> None:
         LOG.debug("HA: publish: %s", state)
         device_id = state.device_id
         state_payload = state.payload
+        observe_device(device_id)
 
         # Compose NOAH/NEXA firmware before the common telemetry path so
         # publish_input_register has one authoritative runtime wrapper.
