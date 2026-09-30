@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from functools import lru_cache
+import time
 
 from grobro.ha.supervisor_config import get_home_assistant_language
 
@@ -377,10 +377,29 @@ def normalize_language(language: str | None) -> str:
     return base if base in SUPPORTED_LANGUAGES else "en"
 
 
-@lru_cache(maxsize=1)
+_LANGUAGE_CACHE = {"value": "en", "checked_at": 0.0}
+
+
 def runtime_language() -> str:
-    """Use Home Assistant's backend language for discovery names."""
-    return normalize_language(get_home_assistant_language("en"))
+    """Use Home Assistant's backend language for discovery names.
+
+    Refresh periodically so a temporary Supervisor/Core API failure at startup
+    cannot lock the add-on to the English fallback for its entire lifetime.
+    """
+    now = time.monotonic()
+    if now - float(_LANGUAGE_CACHE["checked_at"]) < 60:
+        return str(_LANGUAGE_CACHE["value"])
+
+    language = normalize_language(get_home_assistant_language("en"))
+    _LANGUAGE_CACHE["value"] = language
+    _LANGUAGE_CACHE["checked_at"] = now
+    return language
+
+
+def reset_language_cache() -> None:
+    """Reset the runtime language cache for tests or explicit rediscovery."""
+    _LANGUAGE_CACHE["value"] = "en"
+    _LANGUAGE_CACHE["checked_at"] = 0.0
 
 
 def _replace_phrases(text: str, language: str) -> str:
