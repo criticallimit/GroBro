@@ -37,27 +37,39 @@ class TestModule:
         assert hasattr(grobro.ha_bridge, "HA_MQTT_CONFIG")
         assert hasattr(grobro.ha_bridge, "FORWARD_MQTT_CONFIG")
 
-    def test_logger_fallback_on_bad_level(self):
+    def test_logger_forces_selected_level_even_with_existing_handlers(self):
         import grobro.ha_bridge as mod
 
-        with patch.dict(
-            "os.environ",
-            {"LOG_LEVEL": "INVALID_LEVEL_THAT_IS_WAY_TOO_LONG"},
-        ):
+        with patch.dict("os.environ", {"LOG_LEVEL": "INFO"}):
             with patch.object(mod.logging, "basicConfig") as mock_basic_config:
-                mock_basic_config.side_effect = [ValueError("bad level"), None]
-                mod.configure_logging()
-                assert mock_basic_config.call_count == 2
+                with patch.object(mod.logging.getLogger(), "setLevel") as mock_set_level:
+                    level, _logger = mod.configure_logging()
 
-    def test_logger_fallback_prints_error(self, capsys):
+        assert level == "INFO"
+        mock_basic_config.assert_called_once_with(
+            level=mod.logging.INFO,
+            format=mod._LOG_FORMAT,
+            force=True,
+        )
+        mock_set_level.assert_called_once_with(mod.logging.INFO)
+
+    def test_logger_invalid_level_falls_back_to_error(self, capsys):
         import grobro.ha_bridge as mod
 
         with patch.dict("os.environ", {"LOG_LEVEL": "INVALID"}):
             with patch.object(mod.logging, "basicConfig") as mock_basic_config:
-                mock_basic_config.side_effect = [ValueError("bad level"), None]
-                mod.configure_logging()
-                captured = capsys.readouterr()
-                assert "Failed to setup logger" in captured.out
+                with patch.object(mod.logging.getLogger(), "setLevel") as mock_set_level:
+                    level, _logger = mod.configure_logging()
+
+        captured = capsys.readouterr()
+        assert "Invalid LOG_LEVEL" in captured.out
+        assert level == "ERROR"
+        mock_basic_config.assert_called_once_with(
+            level=mod.logging.ERROR,
+            format=mod._LOG_FORMAT,
+            force=True,
+        )
+        mock_set_level.assert_called_once_with(mod.logging.ERROR)
 
     def test_config_from_env_source_prefix(self):
         from grobro.ha_bridge import load_bridge_mqtt_configs
