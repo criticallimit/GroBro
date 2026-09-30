@@ -210,3 +210,37 @@ def test_get_home_assistant_language_falls_back_on_api_error(monkeypatch):
     monkeypatch.setattr(supervisor_config, "_supervisor_request", fake_request)
 
     assert supervisor_config.get_home_assistant_language() == "en"
+
+def test_current_process_logs_return_only_current_session(monkeypatch):
+    marker = supervisor_config._PROCESS_LOG_MARKER
+    raw = (
+        "2026-09-06 18:26:33 [DEBUG] old entry\n"
+        f"--- {marker} ---\n"
+        "2026-09-30 21:31:00 [ERROR] current entry\n"
+    )
+    monkeypatch.setattr(
+        supervisor_config,
+        "_supervisor_text_request",
+        lambda path: raw if path == "/addons/self/logs" else "",
+    )
+
+    result = supervisor_config.get_current_process_logs()
+
+    assert result["marker_found"] is True
+    assert "old entry" not in result["logs"]
+    assert "current entry" in result["logs"]
+    assert result["started_at"] == supervisor_config._PROCESS_STARTED_AT
+
+
+def test_current_process_logs_never_leak_old_logs_without_marker(monkeypatch):
+    monkeypatch.setattr(
+        supervisor_config,
+        "_supervisor_text_request",
+        lambda _path: "2026-09-06 18:26:33 [DEBUG] old entry\n",
+    )
+
+    result = supervisor_config.get_current_process_logs()
+
+    assert result["marker_found"] is False
+    assert result["logs"] == ""
+
