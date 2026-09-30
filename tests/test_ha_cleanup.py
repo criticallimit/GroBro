@@ -280,7 +280,11 @@ def test_config_discovery_registers_neo_in_device_inventory():
         ha_client_module.model.DeviceConfig,
         "from_file",
         return_value=None,
-    ), patch.object(config, "to_file"):
+    ), patch.object(
+        ha_client_module.model.DeviceConfig,
+        "to_file",
+        return_value=None,
+    ):
         client.set_config(device_id, config)
 
     inventory = get_device_inventory()
