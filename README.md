@@ -6,7 +6,7 @@ Better GroBro builds on [Robert Zaage's GroBro](https://github.com/robertzaage/G
 
 ---
 
-## Better GroBro 3.1.53
+## Better GroBro 3.1.54
 
 ### What Better GroBro adds
 
@@ -20,6 +20,7 @@ Better GroBro builds on [Robert Zaage's GroBro](https://github.com/robertzaage/G
 #### Better battery handling
 
 - Publishes NOAH Bat2/Bat3/Bat4 maximum and minimum cell voltages with the same Home Assistant metadata and scaling as Bat1
+- Requests three decimal places for NOAH Bat1–Bat4 cell-voltage sensors in Home Assistant so millivolt resolution is displayed consistently
 - Stable NOAH/NEXA battery identities
 - Optional manual Bat2/Bat3/Bat4 assignment by serial number
 

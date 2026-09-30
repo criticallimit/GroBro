@@ -1,9 +1,10 @@
-# Better GroBro 3.1.53 — Differences from robertzaage/GroBro
+# Better GroBro 3.1.54 — Differences from robertzaage/GroBro
 
 Comparison baseline: `robertzaage/GroBro` main at `e4d59b20ba472853ae6ec0b7a17cf15cd774cb23` (2026-09-18).
 
 ## User-relevant differences
 
+- Sets Home Assistant `suggested_display_precision` to 3 for all NOAH Bat1–Bat4 maximum/minimum cell-voltage sensors, preserving the existing 0.001 V scaling while making the displayed millivolt resolution consistent.
 - Normalizes shortened NEO identifiers seen in passive `0x0103` diagnostics (for example `BZP4N991ML`) back to the full `QMN000...` device identity while preserving the raw identifier for diagnostics.
 - Adds NOAH Battery 2/3/4 maximum and minimum cell-voltage sensors using validated register pairs 375/376, 382/383 and 389/390 with the same scaling and Home Assistant metadata as Battery 1.
 - Correctly parses Growatt Function-6 write acknowledgements, eliminating false `Invalid register block range` warnings for valid NOAH writes such as registers 252, 257 and 258.
