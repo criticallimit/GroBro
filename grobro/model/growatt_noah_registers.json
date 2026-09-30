@@ -2134,6 +2134,54 @@
         "unit_of_measurement": "V",
         "icon": "mdi:flash"
       }
+    },
+    "maxcvbat4": {
+      "growatt": {
+        "position": {
+          "register_no": 389,
+          "offset": 0,
+          "size": 2
+        },
+        "data": {
+          "data_type": "FLOAT",
+          "float_options": {
+            "delta": 0,
+            "multiplier": 0.001
+          }
+        }
+      },
+      "homeassistant": {
+        "name": "Battery 4 max. Cell Voltage",
+        "publish": true,
+        "state_class": "measurement",
+        "device_class": "voltage",
+        "unit_of_measurement": "V",
+        "icon": "mdi:flash"
+      }
+    },
+    "mincvbat4": {
+      "growatt": {
+        "position": {
+          "register_no": 390,
+          "offset": 0,
+          "size": 2
+        },
+        "data": {
+          "data_type": "FLOAT",
+          "float_options": {
+            "delta": 0,
+            "multiplier": 0.001
+          }
+        }
+      },
+      "homeassistant": {
+        "name": "Battery 4 min. Cell Voltage",
+        "publish": true,
+        "state_class": "measurement",
+        "device_class": "voltage",
+        "unit_of_measurement": "V",
+        "icon": "mdi:flash"
+      }
     }
   }
 }
