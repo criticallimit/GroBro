@@ -34,3 +34,8 @@ def test_runtime_dependencies_have_major_version_bounds():
     assert "paho-mqtt>=2.1,<3" in requirements
     assert "crc>=8,<9" in requirements
     assert "pydantic>=2.13,<3" in requirements
+
+
+def test_home_assistant_api_permission_enabled_for_language_lookup():
+    config = Path("config.yaml").read_text(encoding="utf-8")
+    assert "homeassistant_api: true" in config
