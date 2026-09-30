@@ -23,9 +23,15 @@ from grobro.model.modbus_function import (
 )
 
 HA_BASE_TOPIC = os.getenv("HA_BASE_TOPIC", "homeassistant")
-DEVICE_TIMEOUT = int(os.getenv("DEVICE_TIMEOUT", 0))
 AVAILABILITY_SENSOR = os.getenv("AVAILABILITY_SENSOR", "False").lower() == "true"
-PUBLISH_SENSORS_RETAINED = os.getenv("PUBLISH_SENSORS_RETAINED", "False").lower() == "true"
+
+
+def _effective_device_timeout(value: int) -> int:
+    """Never leave HA measurement entities indefinitely available when telemetry stops."""
+    return value if value > 0 else 120
+
+
+DEVICE_TIMEOUT = _effective_device_timeout(int(os.getenv("DEVICE_TIMEOUT", 120)))
 MAX_SLOTS = int(os.getenv("MAX_SLOTS", "1"))
 MAX_BAT_RAW = os.getenv("MAX_BAT", "auto")
 try:
@@ -340,7 +346,7 @@ class Client:
 
         # State publish
         topic = f"{HA_BASE_TOPIC}/grobro/{state.device_id}/state"
-        self._client.publish(topic, json.dumps(payload, separators=(",", ":")), retain=PUBLISH_SENSORS_RETAINED)
+        self._client.publish(topic, json.dumps(payload, separators=(",", ":")), retain=False)
 
 
     def publish_holding_register_input(self, ha_input: HomeAssistantHoldingRegisterInput):
@@ -348,7 +354,7 @@ class Client:
             LOG.debug("HA: publish: %s", ha_input)
             for value in ha_input.payload:
                 topic = f"{HA_BASE_TOPIC}/{value.register_def.type}/grobro/{ha_input.device_id}/{value.name}/get"
-                self._client.publish(topic, value.value, retain=PUBLISH_SENSORS_RETAINED)
+                self._client.publish(topic, value.value, retain=False)
         except Exception as e:
             LOG.error(f"HA: publish msg: {e}")
 
@@ -625,7 +631,7 @@ class Client:
             self._client.publish(
                 f"{HA_BASE_TOPIC}/grobro/{device_id}/online",
                 "ON" if online else "OFF",
-                retain=PUBLISH_SENSORS_RETAINED,
+                retain=True,
             )
 
     def __detect_neo_pv_count(self, device_id: str, payload: dict) -> None:

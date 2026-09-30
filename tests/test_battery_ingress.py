@@ -358,3 +358,18 @@ def test_addon_status_is_localized_for_all_supervisor_states():
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_sensor_retain_option_is_not_exposed_in_ingress_ui():
+    server = start_battery_ingress_server(0)
+    _host, port = server.server_address
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=3) as response:
+            html = response.read().decode()
+
+        assert "cfg-PUBLISH_SENSORS_RETAINED" not in html
+        assert "Sensorzustände retained" not in html
+        assert 'id="cfg-DEVICE_TIMEOUT" type="number" min="1"' in html
+    finally:
+        server.shutdown()
+        server.server_close()

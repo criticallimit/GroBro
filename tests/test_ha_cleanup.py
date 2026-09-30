@@ -352,3 +352,28 @@ def test_client_init_immediately_populates_inventory_from_persisted_config(
         ("NEO", device_id)
     ]
     clear_device_inventory()
+
+
+
+def test_recovery_marks_known_devices_offline_until_fresh_telemetry():
+    install_ha_cleanup_hook()
+
+    class FakeMqtt:
+        def __init__(self):
+            self.published = []
+
+        def publish(self, topic, payload=None, *args, **kwargs):
+            self.published.append((topic, payload, kwargs))
+            return SimpleNamespace()
+
+    client = object.__new__(ha_client_module.Client)
+    _initialize_instance_state(client)
+    client._client = FakeMqtt()
+    client._config_cache = {"QMNTEST0000001": object()}
+    client._Client__recover_after_home_assistant_restart(None)
+
+    assert (
+        "homeassistant/grobro/QMNTEST0000001/availability",
+        "offline",
+        {"retain": True},
+    ) in client._client.published

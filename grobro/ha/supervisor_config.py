@@ -32,7 +32,6 @@ _ALLOWED_OPTIONS = {
     "REGISTER_DEBUG_DIR",
     "REGISTER_DEBUG_MAX_REGISTER",
     "REGISTER_DEBUG_CHANGES_ONLY",
-    "PUBLISH_SENSORS_RETAINED",
     "DEVICE_TIMEOUT",
     "MAX_SLOTS",
     "MAX_BAT",
@@ -41,6 +40,7 @@ _ALLOWED_OPTIONS = {
     "TZ",
     "KEEP_BATTERY_POSITION",
 }
+_RETIRED_OPTIONS = {"PUBLISH_SENSORS_RETAINED"}
 _DEFAULTS = {
     "SOURCE_MQTT_HOST": "homeassistant.local",
     "SOURCE_MQTT_PORT": 7006,
@@ -63,8 +63,7 @@ _DEFAULTS = {
     "REGISTER_DEBUG_DIR": "/share/GroBro/register_debug",
     "REGISTER_DEBUG_MAX_REGISTER": 65535,
     "REGISTER_DEBUG_CHANGES_ONLY": True,
-    "PUBLISH_SENSORS_RETAINED": False,
-    "DEVICE_TIMEOUT": 0,
+    "DEVICE_TIMEOUT": 120,
     "MAX_SLOTS": 1,
     "MAX_BAT": "auto",
     "AVAILABILITY_SENSOR": False,
@@ -212,7 +211,15 @@ def get_addon_options() -> dict:
     raw_options = info.get("options", {}) if isinstance(info, dict) else {}
     options = dict(_DEFAULTS)
     if isinstance(raw_options, dict):
-        options.update(raw_options)
+        options.update(
+            {
+                key: value
+                for key, value in raw_options.items()
+                if key not in _RETIRED_OPTIONS
+            }
+        )
+    if int(options.get("DEVICE_TIMEOUT", 120) or 0) <= 0:
+        options["DEVICE_TIMEOUT"] = 120
     return {
         "options": options,
         "version": info.get("version") if isinstance(info, dict) else None,
@@ -229,7 +236,11 @@ def save_addon_options(raw_changes: dict) -> dict:
     if not isinstance(current, dict):
         current = {}
 
-    merged = dict(current)
+    merged = {
+        key: value
+        for key, value in current.items()
+        if key not in _RETIRED_OPTIONS
+    }
     merged.update(changes)
 
     validation = _supervisor_request(

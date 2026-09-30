@@ -6,7 +6,7 @@ Better GroBro builds on [Robert Zaage's GroBro](https://github.com/robertzaage/G
 
 ---
 
-## Better GroBro 3.1.40
+## Better GroBro 3.1.41
 
 ### What Better GroBro adds
 
@@ -24,6 +24,7 @@ Better GroBro builds on [Robert Zaage's GroBro](https://github.com/robertzaage/G
 #### More reliable operation
 
 - Improved recovery after Home Assistant, MQTT or add-on restarts
+- Stale measurement values become unavailable when telemetry stops, while entities remain in Home Assistant
 - Lower unnecessary MQTT traffic without suppressing real value changes
 - Improved NOAH/NEXA handling, clock synchronization and optional diagnostics
 

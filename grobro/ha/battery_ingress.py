@@ -136,10 +136,9 @@ _INDEX_HTML = r"""<!doctype html>
         <div class="field"><label>Stabile Batteriepositionen</label><div class="check"><input id="cfg-KEEP_BATTERY_POSITION" type="checkbox">NOAH/NEXA per Seriennummer stabil halten</div></div>
         <div class="field"><label for="cfg-MAX_BAT">Maximale Batterieanzahl</label><select id="cfg-MAX_BAT"><option value="auto">Automatisch</option><option>1</option><option>2</option><option>3</option><option>4</option></select></div>
         <div class="field"><label for="cfg-MAX_SLOTS">Zeitfenster</label><select id="cfg-MAX_SLOTS"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option></select><div class="help">Anzahl der Batterie-Zeitfenster in Home Assistant.</div></div>
-        <div class="field"><label for="cfg-DEVICE_TIMEOUT">Geräte-Timeout (Sekunden)</label><input id="cfg-DEVICE_TIMEOUT" type="number" min="0" step="1"><div class="help">0 deaktiviert den Timeout.</div></div>
+        <div class="field"><label for="cfg-DEVICE_TIMEOUT">Geräte-Timeout (Sekunden)</label><input id="cfg-DEVICE_TIMEOUT" type="number" min="1" step="1"><div class="help">Nach dieser Zeit ohne Telemetrie werden die Entities unavailable, bleiben aber in Home Assistant erhalten.</div></div>
         <div class="field"><label>Availability-Sensor</label><div class="check"><input id="cfg-AVAILABILITY_SENSOR" type="checkbox">Zusätzlichen Online-Sensor erzeugen</div></div>
         <div class="field"><label>Messwertsprünge filtern</label><div class="check"><input id="cfg-FILTER_DATA_GLITCHES" type="checkbox">Rücksprünge bei total_increasing unterdrücken</div></div>
-        <div class="field"><label>Sensorzustände retained</label><div class="check"><input id="cfg-PUBLISH_SENSORS_RETAINED" type="checkbox">MQTT retain für Sensorzustände verwenden</div></div>
         <div class="field"><label for="cfg-HA_BASE_TOPIC">HA Basis-Topic</label><input id="cfg-HA_BASE_TOPIC" type="text"></div>
         <div class="field"><label for="cfg-MQTT_CLIENT_SUFFIX">MQTT Client-Suffix</label><input id="cfg-MQTT_CLIENT_SUFFIX" type="text"></div>
         <div class="field"><label for="cfg-TZ">Zeitzone</label><input id="cfg-TZ" type="text" placeholder="leer = Home Assistant übernehmen"></div>
@@ -216,10 +215,10 @@ const TEXTS={
     "Zurück":"Back","Batterie-Zuordnung speichern":"Save battery assignment","Stabile Batteriepositionen":"Stable battery positions",
     "NOAH/NEXA per Seriennummer stabil halten":"Keep NOAH/NEXA stable by serial number","Maximale Batterieanzahl":"Maximum battery count",
     "Automatisch":"Automatic","Zeitfenster":"Time slots","Anzahl der Batterie-Zeitfenster in Home Assistant.":"Number of battery scheduling slots in Home Assistant.",
-    "Geräte-Timeout (Sekunden)":"Device timeout (seconds)","0 deaktiviert den Timeout.":"0 disables the timeout.",
+    "Geräte-Timeout (Sekunden)":"Device timeout (seconds)","Nach dieser Zeit ohne Telemetrie werden die Entities unavailable, bleiben aber in Home Assistant erhalten.":"After this time without telemetry, entities become unavailable but remain in Home Assistant.",
     "Availability-Sensor":"Availability sensor","Zusätzlichen Online-Sensor erzeugen":"Create an additional online sensor",
     "Messwertsprünge filtern":"Filter data glitches","Rücksprünge bei total_increasing unterdrücken":"Suppress decreases in total_increasing values",
-    "Sensorzustände retained":"Retained sensor states","MQTT retain für Sensorzustände verwenden":"Use MQTT retain for sensor states",
+    
     "HA Basis-Topic":"HA base topic","MQTT Client-Suffix":"MQTT client suffix","Zeitzone":"Timezone",
     "Growatt / Quell-MQTT":"Growatt / source MQTT","Host":"Host","Port":"Port","Benutzername":"Username","Passwort":"Password",
     "TLS aktivieren":"Enable TLS","Home Assistant / Ziel-MQTT":"Home Assistant / target MQTT","Cloud-Weiterleitung":"Cloud forwarding",
@@ -241,10 +240,10 @@ const TEXTS={
     "Zurück":"Retour","Batterie-Zuordnung speichern":"Enregistrer l'affectation","Stabile Batteriepositionen":"Positions de batterie stables",
     "NOAH/NEXA per Seriennummer stabil halten":"Maintenir NOAH/NEXA stables par numéro de série","Maximale Batterieanzahl":"Nombre maximal de batteries",
     "Automatisch":"Automatique","Zeitfenster":"Créneaux horaires","Anzahl der Batterie-Zeitfenster in Home Assistant.":"Nombre de créneaux de batterie dans Home Assistant.",
-    "Geräte-Timeout (Sekunden)":"Délai de l'appareil (secondes)","0 deaktiviert den Timeout.":"0 désactive le délai.",
+    "Geräte-Timeout (Sekunden)":"Délai de l'appareil (secondes)","Nach dieser Zeit ohne Telemetrie werden die Entities unavailable, bleiben aber in Home Assistant erhalten.":"Après ce délai sans télémétrie, les entités deviennent indisponibles mais restent dans Home Assistant.",
     "Availability-Sensor":"Capteur de disponibilité","Zusätzlichen Online-Sensor erzeugen":"Créer un capteur en ligne supplémentaire",
     "Messwertsprünge filtern":"Filtrer les anomalies","Rücksprünge bei total_increasing unterdrücken":"Supprimer les diminutions de total_increasing",
-    "Sensorzustände retained":"États capteurs retained","MQTT retain für Sensorzustände verwenden":"Utiliser MQTT retain pour les états",
+    
     "HA Basis-Topic":"Topic de base HA","MQTT Client-Suffix":"Suffixe client MQTT","Zeitzone":"Fuseau horaire",
     "Growatt / Quell-MQTT":"Growatt / MQTT source","Host":"Hôte","Port":"Port","Benutzername":"Nom d'utilisateur","Passwort":"Mot de passe",
     "TLS aktivieren":"Activer TLS","Home Assistant / Ziel-MQTT":"Home Assistant / MQTT cible","Cloud-Weiterleitung":"Transfert cloud",
@@ -266,10 +265,9 @@ const TEXTS={
     "Zurück":"Volver","Batterie-Zuordnung speichern":"Guardar asignación","Stabile Batteriepositionen":"Posiciones estables de batería",
     "NOAH/NEXA per Seriennummer stabil halten":"Mantener NOAH/NEXA estables por número de serie","Maximale Batterieanzahl":"Número máximo de baterías",
     "Automatisch":"Automático","Zeitfenster":"Franjas horarias","Anzahl der Batterie-Zeitfenster in Home Assistant.":"Número de franjas de batería en Home Assistant.",
-    "Geräte-Timeout (Sekunden)":"Tiempo de espera del dispositivo (segundos)","0 deaktiviert den Timeout.":"0 desactiva el tiempo de espera.",
+    "Geräte-Timeout (Sekunden)":"Tiempo de espera del dispositivo (segundos)","Nach dieser Zeit ohne Telemetrie werden die Entities unavailable, bleiben aber in Home Assistant erhalten.":"Tras este tiempo sin telemetría, las entidades pasan a no disponibles pero permanecen en Home Assistant.",
     "Availability-Sensor":"Sensor de disponibilidad","Zusätzlichen Online-Sensor erzeugen":"Crear un sensor en línea adicional",
     "Messwertsprünge filtern":"Filtrar anomalías","Rücksprünge bei total_increasing unterdrücken":"Suprimir descensos en total_increasing",
-    "Sensorzustände retained":"Estados retained","MQTT retain für Sensorzustände verwenden":"Usar MQTT retain para estados",
     "HA Basis-Topic":"Topic base de HA","MQTT Client-Suffix":"Sufijo de cliente MQTT","Zeitzone":"Zona horaria",
     "Growatt / Quell-MQTT":"Growatt / MQTT origen","Host":"Host","Port":"Puerto","Benutzername":"Usuario","Passwort":"Contraseña",
     "TLS aktivieren":"Activar TLS","Home Assistant / Ziel-MQTT":"Home Assistant / MQTT destino","Cloud-Weiterleitung":"Reenvío a la nube",
@@ -328,10 +326,10 @@ const CONFIG_KEYS=[
 "TARGET_MQTT_HOST","TARGET_MQTT_PORT","TARGET_MQTT_TLS","TARGET_MQTT_USER","TARGET_MQTT_PASS",
 "MQTT_CLIENT_SUFFIX","HA_BASE_TOPIC","GROWATT_CLOUD","GROWATT_CLOUD_CONFIG_FILTER","LOG_LEVEL",
 "DUMP_MESSAGES","DUMP_DIR","REGISTER_DEBUG","REGISTER_DEBUG_DIR","REGISTER_DEBUG_MAX_REGISTER",
-"REGISTER_DEBUG_CHANGES_ONLY","PUBLISH_SENSORS_RETAINED","DEVICE_TIMEOUT","MAX_SLOTS","MAX_BAT",
+"REGISTER_DEBUG_CHANGES_ONLY","DEVICE_TIMEOUT","MAX_SLOTS","MAX_BAT",
 "AVAILABILITY_SENSOR","FILTER_DATA_GLITCHES","TZ","KEEP_BATTERY_POSITION"];
 const BOOL_KEYS=new Set(["SOURCE_MQTT_TLS","TARGET_MQTT_TLS","GROWATT_CLOUD","GROWATT_CLOUD_CONFIG_FILTER",
-"DUMP_MESSAGES","REGISTER_DEBUG","REGISTER_DEBUG_CHANGES_ONLY","PUBLISH_SENSORS_RETAINED",
+"DUMP_MESSAGES","REGISTER_DEBUG","REGISTER_DEBUG_CHANGES_ONLY",
 "AVAILABILITY_SENSOR","FILTER_DATA_GLITCHES","KEEP_BATTERY_POSITION"]);
 const INT_KEYS=new Set(["SOURCE_MQTT_PORT","TARGET_MQTT_PORT","REGISTER_DEBUG_MAX_REGISTER","DEVICE_TIMEOUT","MAX_SLOTS"]);
 
