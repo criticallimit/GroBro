@@ -480,3 +480,22 @@ def test_ingress_logs_api_returns_current_process_only(monkeypatch):
         server.shutdown()
         server.server_close()
 
+
+
+def test_log_viewer_preserves_manual_scroll_position():
+    server = start_battery_ingress_server(0)
+    _host, port = server.server_address
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=3) as response:
+            html = response.read().decode()
+
+        assert "const previousScrollTop=output.scrollTop;" in html
+        assert (
+            "output.scrollTop=Math.min(previousScrollTop,"
+            "Math.max(0,output.scrollHeight-output.clientHeight));"
+        ) in html
+        assert "if(wasNearBottom){" in html
+        assert "output.scrollTop=output.scrollHeight;" in html
+    finally:
+        server.shutdown()
+        server.server_close()
