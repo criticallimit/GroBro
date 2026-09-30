@@ -113,6 +113,14 @@ _INDEX_HTML = r"""<!doctype html>
 
   <section id="tab-batteries" class="tab">
     <div class="card">
+      <h2>Batterie-Einstellungen</h2>
+      <div class="grid">
+        <div class="field"><label>Stabile Batteriepositionen</label><div class="check"><input id="cfg-KEEP_BATTERY_POSITION" type="checkbox">NOAH/NEXA per Seriennummer stabil halten</div></div>
+        <div class="field"><label for="cfg-MAX_BAT">Maximale Batterieanzahl</label><select id="cfg-MAX_BAT"><option value="auto">Automatisch</option><option>1</option><option>2</option><option>3</option><option>4</option></select></div>
+      </div>
+      <div class="actions config-actions"></div>
+    </div>
+    <div class="card">
       <h2>Batterie-Zuordnung</h2>
       <div class="grid">
         <div class="field full">
@@ -133,8 +141,6 @@ _INDEX_HTML = r"""<!doctype html>
     <div class="card">
       <h2>Home Assistant</h2>
       <div class="grid">
-        <div class="field"><label>Stabile Batteriepositionen</label><div class="check"><input id="cfg-KEEP_BATTERY_POSITION" type="checkbox">NOAH/NEXA per Seriennummer stabil halten</div></div>
-        <div class="field"><label for="cfg-MAX_BAT">Maximale Batterieanzahl</label><select id="cfg-MAX_BAT"><option value="auto">Automatisch</option><option>1</option><option>2</option><option>3</option><option>4</option></select></div>
         <div class="field"><label for="cfg-MAX_SLOTS">Zeitfenster</label><select id="cfg-MAX_SLOTS"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option></select><div class="help">Anzahl der Batterie-Zeitfenster in Home Assistant.</div></div>
         <div class="field"><label for="cfg-DEVICE_TIMEOUT">Geräte-Timeout (Sekunden)</label><input id="cfg-DEVICE_TIMEOUT" type="number" min="1" step="1"><div class="help">Nach dieser Zeit ohne Telemetrie werden die Entities unavailable, bleiben aber in Home Assistant erhalten.</div></div>
         <div class="field"><label>Availability-Sensor</label><div class="check"><input id="cfg-AVAILABILITY_SENSOR" type="checkbox">Zusätzlichen Online-Sensor erzeugen</div></div>
@@ -210,7 +216,7 @@ const TEXTS={
     "Erkannte Geräte":"Detected devices","Empfohlene Konfiguration":"Recommended configuration",
     "Verwende bevorzugt diese Better-GroBro-Oberfläche. Sie bearbeitet direkt die offiziellen Home-Assistant-Add-on-Optionen; der native Konfiguration-Tab bleibt als Fallback verfügbar und verwendet dieselben Werte.":"Prefer this Better GroBro interface. It edits the official Home Assistant add-on options directly; the native Configuration tab remains available as a fallback and uses the same values.",
     "Änderungen an Better-GroBro-Optionen werden beim Start geladen. Verwende daher nach Änderungen vorzugsweise":"Changes to Better GroBro options are loaded at startup. After changing options, preferably use",
-    "Speichern & Better GroBro neu starten":"Save & restart Better GroBro","Batterie-Zuordnung":"Battery assignment","Bat1 (Master)":"Bat1 (Master)",
+    "Speichern & Better GroBro neu starten":"Save & restart Better GroBro","Batterie-Einstellungen":"Battery settings","Batterie-Zuordnung":"Battery assignment","Bat1 (Master)":"Bat1 (Master)",
     "Zurück":"Back","Batterie-Zuordnung speichern":"Save battery assignment","Stabile Batteriepositionen":"Stable battery positions",
     "NOAH/NEXA per Seriennummer stabil halten":"Keep NOAH/NEXA stable by serial number","Maximale Batterieanzahl":"Maximum battery count",
     "Automatisch":"Automatic","Zeitfenster":"Time slots","Anzahl der Batterie-Zeitfenster in Home Assistant.":"Number of battery scheduling slots in Home Assistant.",
@@ -234,7 +240,7 @@ const TEXTS={
     "Erkannte Geräte":"Appareils détectés","Empfohlene Konfiguration":"Configuration recommandée",
     "Verwende bevorzugt diese Better-GroBro-Oberfläche. Sie bearbeitet direkt die offiziellen Home-Assistant-Add-on-Optionen; der native Konfiguration-Tab bleibt als Fallback verfügbar und verwendet dieselben Werte.":"Utilisez de préférence cette interface Better GroBro. Elle modifie directement les options officielles de l'add-on Home Assistant ; l'onglet Configuration natif reste disponible comme solution de secours et utilise les mêmes valeurs.",
     "Änderungen an Better-GroBro-Optionen werden beim Start geladen. Verwende daher nach Änderungen vorzugsweise":"Les modifications des options Better GroBro sont chargées au démarrage. Après une modification, utilisez de préférence",
-    "Speichern & Better GroBro neu starten":"Enregistrer et redémarrer Better GroBro","Batterie-Zuordnung":"Affectation des batteries","Bat1 (Master)":"Bat1 (Master)",
+    "Speichern & Better GroBro neu starten":"Enregistrer et redémarrer Better GroBro","Batterie-Einstellungen":"Paramètres de batterie","Batterie-Zuordnung":"Affectation des batteries","Bat1 (Master)":"Bat1 (Master)",
     "Zurück":"Retour","Batterie-Zuordnung speichern":"Enregistrer l'affectation","Stabile Batteriepositionen":"Positions de batterie stables",
     "NOAH/NEXA per Seriennummer stabil halten":"Maintenir NOAH/NEXA stables par numéro de série","Maximale Batterieanzahl":"Nombre maximal de batteries",
     "Automatisch":"Automatique","Zeitfenster":"Créneaux horaires","Anzahl der Batterie-Zeitfenster in Home Assistant.":"Nombre de créneaux de batterie dans Home Assistant.",
@@ -258,7 +264,7 @@ const TEXTS={
     "Erkannte Geräte":"Dispositivos detectados","Empfohlene Konfiguration":"Configuración recomendada",
     "Verwende bevorzugt diese Better-GroBro-Oberfläche. Sie bearbeitet direkt die offiziellen Home-Assistant-Add-on-Optionen; der native Konfiguration-Tab bleibt als Fallback verfügbar und verwendet dieselben Werte.":"Use preferentemente esta interfaz de Better GroBro. Edita directamente las opciones oficiales del complemento de Home Assistant; la pestaña Configuración nativa permanece disponible como respaldo y utiliza los mismos valores.",
     "Änderungen an Better-GroBro-Optionen werden beim Start geladen. Verwende daher nach Änderungen vorzugsweise":"Los cambios de Better GroBro se cargan al iniciar. Después de cambiar opciones, use preferiblemente",
-    "Speichern & Better GroBro neu starten":"Guardar y reiniciar Better GroBro","Batterie-Zuordnung":"Asignación de baterías","Bat1 (Master)":"Bat1 (Master)",
+    "Speichern & Better GroBro neu starten":"Guardar y reiniciar Better GroBro","Batterie-Einstellungen":"Ajustes de batería","Batterie-Zuordnung":"Asignación de baterías","Bat1 (Master)":"Bat1 (Master)",
     "Zurück":"Volver","Batterie-Zuordnung speichern":"Guardar asignación","Stabile Batteriepositionen":"Posiciones estables de batería",
     "NOAH/NEXA per Seriennummer stabil halten":"Mantener NOAH/NEXA estables por número de serie","Maximale Batterieanzahl":"Número máximo de baterías",
     "Automatisch":"Automático","Zeitfenster":"Franjas horarias","Anzahl der Batterie-Zeitfenster in Home Assistant.":"Número de franjas de batería en Home Assistant.",
@@ -281,7 +287,7 @@ const TEXTS={
     "Erkannte Geräte":"Gedetecteerde apparaten","Empfohlene Konfiguration":"Aanbevolen configuratie",
     "Verwende bevorzugt diese Better-GroBro-Oberfläche. Sie bearbeitet direkt die offiziellen Home-Assistant-Add-on-Optionen; der native Konfiguration-Tab bleibt als Fallback verfügbar und verwendet dieselben Werte.":"Gebruik bij voorkeur deze Better GroBro-interface. Deze bewerkt rechtstreeks de officiële Home Assistant add-onopties; het native tabblad Configuratie blijft als fallback beschikbaar en gebruikt dezelfde waarden.",
     "Änderungen an Better-GroBro-Optionen werden beim Start geladen. Verwende daher nach Änderungen vorzugsweise":"Wijzigingen in Better GroBro-opties worden bij het starten geladen. Gebruik daarom na wijzigingen bij voorkeur",
-    "Speichern & Better GroBro neu starten":"Opslaan en Better GroBro herstarten","Batterie-Zuordnung":"Batterijtoewijzing","Bat1 (Master)":"Bat1 (Master)",
+    "Speichern & Better GroBro neu starten":"Opslaan en Better GroBro herstarten","Batterie-Einstellungen":"Batterij-instellingen","Batterie-Zuordnung":"Batterijtoewijzing","Bat1 (Master)":"Bat1 (Master)",
     "Zurück":"Terug","Batterie-Zuordnung speichern":"Batterijtoewijzing opslaan","Stabile Batteriepositionen":"Stabiele batterijposities",
     "NOAH/NEXA per Seriennummer stabil halten":"NOAH/NEXA per serienummer op een vaste positie houden","Maximale Batterieanzahl":"Maximaal aantal batterijen",
     "Automatisch":"Automatisch","Zeitfenster":"Tijdsloten","Anzahl der Batterie-Zeitfenster in Home Assistant.":"Aantal batterij-tijdsloten in Home Assistant.",
