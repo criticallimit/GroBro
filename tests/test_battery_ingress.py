@@ -282,6 +282,30 @@ def test_restart_button_explicitly_names_better_grobro():
         assert "Save & restart Better GroBro" in html
         assert "Enregistrer et redémarrer Better GroBro" in html
         assert "Guardar y reiniciar Better GroBro" in html
+        assert "Opslaan en Better GroBro herstarten" in html
+        assert "Nur speichern" not in html
+        assert "Save only" not in html
+        assert "Enregistrer seulement" not in html
+        assert "Solo guardar" not in html
+        assert "Alleen opslaan" not in html
+        assert "saveConfig(false)" not in html
+        assert 'host.append(restart);' in html
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_config_save_always_restarts_addon():
+    server = start_battery_ingress_server(0)
+    _host, port = server.server_address
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=3) as response:
+            html = response.read().decode()
+
+        assert 'body:JSON.stringify({options:collectConfig()})' in html
+        assert 'saveConfig(false)' not in html
+        assert 'saveConfig(true)' not in html
+        assert 'schedule_restart()' not in html
     finally:
         server.shutdown()
         server.server_close()
