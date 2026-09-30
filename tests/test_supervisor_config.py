@@ -113,3 +113,14 @@ def test_save_addon_options_stops_on_supervisor_validation_failure(monkeypatch):
 
     with pytest.raises(supervisor_config.SupervisorConfigError, match="bad config"):
         supervisor_config.save_addon_options({"MAX_SLOTS": 2})
+
+
+def test_all_ingress_configuration_options_are_normalized():
+    options = dict(supervisor_config._DEFAULTS)
+
+    normalized = supervisor_config.normalize_options(options)
+
+    assert set(normalized) == set(supervisor_config._ALLOWED_OPTIONS)
+    assert normalized["SOURCE_MQTT_PORT"] == 7006
+    assert normalized["MAX_BAT"] == "auto"
+    assert normalized["KEEP_BATTERY_POSITION"] is False
