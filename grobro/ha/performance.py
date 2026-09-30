@@ -283,7 +283,7 @@ def install_ha_performance_hook() -> None:
             rules,
         )
 
-        if rules[4]:
+        if rules[3]:
             expose_combined_battery_serials = ha_client_module.model.is_family(
                 device_id,
                 "noah",
