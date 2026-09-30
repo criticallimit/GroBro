@@ -9,6 +9,8 @@ def test_noah_bat2_bat3_cell_voltage_registers_are_published_like_bat1():
         "mincvbat2": (376, "Battery 2 min. Cell Voltage"),
         "maxcvbat3": (382, "Battery 3 max. Cell Voltage"),
         "mincvbat3": (383, "Battery 3 min. Cell Voltage"),
+        "maxcvbat4": (389, "Battery 4 max. Cell Voltage"),
+        "mincvbat4": (390, "Battery 4 min. Cell Voltage"),
     }
 
     for name, (register_no, display_name) in expected.items():
