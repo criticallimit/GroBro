@@ -341,7 +341,7 @@ def install_ha_performance_hook() -> None:
         self._client.publish(
             topic,
             payload_json,
-            retain=ha_client_module.PUBLISH_SENSORS_RETAINED,
+            retain=False,
         )
 
         # Best-effort initial NEO inverter-power read. This used to be another
