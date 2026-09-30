@@ -397,3 +397,38 @@ def test_all_current_slot_specific_noah_and_nexa_register_names_are_remappable()
 
     for name, expected_slot in current_slot_registers.items():
         assert _logical_slot_from_key(name) == expected_slot
+
+def test_expected_battery_remap_is_debug_not_warning(tmp_path, monkeypatch, caplog):
+    monkeypatch.chdir(tmp_path)
+    client = SimpleNamespace()
+
+    stabilize_battery_payload(
+        client,
+        "0PVPTEST",
+        _payload(
+            slot2_serial="SN00200000000001",
+            slot3_serial="SN00300000000002",
+        ),
+    )
+
+    caplog.clear()
+    remapped, logical_max = stabilize_battery_payload(
+        client,
+        "0PVPTEST",
+        _payload(
+            slot2_serial="SN00300000000002",
+            slot3_serial="SN00200000000001",
+            bat2_temp=31.0,
+            bat3_temp=22.0,
+        ),
+    )
+
+    assert logical_max == 3
+    assert remapped["bat2_temp"] == 22.0
+    assert remapped["bat3_temp"] == 31.0
+    assert not any(
+        record.levelname == "WARNING"
+        and "kept at stable" in record.getMessage()
+        for record in caplog.records
+    )
+
