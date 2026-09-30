@@ -45,7 +45,7 @@ _BAT_SERIAL_GROUPS = (
 def _register_rules(known_registers):
     """Cache static per-register HA rules for one immutable runtime register map."""
     if known_registers is None:
-        return {}, frozenset(), frozenset(), frozenset(), False
+        return {}, frozenset(), frozenset(), False
 
     cache_key = id(known_registers)
     cached = _REGISTER_RULES_CACHE.get(cache_key)
