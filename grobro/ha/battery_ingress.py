@@ -16,6 +16,12 @@ from grobro.ha.battery_position import (
     load_battery_ui_state,
     save_manual_assignments,
 )
+from grobro.ha.supervisor_config import (
+    SupervisorConfigError,
+    get_addon_options,
+    save_addon_options,
+    schedule_restart,
+)
 
 LOG = logging.getLogger(__name__)
 INGRESS_PORT = int(os.getenv("INGRESS_PORT", "8099"))
@@ -26,349 +32,260 @@ _INDEX_HTML = r"""<!doctype html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Better GroBro – Batterie-Zuordnung</title>
+  <title>Better GroBro</title>
   <style>
     :root {
       color-scheme: light dark;
-      --bg: #101418;
-      --card: #1c2228;
-      --border: #343b43;
-      --text: #e8eaed;
-      --muted: #aeb6bf;
-      --accent: #03a9f4;
-      --danger: #ff6b6b;
-      --ok: #62c96b;
-      --secondary: #2a3138;
+      --bg:#101418; --card:#1c2228; --border:#343b43; --text:#e8eaed;
+      --muted:#aeb6bf; --accent:#03a9f4; --danger:#ff6b6b; --ok:#62c96b;
+      --secondary:#2a3138; --warning:#c58b16;
     }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font: 14px/1.45 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: var(--bg);
-      color: var(--text);
-    }
-    main { max-width: 980px; margin: 0 auto; padding: 24px; }
-    h1 { margin: 0 0 6px; font-size: 26px; }
-    h2 { margin: 0 0 16px; font-size: 18px; }
-    p { margin: 0; }
-    .muted { color: var(--muted); }
-    .card {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 18px;
-      margin-top: 18px;
-    }
-    .row {
-      display: grid;
-      grid-template-columns: minmax(180px, 1fr) minmax(280px, 1.4fr);
-      gap: 18px;
-      align-items: center;
-      padding: 12px 0;
-      border-top: 1px solid var(--border);
-    }
-    .row:first-of-type { border-top: 0; }
-    label { font-weight: 600; }
-    select, button {
-      width: 100%;
-      min-height: 42px;
-      border-radius: 8px;
-      border: 1px solid var(--border);
-      background: #151a1f;
-      color: var(--text);
-      padding: 8px 12px;
-      font: inherit;
-    }
-    button {
-      width: auto;
-      min-width: 130px;
-      cursor: pointer;
-      background: var(--accent);
-      color: #00131d;
-      border-color: transparent;
-      font-weight: 700;
-    }
-    button.secondary {
-      background: var(--secondary);
-      color: var(--text);
-      border-color: var(--border);
-    }
-    button:disabled { opacity: .55; cursor: default; }
-    .page-toolbar {
-      display: flex;
-      justify-content: space-between;
-      gap: 12px;
-      align-items: center;
-      flex-wrap: wrap;
-      margin-bottom: 8px;
-    }
-    .toolbar { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; }
-    .toolbar > div { min-width: 280px; flex: 1; }
-    .status {
-      margin-top: 14px;
-      border-radius: 8px;
-      padding: 10px 12px;
-      border: 1px solid var(--border);
-    }
-    .status.ok { border-color: var(--ok); }
-    .status.error { border-color: var(--danger); color: #ffd2d2; }
-    .warning {
-      border-color: #c58b16;
-      background: #2a2417;
-    }
-    .serials {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      margin-top: 10px;
-    }
-    .chip {
-      border: 1px solid var(--border);
-      border-radius: 999px;
-      padding: 5px 9px;
-      color: var(--muted);
-    }
-    .right {
-      display: flex;
-      justify-content: flex-end;
-      margin-top: 16px;
-      gap: 12px;
-      flex-wrap: wrap;
-    }
-    .small-note {
-      margin-top: 10px;
-      font-size: 12px;
-      color: var(--muted);
-    }
-    @media (max-width: 700px) {
-      main { padding: 16px; }
-      .row { grid-template-columns: 1fr; gap: 8px; }
-      .toolbar > div { min-width: 100%; }
-      button { width: 100%; }
-      .page-toolbar { flex-direction: column; align-items: stretch; }
-      .right { justify-content: stretch; }
+    * { box-sizing:border-box; }
+    body { margin:0; font:14px/1.45 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:var(--bg); color:var(--text); }
+    main { max-width:1100px; margin:0 auto; padding:22px; }
+    h1 { margin:0 0 4px; font-size:26px; } h2 { margin:0 0 14px; font-size:19px; } h3 { margin:18px 0 10px; font-size:15px; }
+    p { margin:0; } .muted { color:var(--muted); }
+    .header { display:flex; justify-content:space-between; align-items:center; gap:14px; flex-wrap:wrap; }
+    .tabs { display:flex; gap:6px; flex-wrap:wrap; margin:18px 0; padding-bottom:10px; border-bottom:1px solid var(--border); }
+    .tabs button { min-width:0; }
+    .tabs button.active { background:var(--accent); color:#00131d; border-color:transparent; }
+    .tab { display:none; } .tab.active { display:block; }
+    .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:18px; margin-top:14px; }
+    .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px 18px; }
+    .field { min-width:0; } .field.full { grid-column:1/-1; }
+    label { display:block; font-weight:600; margin-bottom:5px; }
+    .help { color:var(--muted); font-size:12px; margin-top:4px; }
+    input, select, button { min-height:42px; border-radius:8px; border:1px solid var(--border); background:#151a1f; color:var(--text); padding:8px 11px; font:inherit; }
+    input,select { width:100%; } input[type="checkbox"] { width:auto; min-height:auto; transform:scale(1.15); margin-right:8px; }
+    .check { display:flex; align-items:center; min-height:42px; }
+    button { cursor:pointer; background:var(--accent); color:#00131d; border-color:transparent; font-weight:700; }
+    button.secondary { background:var(--secondary); color:var(--text); border-color:var(--border); }
+    button:disabled { opacity:.55; cursor:default; }
+    .actions { display:flex; justify-content:flex-end; gap:10px; flex-wrap:wrap; margin-top:18px; }
+    .status { margin-top:14px; border-radius:8px; padding:10px 12px; border:1px solid var(--border); }
+    .status.ok { border-color:var(--ok); } .status.error { border-color:var(--danger); color:#ffd2d2; }
+    .status.warning { border-color:var(--warning); background:#2a2417; }
+    .serials { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+    .chip { border:1px solid var(--border); border-radius:999px; padding:5px 9px; color:var(--muted); }
+    .battery-row { display:grid; grid-template-columns:minmax(180px,1fr) minmax(280px,1.4fr); gap:18px; align-items:center; padding:12px 0; border-top:1px solid var(--border); }
+    .battery-row:first-of-type { border-top:0; }
+    .summary { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
+    .metric { background:#151a1f; border:1px solid var(--border); border-radius:10px; padding:14px; }
+    .metric strong { display:block; font-size:20px; margin-top:4px; }
+    .section-note { margin-top:12px; color:var(--muted); font-size:12px; }
+    @media (max-width:760px) {
+      main{padding:15px}.grid,.summary,.battery-row{grid-template-columns:1fr}.actions button,.header button{width:100%}
     }
   </style>
 </head>
 <body>
 <main>
-  <div class="page-toolbar">
+  <div class="header">
     <div>
       <h1>Better GroBro</h1>
-      <p class="muted">Manuelle Batterie-Zuordnung für NOAH und NEXA</p>
+      <p class="muted">Konfiguration und Batterie-Zuordnung</p>
     </div>
     <button id="back-top" type="button" class="secondary">Zurück zum Add-on</button>
   </div>
 
-  <section class="card">
-    <div class="toolbar">
-      <div>
-        <label for="device">Gerät</label>
-        <select id="device"></select>
-      </div>
-      <button id="refresh" type="button">Aktualisieren</button>
+  <nav class="tabs">
+    <button type="button" class="secondary active" data-tab="overview">Übersicht</button>
+    <button type="button" class="secondary" data-tab="batteries">Batterien</button>
+    <button type="button" class="secondary" data-tab="ha">Home Assistant</button>
+    <button type="button" class="secondary" data-tab="mqtt">MQTT</button>
+    <button type="button" class="secondary" data-tab="cloud">Growatt Cloud</button>
+    <button type="button" class="secondary" data-tab="diagnostics">Diagnose</button>
+  </nav>
+
+  <section id="tab-overview" class="tab active">
+    <div class="summary">
+      <div class="metric"><span class="muted">Version</span><strong id="summary-version">–</strong></div>
+      <div class="metric"><span class="muted">Add-on Status</span><strong id="summary-state">–</strong></div>
+      <div class="metric"><span class="muted">Erkannte Geräte</span><strong id="summary-devices">0</strong></div>
     </div>
-    <div id="feature-warning" class="status warning" hidden>
-      KEEP_BATTERY_POSITION ist deaktiviert. Manuelle Zuordnungen bleiben aktiv;
-      „Automatisch“ folgt dann der aktuell vom Gerät gemeldeten Position.
+    <div class="card">
+      <h2>Konfigurationsquelle</h2>
+      <p>Diese Oberfläche bearbeitet direkt die offiziellen Home-Assistant-Add-on-Optionen. Die normale Konfigurationsseite und diese Oberfläche verwenden damit dieselben Werte.</p>
+      <div class="status warning">Änderungen an Better-GroBro-Optionen werden beim Start geladen. Verwende daher nach Änderungen vorzugsweise <b>Speichern & neu starten</b>.</div>
     </div>
-    <div id="detected" class="serials"></div>
   </section>
 
-  <section class="card">
-    <h2>Positionen</h2>
-    <div class="row">
-      <div>
-        <label for="slot2">Bat2</label>
-        <div id="auto2" class="muted"></div>
+  <section id="tab-batteries" class="tab">
+    <div class="card">
+      <h2>Batterie-Zuordnung</h2>
+      <div class="grid">
+        <div class="field full">
+          <label for="device">Gerät</label>
+          <select id="device"></select>
+        </div>
       </div>
-      <select id="slot2"></select>
+      <div id="detected" class="serials"></div>
+      <div class="battery-row"><div><label for="slot2">Bat2</label><div id="auto2" class="muted"></div></div><select id="slot2"></select></div>
+      <div class="battery-row"><div><label for="slot3">Bat3</label><div id="auto3" class="muted"></div></div><select id="slot3"></select></div>
+      <div class="battery-row"><div><label for="slot4">Bat4</label><div id="auto4" class="muted"></div></div><select id="slot4"></select></div>
+      <div class="actions"><button id="battery-save" type="button">Batterie-Zuordnung speichern</button></div>
+      <div id="battery-message" class="status" hidden></div>
     </div>
-    <div class="row">
-      <div>
-        <label for="slot3">Bat3</label>
-        <div id="auto3" class="muted"></div>
-      </div>
-      <select id="slot3"></select>
-    </div>
-    <div class="row">
-      <div>
-        <label for="slot4">Bat4</label>
-        <div id="auto4" class="muted"></div>
-      </div>
-      <select id="slot4"></select>
-    </div>
-    <div class="right">
-      <button id="back-bottom" type="button" class="secondary">Zurück</button>
-      <button id="save" type="button">Speichern</button>
-    </div>
-    <div class="small-note">
-      Nach erfolgreichem Speichern wirst du automatisch zur Add-on-Hauptansicht zurückgeführt.
-    </div>
-    <div id="message" class="status" hidden></div>
   </section>
+
+  <section id="tab-ha" class="tab">
+    <div class="card">
+      <h2>Home Assistant</h2>
+      <div class="grid">
+        <div class="field"><label>Stabile Batteriepositionen</label><div class="check"><input id="cfg-KEEP_BATTERY_POSITION" type="checkbox">NOAH/NEXA per Seriennummer stabil halten</div></div>
+        <div class="field"><label for="cfg-MAX_BAT">Maximale Batterieanzahl</label><select id="cfg-MAX_BAT"><option value="auto">Automatisch</option><option>1</option><option>2</option><option>3</option><option>4</option></select></div>
+        <div class="field"><label for="cfg-MAX_SLOTS">Zeitfenster</label><select id="cfg-MAX_SLOTS"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option></select><div class="help">Anzahl der Batterie-Zeitfenster in Home Assistant.</div></div>
+        <div class="field"><label for="cfg-DEVICE_TIMEOUT">Geräte-Timeout (Sekunden)</label><input id="cfg-DEVICE_TIMEOUT" type="number" min="0" step="1"><div class="help">0 deaktiviert den Timeout.</div></div>
+        <div class="field"><label>Availability-Sensor</label><div class="check"><input id="cfg-AVAILABILITY_SENSOR" type="checkbox">Zusätzlichen Online-Sensor erzeugen</div></div>
+        <div class="field"><label>Messwertsprünge filtern</label><div class="check"><input id="cfg-FILTER_DATA_GLITCHES" type="checkbox">Rücksprünge bei total_increasing unterdrücken</div></div>
+        <div class="field"><label>Sensorzustände retained</label><div class="check"><input id="cfg-PUBLISH_SENSORS_RETAINED" type="checkbox">MQTT retain für Sensorzustände verwenden</div></div>
+        <div class="field"><label for="cfg-HA_BASE_TOPIC">HA Basis-Topic</label><input id="cfg-HA_BASE_TOPIC" type="text"></div>
+        <div class="field"><label for="cfg-MQTT_CLIENT_SUFFIX">MQTT Client-Suffix</label><input id="cfg-MQTT_CLIENT_SUFFIX" type="text"></div>
+        <div class="field"><label for="cfg-TZ">Zeitzone</label><input id="cfg-TZ" type="text" placeholder="leer = Home Assistant übernehmen"></div>
+      </div>
+      <div class="actions config-actions"></div>
+    </div>
+  </section>
+
+  <section id="tab-mqtt" class="tab">
+    <div class="card">
+      <h2>Growatt / Quell-MQTT</h2>
+      <div class="grid">
+        <div class="field"><label for="cfg-SOURCE_MQTT_HOST">Host</label><input id="cfg-SOURCE_MQTT_HOST" type="text"></div>
+        <div class="field"><label for="cfg-SOURCE_MQTT_PORT">Port</label><input id="cfg-SOURCE_MQTT_PORT" type="number" min="1" max="65535"></div>
+        <div class="field"><label for="cfg-SOURCE_MQTT_USER">Benutzername</label><input id="cfg-SOURCE_MQTT_USER" type="text"></div>
+        <div class="field"><label for="cfg-SOURCE_MQTT_PASS">Passwort</label><input id="cfg-SOURCE_MQTT_PASS" type="password"></div>
+        <div class="field"><label>TLS</label><div class="check"><input id="cfg-SOURCE_MQTT_TLS" type="checkbox">TLS aktivieren</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Home Assistant / Ziel-MQTT</h2>
+      <div class="grid">
+        <div class="field"><label for="cfg-TARGET_MQTT_HOST">Host</label><input id="cfg-TARGET_MQTT_HOST" type="text"></div>
+        <div class="field"><label for="cfg-TARGET_MQTT_PORT">Port</label><input id="cfg-TARGET_MQTT_PORT" type="number" min="1" max="65535"></div>
+        <div class="field"><label for="cfg-TARGET_MQTT_USER">Benutzername</label><input id="cfg-TARGET_MQTT_USER" type="text"></div>
+        <div class="field"><label for="cfg-TARGET_MQTT_PASS">Passwort</label><input id="cfg-TARGET_MQTT_PASS" type="password"></div>
+        <div class="field"><label>TLS</label><div class="check"><input id="cfg-TARGET_MQTT_TLS" type="checkbox">TLS aktivieren</div></div>
+      </div>
+      <div class="actions config-actions"></div>
+    </div>
+  </section>
+
+  <section id="tab-cloud" class="tab">
+    <div class="card">
+      <h2>Growatt Cloud</h2>
+      <div class="grid">
+        <div class="field"><label>Cloud-Weiterleitung</label><div class="check"><input id="cfg-GROWATT_CLOUD" type="checkbox">Nachrichten zur/von der Growatt Cloud weiterleiten</div></div>
+        <div class="field"><label>Konfigurationsfilter</label><div class="check"><input id="cfg-GROWATT_CLOUD_CONFIG_FILTER" type="checkbox">Ferninitiierte Konfigurationsnachrichten blockieren</div></div>
+      </div>
+      <div class="actions config-actions"></div>
+    </div>
+  </section>
+
+  <section id="tab-diagnostics" class="tab">
+    <div class="card">
+      <h2>Diagnose</h2>
+      <div class="grid">
+        <div class="field"><label for="cfg-LOG_LEVEL">Log-Level</label><select id="cfg-LOG_LEVEL"><option>ERROR</option><option>INFO</option><option>DEBUG</option></select></div>
+        <div class="field"><label>Roh-Nachrichten speichern</label><div class="check"><input id="cfg-DUMP_MESSAGES" type="checkbox">Raw MQTT Dump aktivieren</div></div>
+        <div class="field full"><label for="cfg-DUMP_DIR">Dump-Verzeichnis</label><input id="cfg-DUMP_DIR" type="text"></div>
+        <div class="field"><label>Register-Debug</label><div class="check"><input id="cfg-REGISTER_DEBUG" type="checkbox">Passiven Register-Debugger aktivieren</div></div>
+        <div class="field"><label>Nur Änderungen</label><div class="check"><input id="cfg-REGISTER_DEBUG_CHANGES_ONLY" type="checkbox">Nach Erstwert nur Änderungen protokollieren</div></div>
+        <div class="field"><label for="cfg-REGISTER_DEBUG_MAX_REGISTER">Maximales Register</label><input id="cfg-REGISTER_DEBUG_MAX_REGISTER" type="number" min="0" max="65535"></div>
+        <div class="field"><label for="cfg-REGISTER_DEBUG_DIR">Register-Debug-Verzeichnis</label><input id="cfg-REGISTER_DEBUG_DIR" type="text"></div>
+      </div>
+      <div class="actions config-actions"></div>
+    </div>
+  </section>
+
+  <div id="config-message" class="status" hidden></div>
 </main>
 
 <script>
-const AUTO = "__auto__";
-const EMPTY = "__empty__";
-let state = null;
+const AUTO="__auto__", EMPTY="__empty__";
+let batteryState=null, configState=null;
+const CONFIG_KEYS=[
+"SOURCE_MQTT_HOST","SOURCE_MQTT_PORT","SOURCE_MQTT_TLS","SOURCE_MQTT_USER","SOURCE_MQTT_PASS",
+"TARGET_MQTT_HOST","TARGET_MQTT_PORT","TARGET_MQTT_TLS","TARGET_MQTT_USER","TARGET_MQTT_PASS",
+"MQTT_CLIENT_SUFFIX","HA_BASE_TOPIC","GROWATT_CLOUD","GROWATT_CLOUD_CONFIG_FILTER","LOG_LEVEL",
+"DUMP_MESSAGES","DUMP_DIR","REGISTER_DEBUG","REGISTER_DEBUG_DIR","REGISTER_DEBUG_MAX_REGISTER",
+"REGISTER_DEBUG_CHANGES_ONLY","PUBLISH_SENSORS_RETAINED","DEVICE_TIMEOUT","MAX_SLOTS","MAX_BAT",
+"AVAILABILITY_SENSOR","FILTER_DATA_GLITCHES","TZ","KEEP_BATTERY_POSITION"];
+const BOOL_KEYS=new Set(["SOURCE_MQTT_TLS","TARGET_MQTT_TLS","GROWATT_CLOUD","GROWATT_CLOUD_CONFIG_FILTER",
+"DUMP_MESSAGES","REGISTER_DEBUG","REGISTER_DEBUG_CHANGES_ONLY","PUBLISH_SENSORS_RETAINED",
+"AVAILABILITY_SENSOR","FILTER_DATA_GLITCHES","KEEP_BATTERY_POSITION"]);
+const INT_KEYS=new Set(["SOURCE_MQTT_PORT","TARGET_MQTT_PORT","REGISTER_DEBUG_MAX_REGISTER","DEVICE_TIMEOUT","MAX_SLOTS"]);
 
-function apiUrl(suffix) {
-  const path = window.location.pathname.replace(/\/+$/, "");
-  return path + "/" + suffix.replace(/^\/+/, "");
+function apiUrl(suffix){const path=window.location.pathname.replace(/\/+$/,"");return path+"/"+suffix.replace(/^\/+/, "");}
+function option(value,label,selected){const o=document.createElement("option");o.value=value;o.textContent=label;o.selected=selected;return o;}
+function goBackToAddon(){try{if(window.history.length>1)window.history.back();}catch(e){console.warn(e);}}
+function showMessage(id,text,kind="ok"){const el=document.getElementById(id);el.textContent=text;el.className="status "+kind;el.hidden=false;}
+
+function activateTab(name){
+  document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x.id==="tab-"+name));
+  document.querySelectorAll("[data-tab]").forEach(x=>x.classList.toggle("active",x.dataset.tab===name));
 }
+document.querySelectorAll("[data-tab]").forEach(b=>b.addEventListener("click",()=>activateTab(b.dataset.tab)));
+document.getElementById("back-top").addEventListener("click",goBackToAddon);
 
-function option(value, label, selected) {
-  const item = document.createElement("option");
-  item.value = value;
-  item.textContent = label;
-  item.selected = selected;
-  return item;
-}
-
-function currentDevice() {
-  if (!state) return null;
-  const id = document.getElementById("device").value;
-  return state.devices.find((device) => device.device_id === id) || null;
-}
-
-function goBackToAddon() {
-  try {
-    if (window.history.length > 1) {
-      window.history.back();
-    }
-  } catch (error) {
-    console.warn("history.back() failed", error);
+function currentDevice(){if(!batteryState)return null;const id=document.getElementById("device").value;return batteryState.devices.find(d=>d.device_id===id)||null;}
+function renderBatteries(){
+  const d=currentDevice(), detected=document.getElementById("detected");detected.replaceChildren();
+  document.getElementById("battery-save").disabled=!d;
+  if(!d){for(const slot of [2,3,4]){const c=document.getElementById("slot"+slot);c.replaceChildren(option(AUTO,"Automatisch",true));c.disabled=true;}return;}
+  for(const e of d.detected){const chip=document.createElement("span");chip.className="chip";chip.textContent=e.serial+" (physisch Bat"+e.physical_slot+")";detected.appendChild(chip);}
+  for(const slot of [2,3,4]){
+    const c=document.getElementById("slot"+slot), selected=d.manual[String(slot)]||AUTO, serials=d.detected.map(x=>x.serial);
+    c.replaceChildren(option(AUTO,"Automatisch",selected===AUTO),option(EMPTY,"Nicht belegt",selected===EMPTY));
+    if(selected!==AUTO&&selected!==EMPTY&&!serials.includes(selected))c.appendChild(option(selected,selected+" (nicht erkannt)",true));
+    for(const serial of serials)c.appendChild(option(serial,serial,selected===serial));
+    c.disabled=false;
+    const automatic=d.automatic[String(slot)];
+    document.getElementById("auto"+slot).textContent=automatic?"Automatisch: "+automatic:"Automatisch: noch nicht zugeordnet";
   }
 }
-
-function renderAssignments() {
-  const device = currentDevice();
-  const controls = [2, 3, 4].map((slot) => document.getElementById("slot" + slot));
-  document.getElementById("save").disabled = !device;
-  document.getElementById("detected").replaceChildren();
-
-  if (!device) {
-    for (const control of controls) {
-      control.replaceChildren(option(AUTO, "Automatisch", true));
-      control.disabled = true;
-    }
-    return;
-  }
-
-  for (const entry of device.detected) {
-    const chip = document.createElement("span");
-    chip.className = "chip";
-    chip.textContent = entry.serial + " (physisch Bat" + entry.physical_slot + ")";
-    document.getElementById("detected").appendChild(chip);
-  }
-
-  for (const slot of [2, 3, 4]) {
-    const control = document.getElementById("slot" + slot);
-    const selected = device.manual[String(slot)] || AUTO;
-    control.replaceChildren();
-    control.appendChild(option(AUTO, "Automatisch", selected === AUTO));
-    control.appendChild(option(EMPTY, "Nicht belegt", selected === EMPTY));
-
-    const serials = device.detected.map((item) => item.serial);
-    if (selected !== AUTO && selected !== EMPTY && !serials.includes(selected)) {
-      control.appendChild(option(selected, selected + " (nicht erkannt)", true));
-    }
-    for (const serial of serials) {
-      control.appendChild(option(serial, serial, selected === serial));
-    }
-    control.disabled = false;
-
-    const automatic = device.automatic[String(slot)];
-    document.getElementById("auto" + slot).textContent =
-      automatic ? "Automatisch: " + automatic : "Automatisch: noch nicht zugeordnet";
-  }
+async function loadBatteries(){
+  const r=await fetch(apiUrl("api/state"),{cache:"no-store"});if(!r.ok)throw new Error("Batteriestatus konnte nicht geladen werden");
+  batteryState=await r.json();document.getElementById("summary-devices").textContent=batteryState.devices.length;
+  const select=document.getElementById("device"),previous=select.value;select.replaceChildren();
+  if(!batteryState.devices.length){select.appendChild(option("","Noch keine Batterie erkannt",true));select.disabled=true;}
+  else{select.disabled=false;for(const d of batteryState.devices)select.appendChild(option(d.device_id,d.device_id,d.device_id===previous));if(!select.value)select.selectedIndex=0;}
+  renderBatteries();
 }
+document.getElementById("device").addEventListener("change",renderBatteries);
+document.getElementById("battery-save").addEventListener("click",async()=>{
+  const d=currentDevice();if(!d)return;
+  const values=[2,3,4].map(s=>document.getElementById("slot"+s).value),serials=values.filter(v=>v!==AUTO&&v!==EMPTY);
+  if(new Set(serials).size!==serials.length){showMessage("battery-message","Eine Seriennummer kann nur einer Position zugeordnet werden.","error");return;}
+  const assignments={};[2,3,4].forEach((s,i)=>assignments[String(s)]=values[i]);
+  const r=await fetch(apiUrl("api/assignments"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({device_id:d.device_id,assignments})});
+  const out=await r.json();if(!r.ok){showMessage("battery-message",out.error||"Speichern fehlgeschlagen","error");return;}
+  showMessage("battery-message","Batterie-Zuordnung gespeichert.");await loadBatteries();
+});
 
-async function loadState() {
-  const message = document.getElementById("message");
-  message.hidden = true;
-  const response = await fetch(apiUrl("api/state"), {cache: "no-store"});
-  if (!response.ok) throw new Error("Status konnte nicht geladen werden");
-  const previous = document.getElementById("device").value;
-  state = await response.json();
-
-  const deviceSelect = document.getElementById("device");
-  deviceSelect.replaceChildren();
-  if (!state.devices.length) {
-    deviceSelect.appendChild(option("", "Noch keine Batterie erkannt", true));
-    deviceSelect.disabled = true;
-  } else {
-    deviceSelect.disabled = false;
-    for (const device of state.devices) {
-      deviceSelect.appendChild(
-        option(device.device_id, device.device_id, device.device_id === previous)
-      );
-    }
-    if (!deviceSelect.value) deviceSelect.selectedIndex = 0;
-  }
-
-  document.getElementById("feature-warning").hidden = state.keep_battery_position;
-  renderAssignments();
+function fillConfig(options){
+  for(const key of CONFIG_KEYS){const el=document.getElementById("cfg-"+key);if(!el)continue;const value=options[key];if(BOOL_KEYS.has(key))el.checked=Boolean(value);else el.value=value??"";}
 }
-
-function validateUnique() {
-  const chosen = [2, 3, 4]
-    .map((slot) => document.getElementById("slot" + slot).value)
-    .filter((value) => value !== AUTO && value !== EMPTY);
-  return new Set(chosen).size === chosen.length;
+function collectConfig(){
+  const out={};for(const key of CONFIG_KEYS){const el=document.getElementById("cfg-"+key);if(!el)continue;if(BOOL_KEYS.has(key))out[key]=el.checked;else if(INT_KEYS.has(key))out[key]=Number(el.value);else out[key]=el.value;}return out;
 }
-
-async function saveAssignments() {
-  const device = currentDevice();
-  if (!device) return;
-  const message = document.getElementById("message");
-  if (!validateUnique()) {
-    message.textContent = "Eine Seriennummer kann nur einer Position zugeordnet werden.";
-    message.className = "status error";
-    message.hidden = false;
-    return;
-  }
-
-  const assignments = {};
-  for (const slot of [2, 3, 4]) {
-    assignments[String(slot)] = document.getElementById("slot" + slot).value;
-  }
-
-  const response = await fetch(apiUrl("api/assignments"), {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({device_id: device.device_id, assignments})
-  });
-  const result = await response.json();
-  if (!response.ok) {
-    message.textContent = result.error || "Speichern fehlgeschlagen";
-    message.className = "status error";
-    message.hidden = false;
-    return;
-  }
-
-  message.textContent = "Zuordnung gespeichert. Rückkehr zur Add-on-Hauptansicht…";
-  message.className = "status ok";
-  message.hidden = false;
-  setTimeout(goBackToAddon, 900);
+async function loadConfig(){
+  const r=await fetch(apiUrl("api/config"),{cache:"no-store"});const out=await r.json();if(!r.ok)throw new Error(out.error||"Konfiguration konnte nicht geladen werden");
+  configState=out;fillConfig(out.options||{});document.getElementById("summary-version").textContent=out.version||"–";document.getElementById("summary-state").textContent=out.state||"–";
 }
-
-document.getElementById("device").addEventListener("change", renderAssignments);
-document.getElementById("refresh").addEventListener("click", () => loadState().catch(showError));
-document.getElementById("save").addEventListener("click", () => saveAssignments().catch(showError));
-document.getElementById("back-top").addEventListener("click", goBackToAddon);
-document.getElementById("back-bottom").addEventListener("click", goBackToAddon);
-
-function showError(error) {
-  const message = document.getElementById("message");
-  message.textContent = error.message || String(error);
-  message.className = "status error";
-  message.hidden = false;
+async function saveConfig(restart){
+  const r=await fetch(apiUrl("api/config"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({options:collectConfig(),restart})});
+  const out=await r.json();if(!r.ok){showMessage("config-message",out.error||"Speichern fehlgeschlagen","error");return;}
+  if(restart){showMessage("config-message","Konfiguration gespeichert. Better GroBro wird neu gestartet…");setTimeout(goBackToAddon,900);}
+  else showMessage("config-message","Konfiguration gespeichert. Neustart erforderlich, damit alle Änderungen aktiv werden.","warning");
 }
-
-loadState().catch(showError);
+for(const host of document.querySelectorAll(".config-actions")){
+  const only=document.createElement("button");only.type="button";only.className="secondary";only.textContent="Nur speichern";only.addEventListener("click",()=>saveConfig(false).catch(showError));
+  const restart=document.createElement("button");restart.type="button";restart.textContent="Speichern & neu starten";restart.addEventListener("click",()=>saveConfig(true).catch(showError));
+  host.append(only,restart);
+}
+function showError(error){showMessage("config-message",error.message||String(error),"error");}
+Promise.all([loadBatteries(),loadConfig()]).catch(showError);
 </script>
 </body>
 </html>
