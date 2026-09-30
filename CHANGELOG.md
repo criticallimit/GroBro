@@ -1,9 +1,10 @@
-# Better GroBro 3.1.50 — Differences from robertzaage/GroBro
+# Better GroBro 3.1.51 — Differences from robertzaage/GroBro
 
 Comparison baseline: `robertzaage/GroBro` main at `e4d59b20ba472853ae6ec0b7a17cf15cd774cb23` (2026-09-18).
 
 ## User-relevant differences
 
+- Moves expected stable/manual battery remapping messages from WARNING to DEBUG so normal NOAH/NEXA slot stabilization no longer floods the add-on log; real battery mapping problems remain warnings.
 - Fixes the integrated log viewer on normal Home Assistant add-on permissions by using the self-log endpoint and isolating the current process session without requiring elevated Supervisor permissions.
 - Adds an integrated log viewer that shows only entries from the current add-on startup, and makes ERROR/INFO/DEBUG logging deterministic even when logging handlers already exist.
 - Adds real MQTT end-to-end validation for both NEO and NOAH and full localization coverage across all register display names, reducing regression risk without changing entity IDs or user configuration.
