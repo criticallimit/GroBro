@@ -288,16 +288,6 @@ def save_addon_options(raw_changes: dict) -> dict:
     }
     merged.update(changes)
 
-    validation = _supervisor_request(
-        "POST",
-        "/addons/self/options/validate",
-        merged,
-    )
-    if isinstance(validation, dict) and validation.get("valid") is False:
-        raise SupervisorConfigError(
-            str(validation.get("message") or "Konfiguration ist ungültig")
-        )
-
     _supervisor_request(
         "POST",
         "/addons/self/options",
