@@ -4,27 +4,26 @@ Comparison baseline: `robertzaage/GroBro` main at `e4d59b20ba472853ae6ec0b7a17cf
 
 ## User-relevant differences
 
-- Simplifies the Ingress configuration UI to one localized “Save & restart Better GroBro” action and always restarts the add-on after saving configuration changes.
-- Moves normal `Installed ...` startup messages from INFO to DEBUG so the standard INFO log is less noisy.
-- Stops NOAH/NEO `0x0103` packets from falling through to the generic Modbus block parser, removing false `Truncated register block` warnings caused by embedded device-serial bytes.
-- Fixes the integrated log viewer so manual scrolling is preserved across the 3-second auto-refresh; it only follows the newest entries automatically while the user remains near the bottom.
-- Sets Home Assistant `suggested_display_precision` to 3 for all NOAH Bat1–Bat4 maximum/minimum cell-voltage sensors, preserving the existing 0.001 V scaling while making the displayed millivolt resolution consistent.
-- Normalizes shortened NEO identifiers seen in passive `0x0103` diagnostics (for example `BZP4N991ML`) back to the full `QMN000...` device identity while preserving the raw identifier for diagnostics.
-- Adds NOAH Battery 2/3/4 maximum and minimum cell-voltage sensors using validated register pairs 375/376, 382/383 and 389/390 with the same scaling and Home Assistant metadata as Battery 1.
-- Correctly parses Growatt Function-6 write acknowledgements, eliminating false `Invalid register block range` warnings for valid NOAH writes such as registers 252, 257 and 258.
-- Fixes HTTP 403 when using “Save & restart Better GroBro” by removing the forbidden Supervisor options validation endpoint and using the supported self options/restart endpoints.
-- Moves expected stable/manual battery remapping messages from WARNING to DEBUG so normal NOAH/NEXA slot stabilization no longer floods the add-on log; real battery mapping problems remain warnings.
-- Fixes the integrated log viewer on normal Home Assistant add-on permissions by using the self-log endpoint and isolating the current process session without requiring elevated Supervisor permissions.
-- Adds an integrated log viewer that shows only entries from the current add-on startup, and makes ERROR/INFO/DEBUG logging deterministic even when logging handlers already exist.
-- Adds real MQTT end-to-end validation for both NEO and NOAH and full localization coverage across all register display names, reducing regression risk without changing entity IDs or user configuration.
-- Improves German, French, Spanish and Dutch Home Assistant entity names with idiomatic PV, grid, battery and BMS terminology, including rare device-specific sensors, while keeping technical IDs and MQTT topics unchanged.
-- Adds a dedicated Better GroBro Ingress configuration UI that edits the official Home Assistant add-on options. Home Assistant's native Configuration tab remains available as a fallback.
-- Shows the actually detected Growatt device families in the overview instead of only a generic device count.
-- Adds automatic German, English, French, Spanish and Dutch localization for the Ingress UI, native add-on configuration and Home Assistant entity display names, with English fallback.
-- Adds stable NOAH/NEXA battery identities and optional manual Bat2/Bat3/Bat4 assignment from detected serial numbers.
-- Improves Home Assistant restart/reconnect recovery and retains important control states so values do not disappear after reloads.
-- Removes retained publishing for measurement states and uses device availability instead, preventing stale power values from remaining active when telemetry stops.
-- Reduces unnecessary MQTT/Home Assistant churn while preserving real state changes.
-- Improves NOAH/NEXA handling, supported-device clock synchronization and optional passive diagnostics.
+### Home Assistant integration
+
+- Built-in Better GroBro configuration interface inside Home Assistant.
+- Automatic German, English, French, Spanish and Dutch localization for the interface and Home Assistant entity display names.
+- Device overview for detected Growatt families such as NOAH, NEO and NEXA.
+- Integrated log viewer for the current Better GroBro process.
+
+### Battery handling
+
+- Stable NOAH/NEXA battery positions based on battery serial numbers.
+- Optional manual Bat2/Bat3/Bat4 assignment.
+- Additional NOAH Battery 2/3/4 maximum and minimum cell-voltage sensors.
+- Consistent three-decimal display precision for NOAH Bat1–Bat4 cell-voltage sensors.
+
+### Reliability and operation
+
+- Improved NOAH/NEXA protocol handling compared with the upstream baseline.
+- Improved Home Assistant, MQTT and add-on restart/reconnect recovery.
+- Device availability handling prevents stale measurement values from remaining active when telemetry stops.
+- Reduced unnecessary MQTT/Home Assistant traffic without suppressing real state changes.
+- Supported-device clock synchronization and optional diagnostics.
 
 All other behavior is inherited from Robert Zaage's GroBro.
