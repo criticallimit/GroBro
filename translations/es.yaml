@@ -1,0 +1,85 @@
+configuration:
+  SOURCE_MQTT_HOST:
+    name: Host MQTT de origen
+    description: Nombre de host o dirección IP del broker MQTT utilizado por Growatt.
+  SOURCE_MQTT_PORT:
+    name: Puerto MQTT de origen
+    description: Puerto del broker MQTT utilizado por Growatt.
+  SOURCE_MQTT_TLS:
+    name: TLS MQTT de origen
+    description: Usar TLS para la conexión MQTT de Growatt.
+  SOURCE_MQTT_USER:
+    name: Usuario MQTT de origen
+    description: Usuario del broker MQTT de Growatt, si es necesario.
+  SOURCE_MQTT_PASS:
+    name: Contraseña MQTT de origen
+    description: Contraseña del broker MQTT de Growatt, si es necesaria.
+  TARGET_MQTT_HOST:
+    name: Host MQTT de Home Assistant
+    description: Nombre de host o dirección IP del broker MQTT utilizado por Home Assistant.
+  TARGET_MQTT_PORT:
+    name: Puerto MQTT de Home Assistant
+    description: Puerto del broker MQTT utilizado por Home Assistant.
+  TARGET_MQTT_TLS:
+    name: TLS MQTT de Home Assistant
+    description: Usar TLS para la conexión MQTT de Home Assistant.
+  TARGET_MQTT_USER:
+    name: Usuario MQTT de Home Assistant
+    description: Usuario del broker MQTT de Home Assistant, si es necesario.
+  TARGET_MQTT_PASS:
+    name: Contraseña MQTT de Home Assistant
+    description: Contraseña del broker MQTT de Home Assistant, si es necesaria.
+  MQTT_CLIENT_SUFFIX:
+    name: Sufijo de cliente MQTT
+    description: Sufijo opcional para los ID de cliente MQTT cuando varias instancias de Better GroBro comparten un broker.
+  HA_BASE_TOPIC:
+    name: Topic base de Home Assistant
+    description: Topic MQTT base utilizado para descubrimiento y estados de Home Assistant.
+  GROWATT_CLOUD:
+    name: Reenvío a Growatt Cloud
+    description: Reenviar mensajes hacia y desde Growatt Cloud.
+  GROWATT_CLOUD_CONFIG_FILTER:
+    name: Filtro de configuración de Growatt Cloud
+    description: Bloquear mensajes de configuración iniciados remotamente por Growatt Cloud.
+  LOG_LEVEL:
+    name: Nivel de registro
+    description: Nivel de registro utilizado por Better GroBro.
+  DUMP_MESSAGES:
+    name: Guardar mensajes sin procesar
+    description: Guardar cada mensaje MQTT sin procesar recibido para análisis posterior.
+  DUMP_DIR:
+    name: Directorio de mensajes sin procesar
+    description: Directorio utilizado para los mensajes sin procesar.
+  REGISTER_DEBUG:
+    name: Depuración de registros
+    description: Activar el registro pasivo de registros sin lecturas ni escrituras adicionales en el dispositivo.
+  REGISTER_DEBUG_DIR:
+    name: Directorio de depuración de registros
+    description: Directorio utilizado para los datos de depuración de registros.
+  REGISTER_DEBUG_MAX_REGISTER:
+    name: Registro máximo
+    description: Dirección de registro más alta conservada de los bloques Modbus recibidos.
+  REGISTER_DEBUG_CHANGES_ONLY:
+    name: Registrar solo cambios
+    description: Registrar cada valor una vez y después solo cuando cambie.
+  MAX_SLOTS:
+    name: Franjas de batería
+    description: Número de franjas de programación de batería expuestas en Home Assistant.
+  MAX_BAT:
+    name: Número máximo de baterías
+    description: Número máximo de módulos de batería mostrados en Home Assistant. Automático usa la cantidad detectada.
+  DEVICE_TIMEOUT:
+    name: Tiempo de espera del dispositivo
+    description: Tiempo mínimo en segundos antes de que las entidades pasen a no disponibles. Los intervalos de reporte del dispositivo se respetan automáticamente.
+  AVAILABILITY_SENSOR:
+    name: Sensor de disponibilidad
+    description: Mostrar un sensor binario En línea adicional. La disponibilidad normal de las entidades permanece activa.
+  FILTER_DATA_GLITCHES:
+    name: Filtrar anomalías de medición
+    description: Suprimir descensos en sensores total_increasing como contadores de energía.
+  TZ:
+    name: Zona horaria
+    description: Zona horaria local utilizada para registros y eventos del sistema.
+  KEEP_BATTERY_POSITION:
+    name: Posiciones de batería estables
+    description: Mantener los módulos NOAH y NEXA en posiciones lógicas estables por número de serie tras renumeraciones y reinicios.
