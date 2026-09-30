@@ -67,4 +67,4 @@ def install_raw_dump_hook() -> None:
 
     grobro_client_module.dump_message_binary = dump_message_binary_compat
     _INSTALLED = True
-    LOG.info("Installed centralized raw MQTT dump compatibility hook")
+    LOG.debug("Installed centralized raw MQTT dump compatibility hook")
