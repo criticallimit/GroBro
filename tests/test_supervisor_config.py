@@ -67,7 +67,7 @@ def test_get_addon_options_merges_defaults(monkeypatch):
     assert result["language"] == "de"
 
 
-def test_save_addon_options_validates_then_updates_and_preserves_unknown(monkeypatch):
+def test_save_addon_options_preserves_future_unknown_but_drops_retired(monkeypatch):
     calls = []
 
     def fake_request(method, path, payload=None):
@@ -77,6 +77,7 @@ def test_save_addon_options_validates_then_updates_and_preserves_unknown(monkeyp
                 "options": {
                     "SOURCE_MQTT_HOST": "old.local",
                     "UPSTREAM_FUTURE_OPTION": "keep-me",
+                    "PUBLISH_SENSORS_RETAINED": True,
                 }
             }
         if path == "/addons/self/options/validate":
@@ -97,16 +98,41 @@ def test_save_addon_options_validates_then_updates_and_preserves_unknown(monkeyp
     assert merged["SOURCE_MQTT_HOST"] == "new.local"
     assert merged["KEEP_BATTERY_POSITION"] is True
     assert merged["UPSTREAM_FUTURE_OPTION"] == "keep-me"
+    assert "PUBLISH_SENSORS_RETAINED" not in merged
 
     validate_call = calls[1]
     save_call = calls[2]
     assert validate_call[0:2] == ("POST", "/addons/self/options/validate")
     assert validate_call[2]["UPSTREAM_FUTURE_OPTION"] == "keep-me"
+    assert "PUBLISH_SENSORS_RETAINED" not in validate_call[2]
     assert save_call == (
         "POST",
         "/addons/self/options",
         {"options": merged},
     )
+
+
+def test_get_addon_options_hides_retired_retain_option_and_normalizes_timeout(monkeypatch):
+    def fake_request(method, path, payload=None):
+        if path == "/addons/self/info":
+            return {
+                "version": "3.1.41",
+                "state": "started",
+                "options": {
+                    "PUBLISH_SENSORS_RETAINED": True,
+                    "DEVICE_TIMEOUT": 0,
+                },
+            }
+        if path == "/homeassistant/api/config":
+            return {"language": "de"}
+        raise AssertionError(path)
+
+    monkeypatch.setattr(supervisor_config, "_supervisor_request", fake_request)
+
+    result = supervisor_config.get_addon_options()
+
+    assert "PUBLISH_SENSORS_RETAINED" not in result["options"]
+    assert result["options"]["DEVICE_TIMEOUT"] == 120
 
 
 def test_save_addon_options_stops_on_supervisor_validation_failure(monkeypatch):
