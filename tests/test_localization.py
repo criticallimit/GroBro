@@ -67,3 +67,88 @@ def test_discovery_localizes_only_display_name(monkeypatch):
 
 def test_language_cache_can_be_reset():
     reset_language_cache()
+
+def test_idiomatic_domain_translations_are_complete_and_not_mechanical():
+    import grobro.ha.localization as localization
+
+    expected_sources = {
+        "Battery SOC",
+        "Battery Health",
+        "Battery Cycle Count",
+        "Grid import power",
+        "Grid export power",
+        "Load power",
+        "Derating Mode",
+        "PV ISO value",
+        "GFCI Curr",
+        "R DCI Curr",
+        "Inverter output PF now",
+        "Current status of DryContact",
+        "Pack Information from BMS",
+        "Using Cap from BMS",
+        "Delta V from BMS",
+        "Island Mode Enabled",
+        "Power factor",
+    }
+
+    for language in ("de", "fr", "es", "nl"):
+        assert expected_sources <= set(localization._IDIOMATIC_EXACT[language])
+        for source in expected_sources:
+            translated = translate_entity_name(source, language)
+            assert translated
+            assert translated != source
+
+    assert translate_entity_name("Battery SOC", "de") == "Ladezustand"
+    assert translate_entity_name("Battery SOC", "fr") == "État de charge"
+    assert translate_entity_name("Battery SOC", "es") == "Estado de carga"
+    assert translate_entity_name("Battery SOC", "nl") == "Laadstatus"
+
+    assert translate_entity_name("Load power", "de") == "Verbrauchsleistung"
+    assert translate_entity_name("Load power", "fr") == "Puissance consommée"
+    assert translate_entity_name("Load power", "es") == "Potencia de consumo"
+    assert translate_entity_name("Load power", "nl") == "Verbruiksvermogen"
+
+    assert translate_entity_name("Current status of DryContact", "de") == "Status des potentialfreien Kontakts"
+    assert translate_entity_name("Current status of DryContact", "fr") == "État du contact sec"
+    assert translate_entity_name("Current status of DryContact", "es") == "Estado del contacto seco"
+    assert translate_entity_name("Current status of DryContact", "nl") == "Status van het potentiaalvrije contact"
+
+
+def test_idiomatic_translation_tables_stay_in_sync():
+    import grobro.ha.localization as localization
+
+    source_sets = {
+        language: set(mapping)
+        for language, mapping in localization._IDIOMATIC_EXACT.items()
+    }
+    assert source_sets["de"] == source_sets["fr"] == source_sets["es"] == source_sets["nl"]
+
+
+def test_idiomatic_translation_does_not_change_technical_identity(monkeypatch):
+    import grobro.ha.discovery_runtime as discovery_runtime
+
+    monkeypatch.setattr(discovery_runtime, "runtime_language", lambda: "de")
+    client = SimpleNamespace(_config_cache={})
+    device_id = "QMNTEST0000002"
+    component_id = f"grobro_{device_id}_battery_soc"
+    data = {
+        "dev": {"identifiers": [device_id]},
+        "o": {"name": "grobro", "url": "https://example.invalid"},
+        "cmps": {
+            component_id: {
+                "platform": "sensor",
+                "name": "Battery SOC",
+                "unique_id": component_id,
+                "state_topic": f"homeassistant/grobro/{device_id}/state",
+                "value_template": "{{ value_json['SOC'] }}",
+            }
+        },
+    }
+
+    cleaned = clean_discovery_payload(client, device_id, data)
+    component = cleaned["cmps"][component_id]
+    assert component["name"] == "Ladezustand"
+    assert component["unique_id"] == component_id
+    assert component["state_topic"] == f"homeassistant/grobro/{device_id}/state"
+    assert component["value_template"] == "{{ value_json['SOC'] }}"
+
