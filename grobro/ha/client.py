@@ -24,7 +24,14 @@ from grobro.model.modbus_function import (
 
 HA_BASE_TOPIC = os.getenv("HA_BASE_TOPIC", "homeassistant")
 AVAILABILITY_SENSOR = os.getenv("AVAILABILITY_SENSOR", "False").lower() == "true"
-DEVICE_TIMEOUT = int(os.getenv("DEVICE_TIMEOUT", 120))
+
+
+def _effective_device_timeout(value: int) -> int:
+    """Never leave HA measurement entities indefinitely available when telemetry stops."""
+    return value if value > 0 else 120
+
+
+DEVICE_TIMEOUT = _effective_device_timeout(int(os.getenv("DEVICE_TIMEOUT", 120)))
 MAX_SLOTS = int(os.getenv("MAX_SLOTS", "1"))
 MAX_BAT_RAW = os.getenv("MAX_BAT", "auto")
 try:
