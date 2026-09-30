@@ -191,7 +191,21 @@ def install_availability_runtime() -> None:
 
     def on_connect_clean(self, client, userdata, flags, reason_code, properties):
         clear_reconnect_caches(self)
-        return original_on_connect(self, client, userdata, flags, reason_code, properties)
+        result = original_on_connect(
+            self,
+            client,
+            userdata,
+            flags,
+            reason_code,
+            properties,
+        )
+        # A retained "online" value from an earlier process must never make
+        # stale retained sensor values look current after reconnect/startup.
+        # Known devices stay in Home Assistant; they are only marked unavailable
+        # until fresh telemetry explicitly publishes "online" again.
+        for device_id in getattr(self, "_config_cache", {}):
+            publish_availability(self, device_id, False)
+        return result
 
     client_cls._Client__on_connect = on_connect_clean
 
