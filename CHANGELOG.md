@@ -1,4 +1,4 @@
-# Better GroBro 3.1.27 — Differences from robertzaage/GroBro
+# Better GroBro 3.1.28 — Differences from robertzaage/GroBro
 
 Comparison baseline: `robertzaage/GroBro` main at `e4d59b20ba472853ae6ec0b7a17cf15cd774cb23` (2026-09-18).
 
@@ -12,6 +12,15 @@ Comparison baseline: `robertzaage/GroBro` main at `e4d59b20ba472853ae6ec0b7a17cf
 - Hides low-level/manual controls that Better GroBro replaces automatically, including MQTT IP, manual Sync Time and System Time.
 - Keeps Robert's NEO Inverter Power discovery/control path intact.
 - Publishes confirmed holding-register control states retained, so number/switch/time/select values survive MQTT entity reloads and discovery refreshes instead of becoming blank until the next Read All.
+
+## Add-on configuration UI
+
+- Expands the Ingress web UI to manage the complete Better GroBro add-on configuration.
+- Reads and writes the official Supervisor add-on options instead of maintaining a second configuration file.
+- Validates options through the Supervisor before saving.
+- Groups Home Assistant behavior, MQTT source/target, Growatt Cloud and diagnostics into dedicated sections.
+- Supports saving without restart or saving followed by a controlled add-on restart.
+- Keeps Home Assistant's normal add-on configuration page as a fallback using the same option values.
 
 ## Battery assignment UI
 

@@ -4,7 +4,7 @@ Better GroBro is a Home Assistant focused fork of [robertzaage/GroBro](https://g
 
 This README lists only the relevant differences from Robert's GroBro.
 
-## Better GroBro 3.1.27
+## Better GroBro 3.1.28
 
 Compared with Robert's GroBro, Better GroBro adds:
 
@@ -17,6 +17,7 @@ Compared with Robert's GroBro, Better GroBro adds:
 - Optional passive diagnostics for register/raw MQTT analysis without additional device polling or writes.
 - Dynamic Home Assistant Ingress page for NOAH/NEXA battery assignment with detected serial numbers, manual Bat2/Bat3/Bat4 mapping, Automatic/Not occupied options, persistent overrides, Back buttons, and automatic return to the add-on view after saving.
 - Consolidated Home Assistant runtime hooks to reduce wrapper stacking and keep reconnect/telemetry/discovery behavior easier to maintain.
+- Full Better GroBro configuration UI inside Home Assistant Ingress. It reads, validates and writes the official Supervisor add-on options, so the standard add-on configuration and the Better GroBro UI remain one shared configuration source.
 
 Everything else follows Robert's GroBro.
 
