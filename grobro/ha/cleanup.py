@@ -15,6 +15,7 @@ from grobro.ha.config_runtime import (
     install_config_runtime,
     persisted_config_data,
     restore_config_cache_by_filename,
+    restore_device_inventory_from_config_cache,
 )
 from grobro.ha.discovery_runtime import (
     clean_discovery_payload,
@@ -135,7 +136,9 @@ def install_state_runtime() -> None:
 
     def init_with_state(self, *args, **kwargs):
         initialize_instance_state(self)
-        return original_init(self, *args, **kwargs)
+        result = original_init(self, *args, **kwargs)
+        restore_device_inventory_from_config_cache(self)
+        return result
 
     client_cls.__init__ = init_with_state
 
@@ -208,6 +211,7 @@ _configuration_url_for_ip = configuration_url_for_ip
 _persisted_config_data = persisted_config_data
 _initialize_instance_state = initialize_instance_state
 _restore_config_cache_by_filename = restore_config_cache_by_filename
+_restore_device_inventory_from_config_cache = restore_device_inventory_from_config_cache
 _cancel_runtime_timers = cancel_runtime_timers
 _migration_set = migration_set
 _discovery_signature = discovery_signature
