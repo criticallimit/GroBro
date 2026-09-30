@@ -1,3 +1,7 @@
+import json
+import re
+from pathlib import Path
+
 from types import SimpleNamespace
 
 from grobro.ha.discovery_runtime import clean_discovery_payload
@@ -151,4 +155,59 @@ def test_idiomatic_translation_does_not_change_technical_identity(monkeypatch):
     assert component["unique_id"] == component_id
     assert component["state_topic"] == f"homeassistant/grobro/{device_id}/state"
     assert component["value_template"] == "{{ value_json['SOC'] }}"
+
+def test_all_register_display_names_are_localization_covered():
+    import grobro.ha.localization as localization
+
+    root = Path(__file__).resolve().parents[1] / "grobro" / "model"
+    register_files = (
+        "growatt_mod_registers.json",
+        "growatt_neo_registers.json",
+        "growatt_nexa_registers.json",
+        "growatt_noah_registers.json",
+        "growatt_spf_registers.json",
+        "growatt_xh2_registers.json",
+    )
+
+    names = set()
+
+    def collect(value):
+        if isinstance(value, dict):
+            name = value.get("name")
+            if isinstance(name, str) and name.strip():
+                names.add(name.strip())
+            for child in value.values():
+                collect(child)
+        elif isinstance(value, list):
+            for child in value:
+                collect(child)
+
+    for filename in register_files:
+        collect(json.loads((root / filename).read_text(encoding="utf-8")))
+
+    # Guard against accidentally testing only a small subset after schema changes.
+    assert len(names) >= 300
+
+    word_re = re.compile(r"[A-Za-z]+")
+    for language in ("de", "fr", "es", "nl"):
+        word_map = localization._WORDS[language]
+        for source in sorted(names):
+            translated = translate_entity_name(source, language)
+            assert translated
+            # Every source word for which this language has a genuinely different
+            # localized term must disappear from the visible result. Technical
+            # acronyms and internationally identical terms are intentionally allowed.
+            translated_words = {word.lower() for word in word_re.findall(translated)}
+            for source_word in word_re.findall(source):
+                target_word = word_map.get(source_word.lower())
+                if target_word is None:
+                    continue
+                if target_word.lower() == source_word.lower():
+                    continue
+                assert source_word.lower() not in translated_words, (
+                    language,
+                    source,
+                    translated,
+                    source_word,
+                )
 
