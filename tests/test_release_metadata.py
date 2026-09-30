@@ -30,6 +30,8 @@ def test_release_notes_remain_user_focused():
     assert "Comparison baseline" not in readme
     assert "Runtime architecture" not in readme
     assert "wrapper" not in readme.lower()
+    assert "Battery assignment view follows the configured maximum battery count" not in readme
+    assert "maximum battery count, so unused Bat positions are not shown" not in changelog
 
 
 def test_runtime_dependencies_have_major_version_bounds():
