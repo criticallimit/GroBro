@@ -757,6 +757,9 @@ class Client:
                 "state_class": state.homeassistant.state_class,
                 "unit_of_measurement": state.homeassistant.unit_of_measurement,
                 "icon": state.homeassistant.icon,
+                "suggested_display_precision": (
+                    state.homeassistant.suggested_display_precision
+                ),
             }
 
         # Combined battery serial entities remain a NOAH-only UI feature.
