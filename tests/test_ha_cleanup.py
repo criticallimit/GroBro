@@ -292,3 +292,24 @@ def test_config_discovery_registers_neo_in_device_inventory():
         ("NEO", device_id)
     ]
     clear_device_inventory()
+
+
+def test_restore_config_cache_registers_persisted_neo_in_inventory(tmp_path, monkeypatch):
+    install_ha_cleanup_hook()
+    clear_device_inventory()
+    monkeypatch.chdir(tmp_path)
+
+    device_id = "QMNTEST0000001"
+    config = ha_client_module.model.DeviceConfig(serial_number=device_id)
+    config.to_file(f"config_{device_id}.json")
+
+    client = SimpleNamespace(_config_cache={})
+    from grobro.ha.config_runtime import restore_config_cache_by_filename
+
+    restore_config_cache_by_filename(client)
+
+    assert client._config_cache[device_id].serial_number == device_id
+    assert [(item["display_name"], item["device_id"]) for item in get_device_inventory()] == [
+        ("NEO", device_id)
+    ]
+    clear_device_inventory()
