@@ -261,7 +261,7 @@ document.getElementById("battery-save").addEventListener("click",async()=>{
   const assignments={};[2,3,4].forEach((s,i)=>assignments[String(s)]=values[i]);
   const r=await fetch(apiUrl("api/assignments"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({device_id:d.device_id,assignments})});
   const out=await r.json();if(!r.ok){showMessage("battery-message",out.error||"Speichern fehlgeschlagen","error");return;}
-  showMessage("battery-message","Batterie-Zuordnung gespeichert. Rückkehr zum Add-on…");setTimeout(goBackToAddon,900);
+  showMessage("battery-message","Batterie-Zuordnung gespeichert. Rückkehr zum Add-on…");setTimeout(goBackToAddon, 900);
 });
 
 function fillConfig(options){
@@ -277,7 +277,7 @@ async function loadConfig(){
 async function saveConfig(restart){
   const r=await fetch(apiUrl("api/config"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({options:collectConfig(),restart})});
   const out=await r.json();if(!r.ok){showMessage("config-message",out.error||"Speichern fehlgeschlagen","error");return;}
-  if(restart){showMessage("config-message","Konfiguration gespeichert. Better GroBro wird neu gestartet…");setTimeout(goBackToAddon,900);}
+  if(restart){showMessage("config-message","Konfiguration gespeichert. Better GroBro wird neu gestartet…");setTimeout(goBackToAddon, 900);}
   else showMessage("config-message","Konfiguration gespeichert. Neustart erforderlich, damit alle Änderungen aktiv werden.","warning");
 }
 for(const host of document.querySelectorAll(".config-actions")){
