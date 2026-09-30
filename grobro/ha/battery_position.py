@@ -346,7 +346,24 @@ def _position_maps(client) -> dict[str, dict[str, int]]:
     return positions
 
 
-def stabilize_battery_payload(client, device_id: str, payload: dict) -> tuple[dict, int]:
+def observe_battery_serials(client, device_id: str, payload: dict) -> None:
+    """Persist the currently detected battery serials for the Ingress UI."""
+    _record_detected_serials(client, device_id, _serials_from_payload(payload))
+
+
+def has_manual_assignments(client, device_id: str) -> bool:
+    """Return whether at least one slot has a non-automatic manual choice."""
+    assignments = _manual_positions(client).get(device_id, {})
+    return any(value != AUTO_ASSIGNMENT for value in assignments.values())
+
+
+def stabilize_battery_payload(
+    client,
+    device_id: str,
+    payload: dict,
+    *,
+    use_stable_auto: bool = True,
+) -> tuple[dict, int]:
     """Return payload remapped to stable logical battery slots.
 
     The first observed serial/slot relationship becomes persistent. If NOAH later
@@ -369,41 +386,42 @@ def stabilize_battery_payload(client, device_id: str, payload: dict) -> tuple[di
     mapping = all_positions.setdefault(device_id, {})
     changed = False
 
-    # Existing serial assignments reserve their logical slots even while the
-    # battery is temporarily absent. New batteries therefore cannot steal them.
-    reserved_slots = set(mapping.values())
+    if use_stable_auto:
+        # Existing serial assignments reserve their logical slots even while the
+        # battery is temporarily absent. New batteries therefore cannot steal them.
+        reserved_slots = set(mapping.values())
 
-    for physical_slot, serial in current_serials.items():
-        if serial in mapping:
-            continue
+        for physical_slot, serial in current_serials.items():
+            if serial in mapping:
+                continue
 
-        if physical_slot in _TRACKED_SLOTS and physical_slot not in reserved_slots:
-            logical_slot = physical_slot
-        else:
-            logical_slot = next(
-                (slot for slot in _TRACKED_SLOTS if slot not in reserved_slots),
-                None,
-            )
-        if logical_slot is None:
-            LOG.warning(
-                "No free stable battery slot for %s on device %s",
+            if physical_slot in _TRACKED_SLOTS and physical_slot not in reserved_slots:
+                logical_slot = physical_slot
+            else:
+                logical_slot = next(
+                    (slot for slot in _TRACKED_SLOTS if slot not in reserved_slots),
+                    None,
+                )
+            if logical_slot is None:
+                LOG.warning(
+                    "No free stable battery slot for %s on device %s",
+                    serial,
+                    device_id,
+                )
+                continue
+
+            mapping[serial] = logical_slot
+            reserved_slots.add(logical_slot)
+            changed = True
+            LOG.info(
+                "Assigned battery %s to stable Bat%d for device %s",
                 serial,
+                logical_slot,
                 device_id,
             )
-            continue
 
-        mapping[serial] = logical_slot
-        reserved_slots.add(logical_slot)
-        changed = True
-        LOG.info(
-            "Assigned battery %s to stable Bat%d for device %s",
-            serial,
-            logical_slot,
-            device_id,
-        )
-
-    if changed:
-        _save_all_positions(all_positions)
+        if changed:
+            _save_all_positions(all_positions)
 
     physical_to_logical: dict[int, int] = {}
     explicit_slot_by_serial = {
@@ -432,7 +450,7 @@ def stabilize_battery_payload(client, device_id: str, payload: dict) -> tuple[di
         if physical_slot in physical_to_logical:
             continue
 
-        logical_slot = mapping.get(serial)
+        logical_slot = mapping.get(serial) if use_stable_auto else physical_slot
         if (
             logical_slot in reserved_manual_slots
             or logical_slot in used_slots
