@@ -226,7 +226,11 @@ class TestClientOnMessage:
     def test_noah_type0103(self, client):
         data = (Path(DATA_DIR) / "NoahType0103_HoldingRegs.bin").read_bytes()
         msg = _msg("c/33/0PVP0000TEST0001", data)
-        client._client.on_message(None, None, msg)
+        with patch(
+            "grobro.grobro.client.GrowattModbusMessage.parse_grobro"
+        ) as generic_parser:
+            client._client.on_message(None, None, msg)
+        generic_parser.assert_not_called()
 
     def test_noah_type0110(self, client):
         data = (Path(DATA_DIR) / "NoahType0110_PresetMResp.bin").read_bytes()
