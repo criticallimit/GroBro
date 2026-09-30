@@ -162,7 +162,6 @@ def test_ingress_config_api_reads_and_saves_supervisor_options(tmp_path, monkeyp
                     "SOURCE_MQTT_HOST": "new.local",
                     "KEEP_BATTERY_POSITION": True,
                 },
-                "restart": True,
             }
         ).encode()
         request = urllib.request.Request(
