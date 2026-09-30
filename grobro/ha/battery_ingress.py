@@ -16,6 +16,7 @@ from grobro.ha.battery_position import (
     load_battery_ui_state,
     save_manual_assignments,
 )
+from grobro.ha.device_inventory import get_device_inventory
 from grobro.ha.supervisor_config import (
     SupervisorConfigError,
     get_addon_options,
@@ -101,7 +102,7 @@ _INDEX_HTML = r"""<!doctype html>
     <div class="summary">
       <div class="metric"><span class="muted">Version</span><strong id="summary-version">–</strong></div>
       <div class="metric"><span class="muted">Add-on Status</span><strong id="summary-state">–</strong></div>
-      <div class="metric"><span class="muted">Erkannte Geräte</span><strong id="summary-devices">0</strong></div>
+      <div class="metric"><span class="muted">Erkannte Geräte</span><div id="summary-devices" class="serials"><span class="muted">–</span></div></div>
     </div>
     <div class="card">
       <h2>Empfohlene Konfiguration</h2>
@@ -343,7 +344,18 @@ function renderBatteries(){
 }
 async function loadBatteries(){
   const r=await fetch(apiUrl("api/state"),{cache:"no-store"});if(!r.ok)throw new Error("Batteriestatus konnte nicht geladen werden");
-  batteryState=await r.json();document.getElementById("summary-devices").textContent=batteryState.devices.length;
+  batteryState=await r.json();
+  const summary=document.getElementById("summary-devices");summary.replaceChildren();
+  const inventory=batteryState.inventory||[];
+  if(!inventory.length){
+    const none=document.createElement("span");none.className="muted";none.textContent=currentLang==="de"?"Noch keine Live-Telemetrie":currentLang==="fr"?"Pas encore de télémétrie en direct":currentLang==="es"?"Aún no hay telemetría en vivo":"No live telemetry yet";summary.appendChild(none);
+  }else{
+    const counts={};
+    for(const item of inventory)counts[item.display_name]=(counts[item.display_name]||0)+1;
+    for(const name of Object.keys(counts).sort()){
+      const chip=document.createElement("span");chip.className="chip";chip.textContent=counts[name]>1?name+" ×"+counts[name]:name;summary.appendChild(chip);
+    }
+  }
   const select=document.getElementById("device"),previous=select.value;select.replaceChildren();
   if(!batteryState.devices.length){select.appendChild(option("",t("Noch keine Batterie erkannt"),true));select.disabled=true;}
   else{select.disabled=false;for(const d of batteryState.devices)select.appendChild(option(d.device_id,d.device_id,d.device_id===previous));if(!select.value)select.selectedIndex=0;}
@@ -429,7 +441,9 @@ class BatteryIngressHandler(BaseHTTPRequestHandler):
             return
         path = urlsplit(self.path).path.rstrip("/")
         if path.endswith("/api/state"):
-            self._send_json(load_battery_ui_state())
+            state = load_battery_ui_state()
+            state["inventory"] = get_device_inventory()
+            self._send_json(state)
             return
         if path.endswith("/api/config"):
             try:
