@@ -22,8 +22,9 @@ def test_release_notes_remain_user_focused():
     readme = Path("README.md").read_text(encoding="utf-8")
     changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
 
-    assert "user-relevant differences" in readme
+    assert "### What Better GroBro adds" in readme
     assert "## User-relevant differences" in changelog
+    assert "Comparison baseline" not in readme
     assert "Runtime architecture" not in readme
     assert "wrapper" not in readme.lower()
 
