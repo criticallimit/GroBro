@@ -123,7 +123,7 @@ _INDEX_HTML = r"""<!doctype html>
       <div class="battery-row"><div><label for="slot2">Bat2</label><div id="auto2" class="muted"></div></div><select id="slot2"></select></div>
       <div class="battery-row"><div><label for="slot3">Bat3</label><div id="auto3" class="muted"></div></div><select id="slot3"></select></div>
       <div class="battery-row"><div><label for="slot4">Bat4</label><div id="auto4" class="muted"></div></div><select id="slot4"></select></div>
-      <div class="actions"><button id="battery-back" type="button" class="secondary">Zurück</button><button id="battery-save" type="button">Batterie-Zuordnung speichern</button></div>
+      <div class="actions"><button id="back-bottom" type="button" class="secondary">Zurück</button><button id="battery-save" type="button">Batterie-Zuordnung speichern</button></div>
       <div id="battery-message" class="status" hidden></div>
     </div>
   </section>
@@ -253,7 +253,7 @@ async function loadBatteries(){
   renderBatteries();
 }
 document.getElementById("device").addEventListener("change",renderBatteries);
-document.getElementById("battery-back").addEventListener("click",goBackToAddon);
+document.getElementById("back-bottom").addEventListener("click",goBackToAddon);
 document.getElementById("battery-save").addEventListener("click",async()=>{
   const d=currentDevice();if(!d)return;
   const values=[2,3,4].map(s=>document.getElementById("slot"+s).value),serials=values.filter(v=>v!==AUTO&&v!==EMPTY);
