@@ -1,4 +1,4 @@
-# Better GroBro 3.1.25 — Differences from robertzaage/GroBro
+# Better GroBro 3.1.26 — Differences from robertzaage/GroBro
 
 Comparison baseline: `robertzaage/GroBro` main at `e4d59b20ba472853ae6ec0b7a17cf15cd774cb23` (2026-09-18).
 
@@ -17,6 +17,7 @@ Comparison baseline: `robertzaage/GroBro` main at `e4d59b20ba472853ae6ec0b7a17cf
 - Allows Bat2/Bat3/Bat4 to be set to Automatic, Not occupied or a detected serial number.
 - Manual assignments are persisted separately and override automatic positioning without destroying the automatic fallback map.
 - Prevents assigning the same battery serial to multiple logical slots.
+- Adds explicit Back buttons to the Ingress battery page and automatically returns to the add-on view after a successful save.
 
 ## NOAH / NEXA
 

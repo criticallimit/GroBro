@@ -38,6 +38,7 @@ _INDEX_HTML = r"""<!doctype html>
       --accent: #03a9f4;
       --danger: #ff6b6b;
       --ok: #62c96b;
+      --secondary: #2a3138;
     }
     * { box-sizing: border-box; }
     body {
@@ -87,7 +88,20 @@ _INDEX_HTML = r"""<!doctype html>
       border-color: transparent;
       font-weight: 700;
     }
+    button.secondary {
+      background: var(--secondary);
+      color: var(--text);
+      border-color: var(--border);
+    }
     button:disabled { opacity: .55; cursor: default; }
+    .page-toolbar {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+    }
     .toolbar { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; }
     .toolbar > div { min-width: 280px; flex: 1; }
     .status {
@@ -114,19 +128,37 @@ _INDEX_HTML = r"""<!doctype html>
       padding: 5px 9px;
       color: var(--muted);
     }
-    .right { display: flex; justify-content: flex-end; margin-top: 16px; }
+    .right {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 16px;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .small-note {
+      margin-top: 10px;
+      font-size: 12px;
+      color: var(--muted);
+    }
     @media (max-width: 700px) {
       main { padding: 16px; }
       .row { grid-template-columns: 1fr; gap: 8px; }
       .toolbar > div { min-width: 100%; }
       button { width: 100%; }
+      .page-toolbar { flex-direction: column; align-items: stretch; }
+      .right { justify-content: stretch; }
     }
   </style>
 </head>
 <body>
 <main>
-  <h1>Better GroBro</h1>
-  <p class="muted">Manuelle Batterie-Zuordnung für NOAH und NEXA</p>
+  <div class="page-toolbar">
+    <div>
+      <h1>Better GroBro</h1>
+      <p class="muted">Manuelle Batterie-Zuordnung für NOAH und NEXA</p>
+    </div>
+    <button id="back-top" type="button" class="secondary">Zurück zum Add-on</button>
+  </div>
 
   <section class="card">
     <div class="toolbar">
@@ -166,7 +198,13 @@ _INDEX_HTML = r"""<!doctype html>
       </div>
       <select id="slot4"></select>
     </div>
-    <div class="right"><button id="save" type="button">Speichern</button></div>
+    <div class="right">
+      <button id="back-bottom" type="button" class="secondary">Zurück</button>
+      <button id="save" type="button">Speichern</button>
+    </div>
+    <div class="small-note">
+      Nach erfolgreichem Speichern wirst du automatisch zur Add-on-Hauptansicht zurückgeführt.
+    </div>
     <div id="message" class="status" hidden></div>
   </section>
 </main>
@@ -193,6 +231,16 @@ function currentDevice() {
   if (!state) return null;
   const id = document.getElementById("device").value;
   return state.devices.find((device) => device.device_id === id) || null;
+}
+
+function goBackToAddon() {
+  try {
+    if (window.history.length > 1) {
+      window.history.back();
+    }
+  } catch (error) {
+    console.warn("history.back() failed", error);
+  }
 }
 
 function renderAssignments() {
@@ -301,16 +349,17 @@ async function saveAssignments() {
     return;
   }
 
-  message.textContent = "Zuordnung gespeichert und für neue Telemetriedaten aktiv.";
+  message.textContent = "Zuordnung gespeichert. Rückkehr zur Add-on-Hauptansicht…";
   message.className = "status ok";
   message.hidden = false;
-  await loadState();
-  message.hidden = false;
+  setTimeout(goBackToAddon, 900);
 }
 
 document.getElementById("device").addEventListener("change", renderAssignments);
 document.getElementById("refresh").addEventListener("click", () => loadState().catch(showError));
 document.getElementById("save").addEventListener("click", () => saveAssignments().catch(showError));
+document.getElementById("back-top").addEventListener("click", goBackToAddon);
+document.getElementById("back-bottom").addEventListener("click", goBackToAddon);
 
 function showError(error) {
   const message = document.getElementById("message");
