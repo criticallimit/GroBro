@@ -312,7 +312,6 @@ function selectedHomeAssistantLanguage() {
     return fallback;
   }
 }
-applyLanguage(selectedHomeAssistantLanguage());
 const CONFIG_KEYS=[
 "SOURCE_MQTT_HOST","SOURCE_MQTT_PORT","SOURCE_MQTT_TLS","SOURCE_MQTT_USER","SOURCE_MQTT_PASS",
 "TARGET_MQTT_HOST","TARGET_MQTT_PORT","TARGET_MQTT_TLS","TARGET_MQTT_USER","TARGET_MQTT_PASS",

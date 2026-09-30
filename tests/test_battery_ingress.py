@@ -282,3 +282,21 @@ def test_restart_button_explicitly_names_better_grobro():
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_language_is_applied_only_after_home_assistant_config_load():
+    server = start_battery_ingress_server(0)
+    _host, port = server.server_address
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=3) as response:
+            html = response.read().decode()
+
+        early = "applyLanguage(selectedHomeAssistantLanguage());"
+        assert early not in html
+        assert "applyLanguage(out.language || selectedHomeAssistantLanguage())" in html
+        assert html.index("async function loadConfig()") < html.index(
+            "applyLanguage(out.language || selectedHomeAssistantLanguage())"
+        )
+    finally:
+        server.shutdown()
+        server.server_close()
