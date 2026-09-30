@@ -757,8 +757,13 @@ class Client:
                 "state_class": state.homeassistant.state_class,
                 "unit_of_measurement": state.homeassistant.unit_of_measurement,
                 "icon": state.homeassistant.icon,
-                "suggested_display_precision": (
-                    state.homeassistant.suggested_display_precision
+                **(
+                    {
+                        "suggested_display_precision":
+                        state.homeassistant.suggested_display_precision
+                    }
+                    if state.homeassistant.suggested_display_precision is not None
+                    else {}
                 ),
             }
 
