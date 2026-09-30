@@ -2,22 +2,18 @@
 
 Better GroBro is a Home Assistant focused fork of [robertzaage/GroBro](https://github.com/robertzaage/GroBro).
 
-This README lists only the relevant differences from Robert's GroBro.
+This README lists only the user-relevant differences from Robert's GroBro.
 
-## Better GroBro 3.1.28
+## Better GroBro 3.1.29
 
 Compared with Robert's GroBro, Better GroBro adds:
 
-- Reduced Home Assistant/MQTT churn and lower runtime overhead by avoiding unnecessary repeated state/discovery publications and repeated processing.
-- Stable NOAH/NEXA battery identities with `KEEP_BATTERY_POSITION=true`, so Bat2/Bat3/Bat4 do not change identity when the battery chain is re-enumerated.
-- Improved NOAH/NEXA handling, including combined firmware display, validated NOAH heater-state handling and shared family/protocol behavior.
-- Automatic device clock synchronization at 00:00 and 12:00 local time for supported devices.
-- Cleaner Home Assistant presentation, including removal of low-level/manual controls that are no longer needed, whole-watt power values, and retained control states so values such as Default/Slot output and charge/discharge limits do not disappear from HA.
-- More robust reconnect, timer, config persistence, packet validation and Growatt Cloud forwarding behavior, including forced one-time state republishing after Home Assistant Core restarts even when values themselves did not change.
-- Optional passive diagnostics for register/raw MQTT analysis without additional device polling or writes.
-- Dynamic Home Assistant Ingress page for NOAH/NEXA battery assignment with detected serial numbers, manual Bat2/Bat3/Bat4 mapping, Automatic/Not occupied options, persistent overrides, Back buttons, and automatic return to the add-on view after saving.
-- Consolidated Home Assistant runtime hooks to reduce wrapper stacking and keep reconnect/telemetry/discovery behavior easier to maintain.
-- Full Better GroBro configuration UI inside Home Assistant Ingress. It reads, validates and writes the official Supervisor add-on options, so the standard add-on configuration and the Better GroBro UI remain one shared configuration source.
+- A dedicated Home Assistant Ingress configuration UI for Better GroBro. It edits the official add-on options, validates them through the Supervisor, and keeps Home Assistant's native Configuration tab as a fallback.
+- Automatic UI language selection for German, English, French and Spanish, based on the Home Assistant language, with English fallback.
+- Stable NOAH/NEXA battery identities plus optional manual Bat2/Bat3/Bat4 assignment by detected serial number.
+- More reliable Home Assistant state recovery after Home Assistant/MQTT restarts, including retained control values that would otherwise appear blank until refreshed.
+- Reduced unnecessary Home Assistant/MQTT update traffic and lower runtime overhead without changing real value updates.
+- Improved NOAH/NEXA handling, automatic supported-device clock synchronization, and optional passive diagnostics.
 
 Everything else follows Robert's GroBro.
 
@@ -36,5 +32,3 @@ The existing GroBro-compatible add-on slug and configuration are retained for in
 Base project: [robertzaage/GroBro](https://github.com/robertzaage/GroBro) by Robert Zaage and contributors.
 
 Comparison baseline: `e4d59b20ba472853ae6ec0b7a17cf15cd774cb23`.
-
-See [CHANGELOG.md](CHANGELOG.md) for the technical differences.
