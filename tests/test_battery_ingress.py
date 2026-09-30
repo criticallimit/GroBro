@@ -1,6 +1,7 @@
 import json
 import urllib.request
 
+from grobro.ha import battery_ingress
 from grobro.ha.battery_ingress import start_battery_ingress_server
 from grobro.ha.battery_position import (
     AUTO_ASSIGNMENT,
@@ -110,6 +111,97 @@ def test_ingress_page_has_back_navigation_and_auto_return():
         assert 'id="back-bottom"' in html
         assert "window.history.back()" in html
         assert "setTimeout(goBackToAddon, 900)" in html
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_ingress_config_api_reads_and_saves_supervisor_options(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    saved = {}
+    restarted = []
+
+    monkeypatch.setattr(
+        battery_ingress,
+        "get_addon_options",
+        lambda: {
+            "version": "3.1.28",
+            "state": "started",
+            "options": {
+                "SOURCE_MQTT_HOST": "growatt.local",
+                "KEEP_BATTERY_POSITION": False,
+            },
+        },
+    )
+
+    def fake_save(options):
+        saved.update(options)
+        return options
+
+    monkeypatch.setattr(battery_ingress, "save_addon_options", fake_save)
+    monkeypatch.setattr(
+        battery_ingress,
+        "schedule_restart",
+        lambda: restarted.append(True),
+    )
+
+    server = start_battery_ingress_server(0)
+    _host, port = server.server_address
+    base = f"http://127.0.0.1:{port}"
+    try:
+        with urllib.request.urlopen(f"{base}/api/config", timeout=3) as response:
+            state = json.load(response)
+
+        assert state["version"] == "3.1.28"
+        assert state["options"]["SOURCE_MQTT_HOST"] == "growatt.local"
+
+        payload = json.dumps(
+            {
+                "options": {
+                    "SOURCE_MQTT_HOST": "new.local",
+                    "KEEP_BATTERY_POSITION": True,
+                },
+                "restart": True,
+            }
+        ).encode()
+        request = urllib.request.Request(
+            f"{base}/api/config",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(request, timeout=3) as response:
+            result = json.load(response)
+
+        assert result == {"ok": True, "restart": True}
+        assert saved == {
+            "SOURCE_MQTT_HOST": "new.local",
+            "KEEP_BATTERY_POSITION": True,
+        }
+        assert restarted == [True]
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_ingress_page_contains_full_configuration_sections():
+    server = start_battery_ingress_server(0)
+    _host, port = server.server_address
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=3) as response:
+            html = response.read().decode()
+
+        for label in (
+            "Home Assistant",
+            "MQTT",
+            "Growatt Cloud",
+            "Diagnose",
+            "Speichern & neu starten",
+        ):
+            assert label in html
+        assert "cfg-SOURCE_MQTT_HOST" in html
+        assert "cfg-KEEP_BATTERY_POSITION" in html
+        assert "api/config" in html
     finally:
         server.shutdown()
         server.server_close()
