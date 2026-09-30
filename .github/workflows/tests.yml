@@ -35,5 +35,28 @@ jobs:
       - name: Lint with ruff
         run: ruff check grobro/ tests/
 
+      - name: Start MQTT broker
+        shell: bash
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y mosquitto mosquitto-clients
+          cat > /tmp/grobro-mosquitto.conf <<'EOF'
+          listener 1883 127.0.0.1
+          allow_anonymous true
+          persistence false
+          EOF
+          mosquitto -c /tmp/grobro-mosquitto.conf -d
+          for attempt in {1..20}; do
+            if mosquitto_pub -h 127.0.0.1 -p 1883 -t grobro/ci/health -m ready; then
+              exit 0
+            fi
+            sleep 0.25
+          done
+          echo "MQTT broker did not start" >&2
+          exit 1
+
       - name: Run tests
+        env:
+          E2E_MQTT_HOST: 127.0.0.1
+          E2E_MQTT_PORT: "1883"
         run: python -m pytest tests/ -v --cov=grobro --cov-report=term-missing --cov-report=xml
