@@ -52,11 +52,12 @@ def test_decode_0106_request_and_ack():
 
     ack = _base_packet(0x0106, 45)
     struct.pack_into(">H", ack, 38, 257)
-    struct.pack_into(">H", ack, 40, 800)
-    ack[42] = 1
+    ack[40] = 0
+    struct.pack_into(">H", ack, 41, 800)
     decoded = decode_0106(bytes(ack))
     assert decoded["kind"] == "ack"
-    assert decoded["status"] == 1
+    assert decoded["status"] == 0
+    assert decoded["value"] == 800
 
 
 def test_decode_0106_rejects_wrong_packets():
