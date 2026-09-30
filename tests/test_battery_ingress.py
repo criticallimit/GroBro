@@ -429,3 +429,54 @@ def test_battery_settings_are_grouped_on_batteries_page():
     finally:
         server.shutdown()
         server.server_close()
+
+def test_ingress_page_contains_current_session_log_viewer():
+    server = start_battery_ingress_server(0)
+    _host, port = server.server_address
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=3) as response:
+            html = response.read().decode()
+
+        assert 'data-tab="logs"' in html
+        assert 'id="tab-logs"' in html
+        assert 'id="log-output"' in html
+        assert 'id="log-refresh"' in html
+        assert 'apiUrl("api/logs")' in html
+        assert "setInterval(()=>loadLogs().catch(()=>{}),3000)" in html
+        assert "Ältere Supervisor-Protokolle bleiben ausgeblendet." in html
+        assert '"Protokoll":"Log"' in html
+        assert '"Protokoll":"Journal"' in html
+        assert '"Protokoll":"Registro"' in html
+        assert '"Protokoll":"Logboek"' in html
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_ingress_logs_api_returns_current_process_only(monkeypatch):
+    monkeypatch.setattr(
+        battery_ingress,
+        "get_current_process_logs",
+        lambda: {
+            "logs": "2026-09-30 21:31:00 [ERROR] current",
+            "started_at": "2026-09-30T21:30:00+02:00",
+            "marker_found": True,
+        },
+    )
+
+    server = start_battery_ingress_server(0)
+    _host, port = server.server_address
+    try:
+        with urllib.request.urlopen(
+            f"http://127.0.0.1:{port}/api/logs",
+            timeout=3,
+        ) as response:
+            result = json.load(response)
+
+        assert result["marker_found"] is True
+        assert result["logs"].endswith("[ERROR] current")
+        assert result["started_at"] == "2026-09-30T21:30:00+02:00"
+    finally:
+        server.shutdown()
+        server.server_close()
+
