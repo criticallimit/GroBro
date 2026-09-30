@@ -154,4 +154,16 @@ def _invalidate_discovery_for_firmware_change(client, device_id: str) -> None:
         discovery_signatures.pop(device_id, None)
 
 
-def install_firmware_runtime() -> None:\n    """Backward-compatible no-op.\n\n    Firmware composition is now part of the single Home Assistant telemetry\n    runtime pipeline in grobro.ha.performance and discovery rewriting is\n    handled by grobro.ha.discovery_runtime. Keeping this function avoids\n    breaking external imports without stacking another Client wrapper.\n    """\n    global _INSTALLED\n    if _INSTALLED:\n        return\n    _INSTALLED = True\n    LOG.info("Firmware runtime is integrated into the consolidated HA pipeline")\n
+def install_firmware_runtime() -> None:
+    """Backward-compatible no-op.
+
+    Firmware composition is now part of the single Home Assistant telemetry
+    runtime pipeline in grobro.ha.performance and discovery rewriting is
+    handled by grobro.ha.discovery_runtime. Keeping this function avoids
+    breaking external imports without stacking another Client wrapper.
+    """
+    global _INSTALLED
+    if _INSTALLED:
+        return
+    _INSTALLED = True
+    LOG.info("Firmware runtime is integrated into the consolidated HA pipeline")
