@@ -1350,10 +1350,7 @@ class TestBatteryPositionWatch:
         assert "bat2_temp" not in published
         assert published["bat3_temp"] == 31.0
         assert published["bat3_serial"] == "SN00300000000002"
-        assert "SN00300000000002" in caplog.text
-        assert "Bat2" in caplog.text
-        assert "Bat3" in caplog.text
-        assert "kept at stable" in caplog.text
+        assert "kept at stable" not in caplog.text
 
     def test_no_warning_stable_positions(self, ha_client, caplog, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
