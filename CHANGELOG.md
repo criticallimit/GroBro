@@ -1,9 +1,10 @@
-# Better GroBro 3.1.51 — Differences from robertzaage/GroBro
+# Better GroBro 3.1.52 — Differences from robertzaage/GroBro
 
 Comparison baseline: `robertzaage/GroBro` main at `e4d59b20ba472853ae6ec0b7a17cf15cd774cb23` (2026-09-18).
 
 ## User-relevant differences
 
+- Fixes HTTP 403 when using “Save & restart Better GroBro” by removing the forbidden Supervisor options validation endpoint and using the supported self options/restart endpoints.
 - Moves expected stable/manual battery remapping messages from WARNING to DEBUG so normal NOAH/NEXA slot stabilization no longer floods the add-on log; real battery mapping problems remain warnings.
 - Fixes the integrated log viewer on normal Home Assistant add-on permissions by using the self-log endpoint and isolating the current process session without requiring elevated Supervisor permissions.
 - Adds an integrated log viewer that shows only entries from the current add-on startup, and makes ERROR/INFO/DEBUG logging deterministic even when logging handlers already exist.
