@@ -2,38 +2,35 @@
 
 > **GroBro, optimized for Home Assistant.**
 
-Better GroBro builds on [Robert Zaage's GroBro](https://github.com/robertzaage/GroBro) and keeps its core behavior while making day-to-day use in Home Assistant cleaner, easier and more reliable.
+Better GroBro is based on [Robert Zaage's GroBro](https://github.com/robertzaage/GroBro) and keeps its core behavior while extending it for tighter Home Assistant integration and improved NOAH/NEXA support.
 
 ---
 
 ## Better GroBro 3.1.56
 
-### What Better GroBro adds
+### Differences from Robert Zaage's GroBro
 
-#### Easier Home Assistant setup
+#### Home Assistant integration
 
-- Uses one clear configuration action: saving add-on options always restarts Better GroBro so changes take effect immediately
-- Built-in configuration page directly inside Home Assistant
-- Current-session add-on log viewer directly in the Better GroBro interface
-- The log viewer preserves the manual scroll position during automatic refresh while still following new entries when you stay at the bottom
+- Built-in configuration interface directly inside Home Assistant
 - Automatic German, English, French, Spanish and Dutch interface and Home Assistant entity names
-- Clear overview of detected Growatt families such as NOAH, NEO and NEXA
+- Overview of detected Growatt device families such as NOAH, NEO and NEXA
+- Integrated log viewer for the currently running Better GroBro session
 
-#### Better battery handling
+#### Battery handling
 
-- Publishes NOAH Bat2/Bat3/Bat4 maximum and minimum cell voltages with the same Home Assistant metadata and scaling as Bat1
-- Requests three decimal places for NOAH Bat1–Bat4 cell-voltage sensors in Home Assistant so millivolt resolution is displayed consistently
-- Stable NOAH/NEXA battery identities
-- Optional manual Bat2/Bat3/Bat4 assignment by serial number
+- Stable NOAH/NEXA battery positions by serial number
+- Optional manual Bat2/Bat3/Bat4 assignment
+- Additional NOAH Bat2/Bat3/Bat4 maximum and minimum cell-voltage sensors
+- Consistent millivolt-resolution display for NOAH Bat1–Bat4 cell-voltage sensors
 
-#### More reliable operation
+#### Reliability and operation
 
-- Handles NOAH/NEO `0x0103` packets with their dedicated decoder so embedded serial bytes are no longer misreported as truncated register blocks
-- Correctly parses Growatt Function-6 write acknowledgements so valid NOAH register writes no longer appear as invalid register ranges
+- Improved NOAH/NEXA protocol handling
 - Improved recovery after Home Assistant, MQTT or add-on restarts
-- Stale measurement values become unavailable when telemetry stops, while entities remain in Home Assistant
-- Lower unnecessary MQTT traffic without suppressing real value changes
-- Improved NOAH/NEXA handling, clock synchronization and optional diagnostics
+- Device availability handling prevents stale measurement values from remaining active when telemetry stops
+- Reduced unnecessary MQTT/Home Assistant traffic while preserving real value changes
+- Supported-device clock synchronization and optional diagnostics
 
 Everything else continues to follow Robert's GroBro.
 
