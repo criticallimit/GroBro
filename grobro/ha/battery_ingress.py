@@ -7,7 +7,6 @@ import logging
 import os
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from pathlib import Path
 from urllib.parse import urlsplit
 
 from grobro.ha.battery_position import (
@@ -138,8 +137,8 @@ _INDEX_HTML = r"""<!doctype html>
       <button id="refresh" type="button">Aktualisieren</button>
     </div>
     <div id="feature-warning" class="status warning" hidden>
-      KEEP_BATTERY_POSITION ist deaktiviert. Die Auswahl kann gespeichert werden,
-      wird aber erst angewendet, wenn die stabile Batterie-Zuordnung aktiviert ist.
+      KEEP_BATTERY_POSITION ist deaktiviert. Manuelle Zuordnungen bleiben aktiv;
+      „Automatisch“ folgt dann der aktuell vom Gerät gemeldeten Position.
     </div>
     <div id="detected" class="serials"></div>
   </section>
