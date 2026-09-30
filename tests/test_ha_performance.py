@@ -167,6 +167,10 @@ def test_whole_watt_rule_covers_every_device_family(monkeypatch):
         assert key in _register_rules(family.registers)[2], family.key
 
 
+def test_register_rules_without_known_registers_match_current_tuple_shape():
+    assert _register_rules(None) == ({}, frozenset(), frozenset(), False)
+
+
 def test_shared_register_rules_are_cached_for_every_family():
     """Shared HA hot-path rule generation must not be NOAH-only."""
     for family in DEVICE_FAMILIES:
