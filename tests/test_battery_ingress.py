@@ -391,3 +391,18 @@ def test_battery_assignment_labels_fixed_master_as_bat1():
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_glitch_filter_option_is_removed_from_ingress_ui():
+    server = start_battery_ingress_server(0)
+    _host, port = server.server_address
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=3) as response:
+            html = response.read().decode()
+
+        assert "cfg-FILTER_DATA_GLITCHES" not in html
+        assert "Messwertsprünge filtern" not in html
+        assert "total_increasing unterdrücken" not in html
+    finally:
+        server.shutdown()
+        server.server_close()
