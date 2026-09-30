@@ -351,6 +351,12 @@ def install_ha_performance_hook() -> None:
     def publish_holding_register_input_fast(self, ha_input):
         try:
             LOG.debug("HA: publish: %s", ha_input)
+            device_id = ha_input.device_id
+            # A valid holding-register readback proves that the device is live,
+            # even when its normal telemetry interval is longer.
+            self._Client__publish_availability(device_id, True)
+            if ha_client_module.DEVICE_TIMEOUT > 0:
+                self._Client__reset_device_timer(device_id)
             for value in ha_input.payload:
                 if not _should_publish_holding_state(
                     self,
