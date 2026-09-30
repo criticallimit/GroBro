@@ -49,9 +49,11 @@ def install_config_runtime(migration_set) -> None:
     def set_config_clean(self, device_id, config):
         observe_device(device_id)
         # Receiving a real config packet is also live communication from the device.
-        self._Client__publish_availability(device_id, True)
-        if ha_client_module.DEVICE_TIMEOUT > 0:
-            self._Client__reset_device_timer(device_id)
+        # Partial test/tool clients may not have an MQTT runtime attached.
+        if hasattr(self, "_client") and hasattr(self, "_device_last_seen"):
+            self._Client__publish_availability(device_id, True)
+            if ha_client_module.DEVICE_TIMEOUT > 0:
+                self._Client__reset_device_timer(device_id)
         config_path = f"config_{device_id}.json"
         existing_config = ha_client_module.model.DeviceConfig.from_file(config_path)
         previous_config = self._config_cache.get(device_id)
