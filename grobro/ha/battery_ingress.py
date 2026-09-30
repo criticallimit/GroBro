@@ -138,7 +138,6 @@ _INDEX_HTML = r"""<!doctype html>
         <div class="field"><label for="cfg-MAX_SLOTS">Zeitfenster</label><select id="cfg-MAX_SLOTS"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option></select><div class="help">Anzahl der Batterie-Zeitfenster in Home Assistant.</div></div>
         <div class="field"><label for="cfg-DEVICE_TIMEOUT">Geräte-Timeout (Sekunden)</label><input id="cfg-DEVICE_TIMEOUT" type="number" min="1" step="1"><div class="help">Nach dieser Zeit ohne Telemetrie werden die Entities unavailable, bleiben aber in Home Assistant erhalten.</div></div>
         <div class="field"><label>Availability-Sensor</label><div class="check"><input id="cfg-AVAILABILITY_SENSOR" type="checkbox">Zusätzlichen Online-Sensor erzeugen</div></div>
-        <div class="field"><label>Messwertsprünge filtern</label><div class="check"><input id="cfg-FILTER_DATA_GLITCHES" type="checkbox">Rücksprünge bei total_increasing unterdrücken</div></div>
         <div class="field"><label for="cfg-HA_BASE_TOPIC">HA Basis-Topic</label><input id="cfg-HA_BASE_TOPIC" type="text"></div>
         <div class="field"><label for="cfg-MQTT_CLIENT_SUFFIX">MQTT Client-Suffix</label><input id="cfg-MQTT_CLIENT_SUFFIX" type="text"></div>
         <div class="field"><label for="cfg-TZ">Zeitzone</label><input id="cfg-TZ" type="text" placeholder="leer = Home Assistant übernehmen"></div>
@@ -217,7 +216,6 @@ const TEXTS={
     "Automatisch":"Automatic","Zeitfenster":"Time slots","Anzahl der Batterie-Zeitfenster in Home Assistant.":"Number of battery scheduling slots in Home Assistant.",
     "Geräte-Timeout (Sekunden)":"Device timeout (seconds)","Nach dieser Zeit ohne Telemetrie werden die Entities unavailable, bleiben aber in Home Assistant erhalten.":"After this time without telemetry, entities become unavailable but remain in Home Assistant.",
     "Availability-Sensor":"Availability sensor","Zusätzlichen Online-Sensor erzeugen":"Create an additional online sensor",
-    "Messwertsprünge filtern":"Filter data glitches","Rücksprünge bei total_increasing unterdrücken":"Suppress decreases in total_increasing values",
     
     "HA Basis-Topic":"HA base topic","MQTT Client-Suffix":"MQTT client suffix","Zeitzone":"Timezone",
     "Growatt / Quell-MQTT":"Growatt / source MQTT","Host":"Host","Port":"Port","Benutzername":"Username","Passwort":"Password",
@@ -242,7 +240,6 @@ const TEXTS={
     "Automatisch":"Automatique","Zeitfenster":"Créneaux horaires","Anzahl der Batterie-Zeitfenster in Home Assistant.":"Nombre de créneaux de batterie dans Home Assistant.",
     "Geräte-Timeout (Sekunden)":"Délai de l'appareil (secondes)","Nach dieser Zeit ohne Telemetrie werden die Entities unavailable, bleiben aber in Home Assistant erhalten.":"Après ce délai sans télémétrie, les entités deviennent indisponibles mais restent dans Home Assistant.",
     "Availability-Sensor":"Capteur de disponibilité","Zusätzlichen Online-Sensor erzeugen":"Créer un capteur en ligne supplémentaire",
-    "Messwertsprünge filtern":"Filtrer les anomalies","Rücksprünge bei total_increasing unterdrücken":"Supprimer les diminutions de total_increasing",
     
     "HA Basis-Topic":"Topic de base HA","MQTT Client-Suffix":"Suffixe client MQTT","Zeitzone":"Fuseau horaire",
     "Growatt / Quell-MQTT":"Growatt / MQTT source","Host":"Hôte","Port":"Port","Benutzername":"Nom d'utilisateur","Passwort":"Mot de passe",
@@ -267,7 +264,6 @@ const TEXTS={
     "Automatisch":"Automático","Zeitfenster":"Franjas horarias","Anzahl der Batterie-Zeitfenster in Home Assistant.":"Número de franjas de batería en Home Assistant.",
     "Geräte-Timeout (Sekunden)":"Tiempo de espera del dispositivo (segundos)","Nach dieser Zeit ohne Telemetrie werden die Entities unavailable, bleiben aber in Home Assistant erhalten.":"Tras este tiempo sin telemetría, las entidades pasan a no disponibles pero permanecen en Home Assistant.",
     "Availability-Sensor":"Sensor de disponibilidad","Zusätzlichen Online-Sensor erzeugen":"Crear un sensor en línea adicional",
-    "Messwertsprünge filtern":"Filtrar anomalías","Rücksprünge bei total_increasing unterdrücken":"Suprimir descensos en total_increasing",
     "HA Basis-Topic":"Topic base de HA","MQTT Client-Suffix":"Sufijo de cliente MQTT","Zeitzone":"Zona horaria",
     "Growatt / Quell-MQTT":"Growatt / MQTT origen","Host":"Host","Port":"Puerto","Benutzername":"Usuario","Passwort":"Contraseña",
     "TLS aktivieren":"Activar TLS","Home Assistant / Ziel-MQTT":"Home Assistant / MQTT destino","Cloud-Weiterleitung":"Reenvío a la nube",
@@ -291,7 +287,6 @@ const TEXTS={
     "Automatisch":"Automatisch","Zeitfenster":"Tijdsloten","Anzahl der Batterie-Zeitfenster in Home Assistant.":"Aantal batterij-tijdsloten in Home Assistant.",
     "Geräte-Timeout (Sekunden)":"Apparaattime-out (seconden)","Nach dieser Zeit ohne Telemetrie werden die Entities unavailable, bleiben aber in Home Assistant erhalten.":"Na deze tijd zonder telemetrie worden de entiteiten niet beschikbaar, maar blijven ze in Home Assistant behouden.",
     "Availability-Sensor":"Beschikbaarheidssensor","Zusätzlichen Online-Sensor erzeugen":"Extra online-sensor maken",
-    "Messwertsprünge filtern":"Meetwaardesprongen filteren","Rücksprünge bei total_increasing unterdrücken":"Terugval bij total_increasing onderdrukken",
     "HA Basis-Topic":"HA-basistopic","MQTT Client-Suffix":"MQTT-clientsuffix","Zeitzone":"Tijdzone",
     "Growatt / Quell-MQTT":"Growatt / bron-MQTT","Host":"Host","Port":"Poort","Benutzername":"Gebruikersnaam","Passwort":"Wachtwoord",
     "TLS aktivieren":"TLS inschakelen","Home Assistant / Ziel-MQTT":"Home Assistant / doel-MQTT","Cloud-Weiterleitung":"Cloud-doorsturen",
@@ -353,10 +348,10 @@ const CONFIG_KEYS=[
 "MQTT_CLIENT_SUFFIX","HA_BASE_TOPIC","GROWATT_CLOUD","GROWATT_CLOUD_CONFIG_FILTER","LOG_LEVEL",
 "DUMP_MESSAGES","DUMP_DIR","REGISTER_DEBUG","REGISTER_DEBUG_DIR","REGISTER_DEBUG_MAX_REGISTER",
 "REGISTER_DEBUG_CHANGES_ONLY","DEVICE_TIMEOUT","MAX_SLOTS","MAX_BAT",
-"AVAILABILITY_SENSOR","FILTER_DATA_GLITCHES","TZ","KEEP_BATTERY_POSITION"];
+"AVAILABILITY_SENSOR","TZ","KEEP_BATTERY_POSITION"];
 const BOOL_KEYS=new Set(["SOURCE_MQTT_TLS","TARGET_MQTT_TLS","GROWATT_CLOUD","GROWATT_CLOUD_CONFIG_FILTER",
 "DUMP_MESSAGES","REGISTER_DEBUG","REGISTER_DEBUG_CHANGES_ONLY",
-"AVAILABILITY_SENSOR","FILTER_DATA_GLITCHES","KEEP_BATTERY_POSITION"]);
+"AVAILABILITY_SENSOR","KEEP_BATTERY_POSITION"]);
 const INT_KEYS=new Set(["SOURCE_MQTT_PORT","TARGET_MQTT_PORT","REGISTER_DEBUG_MAX_REGISTER","DEVICE_TIMEOUT","MAX_SLOTS"]);
 
 function apiUrl(suffix){const path=window.location.pathname.replace(/\/+$/,"");return path+"/"+suffix.replace(/^\/+/, "");}

@@ -27,7 +27,6 @@ CONFIG_KEYS = (
     "MAX_SLOTS",
     "MAX_BAT",
     "AVAILABILITY_SENSOR",
-    "FILTER_DATA_GLITCHES",
     "TZ",
     "KEEP_BATTERY_POSITION",
 )
@@ -44,6 +43,7 @@ def test_all_supported_languages_have_native_addon_configuration_translations():
         for key in CONFIG_KEYS:
             assert f"  {key}:\n" in text, (language, key)
         assert "PUBLISH_SENSORS_RETAINED" not in text
+        assert "FILTER_DATA_GLITCHES" not in text
 
 
 def test_dutch_translation_is_real_not_english_copy():

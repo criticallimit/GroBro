@@ -51,11 +51,7 @@ def test_prepare_payload_preserves_existing_value_rules(monkeypatch):
             "plain": _reg(),
         }
     )
-    client = SimpleNamespace(
-        _last_energy_values={(state.device_id, "energy"): 120},
-    )
-
-    monkeypatch.setattr(ha_client, "FILTER_DATA_GLITCHES", True)
+    client = SimpleNamespace()
     monkeypatch.setattr(
         ha_client,
         "map_enum_value",
@@ -71,7 +67,7 @@ def test_prepare_payload_preserves_existing_value_rules(monkeypatch):
 
     assert result == {
         "bat2_temp": None,
-        "energy": 120,
+        "energy": 100,
         "enum_value": "Mapped",
         "plain": 5,
     }
@@ -79,30 +75,24 @@ def test_prepare_payload_preserves_existing_value_rules(monkeypatch):
     assert state.payload["bat4_soc"] == 77
 
 
-def test_prepare_payload_updates_increasing_energy_cache(monkeypatch):
+def test_total_increasing_decrease_is_passed_through_unchanged(monkeypatch):
     state = SimpleNamespace(
-        device_id="QMNTEST",
-        payload={"energy": 125},
+        device_id="0PVPTEST",
+        payload={"energy": 0.0},
     )
     known_registers = SimpleNamespace(
         input_registers={"energy": _reg("total_increasing")},
     )
-    client = SimpleNamespace(
-        _last_energy_values={(state.device_id, "energy"): 120},
-    )
-
-    monkeypatch.setattr(ha_client, "FILTER_DATA_GLITCHES", True)
     monkeypatch.setattr(ha_client, "map_enum_value", lambda _reg_def, value: value)
 
     result = _prepare_payload(
-        client,
+        SimpleNamespace(),
         state,
         effective_max_bat=4,
         known_registers=known_registers,
     )
 
-    assert result["energy"] == 125
-    assert client._last_energy_values[(state.device_id, "energy")] == 125
+    assert result["energy"] == 0.0
 
 
 def test_prepare_payload_publishes_power_as_whole_watts(monkeypatch):
@@ -127,9 +117,8 @@ def test_prepare_payload_publishes_power_as_whole_watts(monkeypatch):
             "voltage": _reg(device_class="voltage", unit_of_measurement="V"),
         }
     )
-    client = SimpleNamespace(_last_energy_values={})
+    client = SimpleNamespace()
 
-    monkeypatch.setattr(ha_client, "FILTER_DATA_GLITCHES", False)
     monkeypatch.setattr(ha_client, "map_enum_value", lambda _reg_def, value: value)
 
     result = _prepare_payload(
@@ -149,7 +138,6 @@ def test_prepare_payload_publishes_power_as_whole_watts(monkeypatch):
 
 def test_whole_watt_rule_covers_every_device_family(monkeypatch):
     """Every supported family must use the same 3.0.1 HA whole-watt path."""
-    monkeypatch.setattr(ha_client, "FILTER_DATA_GLITCHES", False)
     monkeypatch.setattr(ha_client, "map_enum_value", lambda _reg_def, value: value)
 
     for family in DEVICE_FAMILIES:
@@ -166,7 +154,7 @@ def test_whole_watt_rule_covers_every_device_family(monkeypatch):
             device_id=f"{family.prefixes[0]}TEST",
             payload={key: -0.4},
         )
-        client = SimpleNamespace(_last_energy_values={})
+        client = SimpleNamespace()
 
         result = _prepare_payload(
             client,
@@ -176,7 +164,7 @@ def test_whole_watt_rule_covers_every_device_family(monkeypatch):
         )
 
         assert result[key] == 0, family.key
-        assert key in _register_rules(family.registers)[3], family.key
+        assert key in _register_rules(family.registers)[2], family.key
 
 
 def test_shared_register_rules_are_cached_for_every_family():
@@ -207,13 +195,11 @@ def test_register_rules_are_cached_and_preserve_static_semantics():
     assert first is second
     (
         enum_registers,
-        total_increasing,
         invalid_battery_temps,
         whole_watt_power,
         has_serial_parts,
     ) = first
     assert enum_registers["enum_value"] is known_registers.input_registers["enum_value"]
-    assert total_increasing == frozenset({"energy"})
     assert invalid_battery_temps == frozenset({"bat2_temp"})
     assert whole_watt_power == frozenset({"power"})
     assert has_serial_parts is True

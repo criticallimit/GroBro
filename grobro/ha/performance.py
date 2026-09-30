@@ -33,7 +33,7 @@ LOG = logging.getLogger(__name__)
 _INSTALLED = False
 _REGISTER_RULES_CACHE: dict[
     int,
-    tuple[dict, frozenset[str], frozenset[str], frozenset[str], bool],
+    tuple[dict, frozenset[str], frozenset[str], bool],
 ] = {}
 _BAT_SERIAL_GROUPS = (
     (2, ("bat2_ser_part_1", "bat2_ser_part_2", "bat2_ser_part_3", "bat2_ser_part_4"), "bat2_serial"),
@@ -53,7 +53,6 @@ def _register_rules(known_registers):
         return cached
 
     enum_registers: dict = {}
-    total_increasing: set[str] = set()
     invalid_battery_temps: set[str] = set()
     whole_watt_power: set[str] = set()
     has_battery_serial_parts = False
@@ -63,8 +62,6 @@ def _register_rules(known_registers):
         if data is not None and getattr(data, "data_type", None) == "ENUM":
             enum_registers[name] = reg
         ha_reg = reg.homeassistant
-        if getattr(ha_reg, "state_class", None) == "total_increasing":
-            total_increasing.add(name)
         if (
             getattr(ha_reg, "device_class", None) == "power"
             and getattr(ha_reg, "unit_of_measurement", None) == "W"
@@ -77,7 +74,6 @@ def _register_rules(known_registers):
 
     rules = (
         enum_registers,
-        frozenset(total_increasing),
         frozenset(invalid_battery_temps),
         frozenset(whole_watt_power),
         has_battery_serial_parts,
@@ -98,7 +94,6 @@ def _prepare_payload(
         rules = _register_rules(known_registers)
     (
         enum_registers,
-        total_increasing,
         invalid_battery_temps,
         whole_watt_power,
         _,
@@ -106,9 +101,6 @@ def _prepare_payload(
 
     get_bat_number = ha_client_module._get_bat_number
     map_enum_value = ha_client_module.map_enum_value
-    filter_data_glitches = ha_client_module.FILTER_DATA_GLITCHES
-    last_energy_values = client._last_energy_values
-    device_id = state.device_id
     payload: dict = {}
 
     for key, raw_value in state.payload.items():
@@ -127,25 +119,6 @@ def _prepare_payload(
         enum_reg = enum_registers.get(key)
         if enum_reg is not None:
             value = map_enum_value(enum_reg, value)
-
-        if (
-            filter_data_glitches
-            and key in total_increasing
-            and isinstance(value, (int, float))
-        ):
-            device_key = (device_id, key)
-            last_value = last_energy_values.get(device_key)
-            if last_value is not None and value < last_value:
-                LOG.debug(
-                    "Suppressed decrease for %s/%s: %.1f -> %.1f",
-                    device_id,
-                    key,
-                    last_value,
-                    value,
-                )
-                value = last_value
-            else:
-                last_energy_values[device_key] = value
 
         if (
             key in whole_watt_power
@@ -310,7 +283,7 @@ def install_ha_performance_hook() -> None:
             rules,
         )
 
-        if rules[4]:
+        if rules[3]:
             expose_combined_battery_serials = ha_client_module.model.is_family(
                 device_id,
                 "noah",

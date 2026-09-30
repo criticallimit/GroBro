@@ -118,7 +118,6 @@ def initialize_instance_state(client) -> None:
     client._device_last_seen = {}
     client._device_timer_lock = Lock()
     client._last_availability = {}
-    client._last_energy_values = {}
     client._config_read_queues = {}
     client._config_read_inflight = {}
     client._config_read_timers = {}

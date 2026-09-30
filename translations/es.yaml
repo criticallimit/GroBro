@@ -74,9 +74,6 @@ configuration:
   AVAILABILITY_SENSOR:
     name: Sensor de disponibilidad
     description: Mostrar un sensor binario En línea adicional. La disponibilidad normal de las entidades permanece activa.
-  FILTER_DATA_GLITCHES:
-    name: Filtrar anomalías de medición
-    description: Suprimir descensos en sensores total_increasing como contadores de energía.
   TZ:
     name: Zona horaria
     description: Zona horaria local utilizada para registros y eventos del sistema.

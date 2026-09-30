@@ -74,9 +74,6 @@ configuration:
   AVAILABILITY_SENSOR:
     name: Beschikbaarheidssensor
     description: Een extra Online binaire sensor weergeven. Normale beschikbaarheid van entiteiten blijft altijd actief.
-  FILTER_DATA_GLITCHES:
-    name: Meetfouten filteren
-    description: Terugval bij total_increasing-sensoren zoals energietellers onderdrukken.
   TZ:
     name: Tijdzone
     description: Lokale tijdzone voor logs en systeemgebeurtenissen.
