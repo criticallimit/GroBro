@@ -194,6 +194,18 @@ def normalize_options(raw: dict) -> dict:
     return result
 
 
+def get_home_assistant_language(default: str = "en") -> str:
+    """Return Home Assistant's configured core language."""
+    try:
+        config = _supervisor_request("GET", "/core/api/config") or {}
+    except SupervisorConfigError:
+        return default
+    if not isinstance(config, dict):
+        return default
+    language = str(config.get("language") or default).strip().replace("_", "-")
+    return language or default
+
+
 def get_addon_options() -> dict:
     """Return current official Home Assistant add-on options with defaults."""
     info = _supervisor_request("GET", "/addons/self/info") or {}
@@ -205,6 +217,7 @@ def get_addon_options() -> dict:
         "options": options,
         "version": info.get("version") if isinstance(info, dict) else None,
         "state": info.get("state") if isinstance(info, dict) else None,
+        "language": get_home_assistant_language(),
     }
 
 
