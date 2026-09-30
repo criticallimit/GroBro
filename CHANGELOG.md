@@ -1,9 +1,10 @@
-# Better GroBro 3.1.55 — Differences from robertzaage/GroBro
+# Better GroBro 3.1.56 — Differences from robertzaage/GroBro
 
 Comparison baseline: `robertzaage/GroBro` main at `e4d59b20ba472853ae6ec0b7a17cf15cd774cb23` (2026-09-18).
 
 ## User-relevant differences
 
+- Simplifies the Ingress configuration UI to one localized “Save & restart Better GroBro” action and always restarts the add-on after saving configuration changes.
 - Moves normal `Installed ...` startup messages from INFO to DEBUG so the standard INFO log is less noisy.
 - Stops NOAH/NEO `0x0103` packets from falling through to the generic Modbus block parser, removing false `Truncated register block` warnings caused by embedded device-serial bytes.
 - Fixes the integrated log viewer so manual scrolling is preserved across the 3-second auto-refresh; it only follows the newest entries automatically while the user remains near the bottom.
