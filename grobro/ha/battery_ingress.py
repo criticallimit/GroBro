@@ -296,6 +296,11 @@ function applyLanguage(language){
   const tz=document.getElementById("cfg-TZ");
   if(tz)tz.placeholder=currentLang==="de"?"leer = Home Assistant übernehmen":currentLang==="fr"?"vide = reprendre Home Assistant":currentLang==="es"?"vacío = usar Home Assistant":"empty = use Home Assistant";
 }
+try {
+  applyLanguage(window.localStorage.getItem("selectedLanguage") || navigator.language || "en");
+} catch (error) {
+  applyLanguage(navigator.language || "en");
+}
 const CONFIG_KEYS=[
 "SOURCE_MQTT_HOST","SOURCE_MQTT_PORT","SOURCE_MQTT_TLS","SOURCE_MQTT_USER","SOURCE_MQTT_PASS",
 "TARGET_MQTT_HOST","TARGET_MQTT_PORT","TARGET_MQTT_TLS","TARGET_MQTT_USER","TARGET_MQTT_PASS",
@@ -364,7 +369,7 @@ function collectConfig(){
 }
 async function loadConfig(){
   const r=await fetch(apiUrl("api/config"),{cache:"no-store"});const out=await r.json();if(!r.ok)throw new Error(out.error||"Konfiguration konnte nicht geladen werden");
-  configState=out;applyLanguage(out.language);fillConfig(out.options||{});document.getElementById("summary-version").textContent=out.version||"–";document.getElementById("summary-state").textContent=out.state||"–";
+  configState=out;fillConfig(out.options||{});document.getElementById("summary-version").textContent=out.version||"–";document.getElementById("summary-state").textContent=out.state||"–";
 }
 async function saveConfig(restart){
   const r=await fetch(apiUrl("api/config"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({options:collectConfig(),restart})});
