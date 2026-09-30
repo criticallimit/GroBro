@@ -494,7 +494,7 @@ def stabilize_battery_payload(
                     "Battery %s reported as Bat%d but manually kept at Bat%d "
                     "for device %s"
                 )
-            LOG.warning(
+            LOG.debug(
                 message,
                 serial,
                 physical_slot,
