@@ -268,7 +268,6 @@ const TEXTS={
     "Geräte-Timeout (Sekunden)":"Tiempo de espera del dispositivo (segundos)","Nach dieser Zeit ohne Telemetrie werden die Entities unavailable, bleiben aber in Home Assistant erhalten.":"Tras este tiempo sin telemetría, las entidades pasan a no disponibles pero permanecen en Home Assistant.",
     "Availability-Sensor":"Sensor de disponibilidad","Zusätzlichen Online-Sensor erzeugen":"Crear un sensor en línea adicional",
     "Messwertsprünge filtern":"Filtrar anomalías","Rücksprünge bei total_increasing unterdrücken":"Suprimir descensos en total_increasing",
-    "Sensorzustände retained":"Estados retained","MQTT retain für Sensorzustände verwenden":"Usar MQTT retain para estados",
     "HA Basis-Topic":"Topic base de HA","MQTT Client-Suffix":"Sufijo de cliente MQTT","Zeitzone":"Zona horaria",
     "Growatt / Quell-MQTT":"Growatt / MQTT origen","Host":"Host","Port":"Puerto","Benutzername":"Usuario","Passwort":"Contraseña",
     "TLS aktivieren":"Activar TLS","Home Assistant / Ziel-MQTT":"Home Assistant / MQTT destino","Cloud-Weiterleitung":"Reenvío a la nube",
