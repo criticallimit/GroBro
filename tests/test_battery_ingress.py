@@ -316,6 +316,7 @@ def test_battery_assignment_ui_respects_max_bat():
         assert 'configState.options.MAX_BAT' in html
         assert "return [2,3,4].filter(slot=>slot<=maxBat);" in html
         assert 'row.hidden=!visibleSlots.includes(slot);' in html
+        assert "[hidden] { display:none !important; }" in html
     finally:
         server.shutdown()
         server.server_close()
