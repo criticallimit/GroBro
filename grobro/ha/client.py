@@ -631,7 +631,7 @@ class Client:
             self._client.publish(
                 f"{HA_BASE_TOPIC}/grobro/{device_id}/online",
                 "ON" if online else "OFF",
-                retain=PUBLISH_SENSORS_RETAINED,
+                retain=True,
             )
 
     def __detect_neo_pv_count(self, device_id: str, payload: dict) -> None:
