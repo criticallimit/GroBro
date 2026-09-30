@@ -74,9 +74,6 @@ configuration:
   AVAILABILITY_SENSOR:
     name: Availability sensor
     description: Expose an additional Online binary sensor. Normal entity availability remains active regardless.
-  FILTER_DATA_GLITCHES:
-    name: Filter measurement glitches
-    description: Suppress decreases in total_increasing sensors such as energy counters.
   TZ:
     name: Timezone
     description: Local timezone used for logs and system events.
