@@ -19,6 +19,7 @@ from grobro.ha.client import (
     _resolve_max_bat,
     _MAX_BAT_CACHE,
     _command_subscriptions,
+    _effective_device_timeout,
 )
 from grobro.model.modbus_message import GrowattModbusFunction, GrowattModbusMessage
 from grobro.model.modbus_function import GrowattModbusFunctionSingle
@@ -152,6 +153,11 @@ class TestHelpers:
         result = map_enum_value(reg, 5)
         assert result == 5
 
+
+    def test_effective_device_timeout_never_disables_availability(self):
+        assert _effective_device_timeout(0) == 120
+        assert _effective_device_timeout(-1) == 120
+        assert _effective_device_timeout(30) == 30
 
 class TestBatNumber:
     def test_bat1_temp(self):
@@ -1168,6 +1174,23 @@ class TestEdgeCases:
         cmps = payload.get("cmps", {})
         cmp_names = [v["name"] for v in cmps.values()]
         assert any("Online" in n for n in cmp_names)
+
+
+class TestRetainSafety:
+    def test_measurement_state_payload_is_never_retained(self, ha_client):
+        state = HomeAssistantInputRegister(
+            device_id="QMN000ABC1D2E3FG",
+            payload={"Ppv": 100},
+        )
+        ha_client.publish_input_register(state)
+
+        state_calls = [
+            call
+            for call in ha_client._client.publish.call_args_list
+            if call.args[0] == "homeassistant/grobro/QMN000ABC1D2E3FG/state"
+        ]
+        assert state_calls
+        assert state_calls[-1].kwargs["retain"] is False
 
 
 class TestCombinedSerial:
