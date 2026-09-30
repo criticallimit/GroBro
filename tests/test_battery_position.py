@@ -307,3 +307,93 @@ def test_detected_serials_are_exposed_to_ingress_state(tmp_path, monkeypatch):
         {"physical_slot": 2, "serial": "NXBAT20000000001"},
         {"physical_slot": 3, "serial": "NXBAT30000000002"},
     ]
+
+
+def test_manual_assignment_moves_all_noah_slot_values_with_serial(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    save_manual_assignments(
+        "0PVPTEST",
+        {
+            "2": "SN00300000000002",
+            "3": "SN00200000000001",
+            "4": AUTO_ASSIGNMENT,
+        },
+    )
+    client = SimpleNamespace()
+    payload = _payload(
+        slot2_serial="SN00200000000001",
+        slot3_serial="SN00300000000002",
+        bat2_temp=22.5,
+        bat3_temp=31.0,
+        bat_2_soc_pct=41,
+        bat_3_soc_pct=86,
+    )
+
+    remapped, logical_max = stabilize_battery_payload(
+        client,
+        "0PVPTEST",
+        payload,
+        use_stable_auto=False,
+    )
+
+    assert logical_max == 3
+    assert remapped["bat2_temp"] == 31.0
+    assert remapped["bat3_temp"] == 22.5
+    assert remapped["bat_2_soc_pct"] == 86
+    assert remapped["bat_3_soc_pct"] == 41
+    assert remapped["bat2_ser_part_1"] == "SN00300000000002"
+    assert remapped["bat3_ser_part_1"] == "SN00200000000001"
+
+
+def test_manual_assignment_moves_all_nexa_slot_values_with_serial(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    save_manual_assignments(
+        "0HVRTEST",
+        {
+            "2": "NXBAT30000000002",
+            "3": "NXBAT20000000001",
+            "4": AUTO_ASSIGNMENT,
+        },
+    )
+    client = SimpleNamespace()
+    payload = _payload(
+        slot2_serial="NXBAT20000000001",
+        slot3_serial="NXBAT30000000002",
+        battery2Soc=52,
+        battery3Soc=91,
+    )
+
+    remapped, logical_max = stabilize_battery_payload(
+        client,
+        "0HVRTEST",
+        payload,
+        use_stable_auto=False,
+    )
+
+    assert logical_max == 3
+    assert remapped["battery2Soc"] == 91
+    assert remapped["battery3Soc"] == 52
+    assert remapped["bat2_ser_part_1"] == "NXBAT30000000002"
+    assert remapped["bat3_ser_part_1"] == "NXBAT20000000001"
+
+
+def test_all_current_slot_specific_noah_and_nexa_register_names_are_remappable():
+    from grobro.ha.battery_position import _logical_slot_from_key
+
+    current_slot_registers = {
+        "bat2_temp": 2,
+        "bat3_temp": 3,
+        "bat4_temp": 4,
+        "bat_2_soc_pct": 2,
+        "bat_3_soc_pct": 3,
+        "bat_4_soc_pct": 4,
+        "battery2Soc": 2,
+        "battery3Soc": 3,
+        "battery4Soc": 4,
+        "bat2_ser_part_1": 2,
+        "bat3_ser_part_1": 3,
+        "bat4_ser_part_1": 4,
+    }
+
+    for name, expected_slot in current_slot_registers.items():
+        assert _logical_slot_from_key(name) == expected_slot
