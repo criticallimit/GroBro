@@ -1,6 +1,13 @@
 from types import SimpleNamespace
 
-from grobro.ha.battery_position import stabilize_battery_payload
+from grobro.ha.battery_position import (
+    AUTO_ASSIGNMENT,
+    EMPTY_ASSIGNMENT,
+    load_battery_ui_state,
+    observe_battery_serials,
+    save_manual_assignments,
+    stabilize_battery_payload,
+)
 from grobro.model.growatt_registers import KNOWN_NEXA_REGISTERS
 
 
@@ -204,3 +211,99 @@ def test_nexa_module_serial_registers_are_internal_only():
         register = KNOWN_NEXA_REGISTERS.input_registers[name]
         assert register.growatt.position.register_no == register_no
         assert register.homeassistant.publish is False
+
+
+def test_manual_serial_assignment_overrides_automatic_slot(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    save_manual_assignments(
+        "0PVPTEST",
+        {
+            "2": "SN00300000000002",
+            "3": "SN00200000000001",
+            "4": AUTO_ASSIGNMENT,
+        },
+    )
+    client = SimpleNamespace()
+    payload = _payload(
+        slot2_serial="SN00200000000001",
+        slot3_serial="SN00300000000002",
+        bat2_temp=22.0,
+        bat3_temp=23.0,
+    )
+
+    remapped, logical_max = stabilize_battery_payload(
+        client,
+        "0PVPTEST",
+        payload,
+        use_stable_auto=False,
+    )
+
+    assert logical_max == 3
+    assert remapped["bat2_temp"] == 23.0
+    assert remapped["bat3_temp"] == 22.0
+
+
+def test_manual_empty_slot_is_reserved(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    save_manual_assignments(
+        "0PVPTEST",
+        {
+            "2": EMPTY_ASSIGNMENT,
+            "3": AUTO_ASSIGNMENT,
+            "4": AUTO_ASSIGNMENT,
+        },
+    )
+    client = SimpleNamespace()
+
+    remapped, logical_max = stabilize_battery_payload(
+        client,
+        "0PVPTEST",
+        _payload(slot2_serial="SN00200000000001", bat2_temp=26.0),
+        use_stable_auto=False,
+    )
+
+    assert "bat2_temp" not in remapped
+    assert remapped["bat3_temp"] == 26.0
+    assert logical_max == 3
+
+
+def test_duplicate_manual_serial_assignment_is_rejected(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+
+    try:
+        save_manual_assignments(
+            "0PVPTEST",
+            {
+                "2": "SN00200000000001",
+                "3": "SN00200000000001",
+                "4": AUTO_ASSIGNMENT,
+            },
+        )
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("duplicate serial assignment was accepted")
+
+
+def test_detected_serials_are_exposed_to_ingress_state(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("KEEP_BATTERY_POSITION", "true")
+    client = SimpleNamespace()
+
+    observe_battery_serials(
+        client,
+        "0HVRTEST",
+        _payload(
+            slot2_serial="NXBAT20000000001",
+            slot3_serial="NXBAT30000000002",
+        ),
+    )
+    state = load_battery_ui_state()
+
+    assert state["keep_battery_position"] is True
+    device = state["devices"][0]
+    assert device["device_id"] == "0HVRTEST"
+    assert device["detected"] == [
+        {"physical_slot": 2, "serial": "NXBAT20000000001"},
+        {"physical_slot": 3, "serial": "NXBAT30000000002"},
+    ]

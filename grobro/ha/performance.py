@@ -14,7 +14,11 @@ import math
 from types import SimpleNamespace
 
 from grobro.ha import client as ha_client_module
-from grobro.ha.battery_position import stabilize_battery_payload
+from grobro.ha.battery_position import (
+    has_manual_assignments,
+    observe_battery_serials,
+    stabilize_battery_payload,
+)
 from grobro.ha.firmware_runtime import (
     _firmware_part_names_for_device,
     _invalidate_discovery_for_firmware_change,
@@ -261,15 +265,16 @@ def install_ha_performance_hook() -> None:
                 )
 
         stable_logical_max = 1
-        if (
-            ha_client_module.KEEP_BATTERY_POSITION
-            and ha_client_module.model.uses_noah_protocol(device_id)
-        ):
-            state_payload, stable_logical_max = stabilize_battery_payload(
-                self,
-                device_id,
-                state_payload,
-            )
+        if ha_client_module.model.uses_noah_protocol(device_id):
+            observe_battery_serials(self, device_id, state_payload)
+            manual_assignment_active = has_manual_assignments(self, device_id)
+            if ha_client_module.KEEP_BATTERY_POSITION or manual_assignment_active:
+                state_payload, stable_logical_max = stabilize_battery_payload(
+                    self,
+                    device_id,
+                    state_payload,
+                    use_stable_auto=ha_client_module.KEEP_BATTERY_POSITION,
+                )
 
         effective_max_bat = ha_client_module._resolve_max_bat(
             device_id,

@@ -1,9 +1,14 @@
 name: "Better GroBro"
 description: "Robert Zaage's GroBro with Better GroBro Home Assistant, NOAH/NEXA, stability and runtime-efficiency improvements"
-version: "3.1.24"
+version: "3.1.25"
 slug: "grobro_register_debug"
 init: false
 url: https://github.com/criticallimit/GroBro
+ingress: true
+ingress_port: 8099
+panel_icon: mdi:battery-sync-outline
+panel_title: Better GroBro
+panel_admin: true
 arch:
   - armhf
   - armv7

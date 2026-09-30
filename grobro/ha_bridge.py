@@ -16,6 +16,7 @@ from grobro.grobro.noah_traffic_debug import install_noah_traffic_debug_hook
 from grobro.grobro.raw_dump import install_raw_dump_hook
 from grobro.grobro.register_debug import install_register_debug_hook
 from grobro.grobro.signals import SignalHandler
+from grobro.ha.battery_ingress import start_battery_ingress_server
 from grobro.ha.cleanup import install_ha_cleanup_hook
 from grobro.ha.discovery_runtime import install_mac_runtime
 from grobro.ha.performance import install_ha_performance_hook
@@ -101,5 +102,12 @@ if __name__ == "__main__":
     ha_client = ha.Client(HA_MQTT_CONFIG)
     grobro_client = grobro.Client(GROBRO_MQTT_CONFIG, FORWARD_MQTT_CONFIG)
     wire_clients(ha_client, grobro_client)
-    run_clients(ha_client, grobro_client, SignalHandler())
+
+    ingress_server = start_battery_ingress_server()
+    try:
+        run_clients(ha_client, grobro_client, SignalHandler())
+    finally:
+        ingress_server.shutdown()
+        ingress_server.server_close()
+
     LOG.info("Stopped both clients. Exiting...")
