@@ -4,7 +4,7 @@ Better GroBro is a Home Assistant focused fork of [robertzaage/GroBro](https://g
 
 This README lists only the relevant differences from Robert's GroBro.
 
-## Better GroBro 3.1.23
+## Better GroBro 3.1.27
 
 Compared with Robert's GroBro, Better GroBro adds:
 
@@ -15,6 +15,8 @@ Compared with Robert's GroBro, Better GroBro adds:
 - Cleaner Home Assistant presentation, including removal of low-level/manual controls that are no longer needed, whole-watt power values, and retained control states so values such as Default/Slot output and charge/discharge limits do not disappear from HA.
 - More robust reconnect, timer, config persistence, packet validation and Growatt Cloud forwarding behavior, including forced one-time state republishing after Home Assistant Core restarts even when values themselves did not change.
 - Optional passive diagnostics for register/raw MQTT analysis without additional device polling or writes.
+- Dynamic Home Assistant Ingress page for NOAH/NEXA battery assignment with detected serial numbers, manual Bat2/Bat3/Bat4 mapping, Automatic/Not occupied options, persistent overrides, Back buttons, and automatic return to the add-on view after saving.
+- Consolidated Home Assistant runtime hooks to reduce wrapper stacking and keep reconnect/telemetry/discovery behavior easier to maintain.
 
 Everything else follows Robert's GroBro.
 

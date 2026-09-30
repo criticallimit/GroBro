@@ -1,14 +1,17 @@
-# Better GroBro 3.1.26 — Differences from robertzaage/GroBro
+# Better GroBro 3.1.27 — Differences from robertzaage/GroBro
 
 Comparison baseline: `robertzaage/GroBro` main at `e4d59b20ba472853ae6ec0b7a17cf15cd774cb23` (2026-09-18).
 
 ## Home Assistant
 
+- Updates the add-on README/info-page content to the current Better GroBro release and feature set.
+
 - Suppresses unnecessary repeated telemetry, holding-state, discovery and availability publications while preserving real value changes.
 - Publishes Home Assistant power sensors in whole watts and removes negative-zero presentation.
 - Repairs stale retained discovery data during upgrades and keeps device/config identity stable across reconnects and restarts.
 - Hides low-level/manual controls that Better GroBro replaces automatically, including MQTT IP, manual Sync Time and System Time.
-- Keeps Robert's NEO Inverter Power discovery/control path intact.\n- Publishes confirmed holding-register control states retained, so number/switch/time/select values survive MQTT entity reloads and discovery refreshes instead of becoming blank until the next Read All.
+- Keeps Robert's NEO Inverter Power discovery/control path intact.
+- Publishes confirmed holding-register control states retained, so number/switch/time/select values survive MQTT entity reloads and discovery refreshes instead of becoming blank until the next Read All.
 
 ## Battery assignment UI
 
