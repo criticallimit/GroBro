@@ -1,4 +1,4 @@
-# Better GroBro 3.1.44 — Differences from robertzaage/GroBro
+# Better GroBro 3.1.45 — Differences from robertzaage/GroBro
 
 Comparison baseline: `robertzaage/GroBro` main at `e4d59b20ba472853ae6ec0b7a17cf15cd774cb23` (2026-09-18).
 
@@ -10,6 +10,7 @@ Comparison baseline: `robertzaage/GroBro` main at `e4d59b20ba472853ae6ec0b7a17cf
 - Adds stable NOAH/NEXA battery identities and optional manual Bat2/Bat3/Bat4 assignment from detected serial numbers.
 - Improves Home Assistant restart/reconnect recovery and retains important control states so values do not disappear after reloads.
 - Removes retained publishing for measurement states and uses device availability instead, preventing stale power values from remaining active when telemetry stops.
+- Removes the optional total_increasing rollback filter so genuine daily, monthly and yearly counter resets are always passed through unchanged.
 - Reduces unnecessary MQTT/Home Assistant churn while preserving real state changes.
 - Improves NOAH/NEXA handling, supported-device clock synchronization and optional passive diagnostics.
 
