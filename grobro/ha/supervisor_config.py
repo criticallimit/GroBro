@@ -210,7 +210,11 @@ def get_addon_options() -> dict:
     raw_options = info.get("options", {}) if isinstance(info, dict) else {}
     options = dict(_DEFAULTS)
     if isinstance(raw_options, dict):
-        options.update(raw_options)
+        options.update(
+            {key: value for key, value in raw_options.items() if key in _ALLOWED_OPTIONS}
+        )
+    if int(options.get("DEVICE_TIMEOUT", 120) or 0) <= 0:
+        options["DEVICE_TIMEOUT"] = 120
     return {
         "options": options,
         "version": info.get("version") if isinstance(info, dict) else None,
@@ -227,7 +231,9 @@ def save_addon_options(raw_changes: dict) -> dict:
     if not isinstance(current, dict):
         current = {}
 
-    merged = dict(current)
+    merged = {
+        key: value for key, value in current.items() if key in _ALLOWED_OPTIONS
+    }
     merged.update(changes)
 
     validation = _supervisor_request(
