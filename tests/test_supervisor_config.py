@@ -124,3 +124,28 @@ def test_all_ingress_configuration_options_are_normalized():
     assert normalized["SOURCE_MQTT_PORT"] == 7006
     assert normalized["MAX_BAT"] == "auto"
     assert normalized["KEEP_BATTERY_POSITION"] is False
+
+
+def test_schedule_restart_restarts_only_this_addon(monkeypatch):
+    calls = []
+
+    monkeypatch.setattr(supervisor_config.time, "sleep", lambda _delay: None)
+    monkeypatch.setattr(
+        supervisor_config,
+        "_supervisor_request",
+        lambda method, path, payload=None: calls.append((method, path, payload)),
+    )
+
+    class ImmediateThread:
+        def __init__(self, target, **_kwargs):
+            self.target = target
+
+        def start(self):
+            self.target()
+
+    monkeypatch.setattr(supervisor_config.threading, "Thread", ImmediateThread)
+
+    supervisor_config.schedule_restart()
+
+    assert calls == [("POST", "/addons/self/restart", {})]
+    assert all("/core/" not in path for _method, path, _payload in calls)
