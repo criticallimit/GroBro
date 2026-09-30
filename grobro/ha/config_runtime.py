@@ -18,6 +18,12 @@ def persisted_config_data(config) -> dict:
     return config.model_dump(exclude_none=True, exclude=_PERSIST_EXCLUDE)
 
 
+def restore_device_inventory_from_config_cache(client) -> None:
+    """Mirror already-restored config devices into the live Ingress inventory."""
+    for device_id in getattr(client, "_config_cache", {}):
+        observe_device(device_id)
+
+
 def restore_config_cache_by_filename(client) -> None:
     prefix = "config_"
     suffix = ".json"
