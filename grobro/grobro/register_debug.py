@@ -58,6 +58,19 @@ def _signed_16(value: int) -> int:
     return struct.unpack(">h", struct.pack(">H", value))[0]
 
 
+def _canonical_0103_device_id(raw_device_id: str) -> str:
+    """Expand the shortened NEO identifier embedded in observed 0x0103 frames.
+
+    Current NEO 0x0103 traffic carries only the ten-character serial suffix
+    (for example BZP4N991ML), while the normal GroBro device identity is the
+    full QMN000-prefixed serial. Keep this normalization diagnostic-only.
+    """
+    raw_device_id = str(raw_device_id or "").strip()
+    if len(raw_device_id) == 10 and raw_device_id.isalnum():
+        return f"QMN000{raw_device_id}"
+    return raw_device_id
+
+
 def _append_records(records: list[dict]) -> None:
     if not records:
         return
@@ -133,7 +146,8 @@ def _write_modbus_message(message: GrowattModbusMessage) -> None:
 def _write_noah_0103(result: dict) -> None:
     """Record both opaque 0x0103 values and any confirmed embedded Modbus block."""
     now = datetime.now(timezone.utc).isoformat()
-    device_id = result.get("device_id", "")
+    raw_device_id = result.get("device_id", "")
+    device_id = _canonical_0103_device_id(raw_device_id)
     records: list[dict] = []
 
     # Preserve the historical/raw view by value index because the prefix portion
@@ -193,6 +207,11 @@ def _write_noah_0103(result: dict) -> None:
                     "captured_at": now,
                     "device_timestamp": None,
                     "device_id": device_id,
+                    **(
+                        {"raw_device_id": raw_device_id}
+                        if raw_device_id != device_id
+                        else {}
+                    ),
                     "source": "noah_0103_modbus",
                     "message_type": "0x0103",
                     "function": 3,
