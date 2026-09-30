@@ -8,7 +8,6 @@ from grobro.ha.cleanup import (
     _configured_serial,
     _detect_bat_count,
     _initialize_instance_state,
-    _publish_availability,
     _resolve_max_bat,
     _seconds_until_next_time_sync,
     _sync_supported_clocks,
