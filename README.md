@@ -1,22 +1,36 @@
 # Better GroBro
 
-**GroBro, optimized for Home Assistant.**
+> **GroBro, optimized for Home Assistant.**
 
-Better GroBro is based on [Robert Zaage's GroBro](https://github.com/robertzaage/GroBro) and focuses on a cleaner, more reliable Home Assistant experience.
+Better GroBro builds on [Robert Zaage's GroBro](https://github.com/robertzaage/GroBro) and keeps its core behavior while making day-to-day use in Home Assistant cleaner, easier and more reliable.
 
-## Better GroBro 3.1.37
+---
+
+## Better GroBro 3.1.38
 
 ### What Better GroBro adds
 
-- **Built-in configuration page** directly inside Home Assistant.
-- **Stable NOAH/NEXA battery positions**, with optional manual Bat2/Bat3/Bat4 assignment by serial number.
-- **Clear device overview** for detected Growatt families such as NOAH, NEO and NEXA.
-- **More reliable recovery** after Home Assistant, MQTT or add-on restarts.
-- **Lower unnecessary MQTT traffic** while keeping real value updates unchanged.
-- **Automatic language selection** for German, English, French and Spanish.
-- **Improved NOAH/NEXA support**, clock synchronization and optional diagnostics.
+#### Easier Home Assistant setup
+
+- Built-in configuration page directly inside Home Assistant
+- Automatic German, English, French and Spanish interface
+- Clear overview of detected Growatt families such as NOAH, NEO and NEXA
+
+#### Better battery handling
+
+- Stable NOAH/NEXA battery identities
+- Optional manual Bat2/Bat3/Bat4 assignment by serial number
+- Battery assignment view follows the configured maximum battery count
+
+#### More reliable operation
+
+- Improved recovery after Home Assistant, MQTT or add-on restarts
+- Lower unnecessary MQTT traffic without suppressing real value changes
+- Improved NOAH/NEXA handling, clock synchronization and optional diagnostics
 
 Everything else continues to follow Robert's GroBro.
+
+---
 
 ## Installation
 
@@ -27,6 +41,8 @@ Add this repository to the Home Assistant Add-on Store:
 Then install or update **Better GroBro**.
 
 Existing GroBro-compatible settings are retained for in-place updates.
+
+---
 
 ## Credits
 
