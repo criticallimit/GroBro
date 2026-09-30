@@ -1,69 +1,14 @@
-# Better GroBro 3.1.28 — Differences from robertzaage/GroBro
+# Better GroBro 3.1.29 — Differences from robertzaage/GroBro
 
 Comparison baseline: `robertzaage/GroBro` main at `e4d59b20ba472853ae6ec0b7a17cf15cd774cb23` (2026-09-18).
 
-## Home Assistant
+## User-relevant differences
 
-- Updates the add-on README/info-page content to the current Better GroBro release and feature set.
-
-- Suppresses unnecessary repeated telemetry, holding-state, discovery and availability publications while preserving real value changes.
-- Publishes Home Assistant power sensors in whole watts and removes negative-zero presentation.
-- Repairs stale retained discovery data during upgrades and keeps device/config identity stable across reconnects and restarts.
-- Hides low-level/manual controls that Better GroBro replaces automatically, including MQTT IP, manual Sync Time and System Time.
-- Keeps Robert's NEO Inverter Power discovery/control path intact.
-- Publishes confirmed holding-register control states retained, so number/switch/time/select values survive MQTT entity reloads and discovery refreshes instead of becoming blank until the next Read All.
-
-## Add-on configuration UI
-
-- Expands the Ingress web UI to manage the complete Better GroBro add-on configuration.
-- Reads and writes the official Supervisor add-on options instead of maintaining a second configuration file.
-- Validates options through the Supervisor before saving.
-- Groups Home Assistant behavior, MQTT source/target, Growatt Cloud and diagnostics into dedicated sections.
-- Supports saving without restart or saving followed by a controlled add-on restart.
-- Keeps Home Assistant's normal add-on configuration page as a fallback using the same option values.
-
-## Battery assignment UI
-
-- Adds a Home Assistant Ingress web UI directly to the Better GroBro add-on.
-- Shows currently detected NOAH/NEXA battery serial numbers and physical positions.
-- Allows Bat2/Bat3/Bat4 to be set to Automatic, Not occupied or a detected serial number.
-- Manual assignments are persisted separately and override automatic positioning without destroying the automatic fallback map.
-- Prevents assigning the same battery serial to multiple logical slots.
-- Adds explicit Back buttons to the Ingress battery page and automatically returns to the add-on view after a successful save.
-
-## NOAH / NEXA
-
-- Adds stable serial-based Bat2/Bat3/Bat4 assignment with `KEEP_BATTERY_POSITION=true`, including persistence across restarts and complete remapping of slot-specific values.
-- Uses shared NOAH/NEXA protocol handling where applicable.
-- Adds combined ShinePhone-style firmware reporting for NOAH/NEXA.
-- Adds validated NOAH heater-state fallback and improved battery-count handling.
-- Removes NOAH-only telemetry that was not considered reliable/useful for normal Home Assistant display.
-
-## Time synchronization
-
-- Automatically synchronizes supported device clocks at 00:00 and 12:00 local time.
-
-## Reliability and safety
-
-- Adds stricter validation for malformed/truncated Growatt packets and config commands.
-- Avoids persisting/logging sensitive config data unnecessarily.
-- Improves reconnect cleanup, timer cleanup, config restore and protection against overlapping Read All cycles.
-- Re-subscribes the complete Home Assistant command surface after MQTT reconnects and reacts to Home Assistant's `homeassistant/status = online` birth message, clearing interrupted Read All/config-read state and both telemetry suppression caches even when Mosquitto itself never restarted.
-- Improves Growatt Cloud forwarding/allowlist behavior and optional cloud configuration filtering.
-
-## Runtime architecture
-
-- Consolidates overlapping Home Assistant runtime wrappers for telemetry, holding states, discovery and reconnect handling while preserving existing behavior.
-
-## Runtime efficiency
-
-- Reduces repeated parsing, allocations, JSON serialization, MQTT subscriptions and discovery work.
-- Keeps diagnostics out of normal hot paths unless enabled.
-- Uses a simplified production module structure with redundant wrapper modules removed.
-
-## Optional diagnostics
-
-- Adds passive register diagnostics and append-only raw MQTT JSONL capture.
-- Diagnostics do not create additional device scans or writes.
+- Adds a dedicated Better GroBro Ingress configuration UI that edits the official Home Assistant add-on options. Home Assistant's native Configuration tab remains available as a fallback.
+- Adds automatic German, English, French and Spanish UI localization based on the Home Assistant language, with English fallback.
+- Adds stable NOAH/NEXA battery identities and optional manual Bat2/Bat3/Bat4 assignment from detected serial numbers.
+- Improves Home Assistant restart/reconnect recovery and retains important control states so values do not disappear after reloads.
+- Reduces unnecessary MQTT/Home Assistant churn while preserving real state changes.
+- Improves NOAH/NEXA handling, supported-device clock synchronization and optional passive diagnostics.
 
 All other behavior is inherited from Robert Zaage's GroBro.
