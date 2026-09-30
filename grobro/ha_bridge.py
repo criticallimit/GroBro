@@ -20,7 +20,6 @@ from grobro.ha.battery_ingress import start_battery_ingress_server
 from grobro.ha.cleanup import install_ha_cleanup_hook
 from grobro.ha.discovery_runtime import install_mac_runtime
 from grobro.ha.performance import install_ha_performance_hook
-from grobro.ha.supervisor_config import mark_process_log_start
 
 _LOG_FORMAT = "%(asctime)s [%(levelname)s] %(message)s"
 
@@ -100,7 +99,6 @@ GROBRO_MQTT_CONFIG, HA_MQTT_CONFIG, FORWARD_MQTT_CONFIG = load_bridge_mqtt_confi
 if __name__ == "__main__":
     # Runtime patching is deliberately deferred until the executable starts.
     # Importing ha_bridge for tests/tools must not mutate Client classes globally.
-    mark_process_log_start()
     install_runtime_layers()
     install_optional_diagnostics()
 
