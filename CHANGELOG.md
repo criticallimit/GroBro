@@ -1,9 +1,10 @@
-# Better GroBro 3.1.47 — Differences from robertzaage/GroBro
+# Better GroBro 3.1.48 — Differences from robertzaage/GroBro
 
 Comparison baseline: `robertzaage/GroBro` main at `e4d59b20ba472853ae6ec0b7a17cf15cd774cb23` (2026-09-18).
 
 ## User-relevant differences
 
+- Adds real MQTT end-to-end validation for both NEO and NOAH and full localization coverage across all register display names, reducing regression risk without changing entity IDs or user configuration.
 - Improves German, French, Spanish and Dutch Home Assistant entity names with idiomatic PV, grid, battery and BMS terminology, including rare device-specific sensors, while keeping technical IDs and MQTT topics unchanged.
 - Adds a dedicated Better GroBro Ingress configuration UI that edits the official Home Assistant add-on options. Home Assistant's native Configuration tab remains available as a fallback.
 - Shows the actually detected Growatt device families in the overview instead of only a generic device count.
