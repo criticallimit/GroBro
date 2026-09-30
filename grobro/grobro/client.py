@@ -389,6 +389,14 @@ class Client:
                         self.on_config(device_id, config)
                         return
 
+            # 0x0103 uses a NOAH/NEO-specific payload with an embedded device
+            # identifier and optional embedded register block. It is not a
+            # generic Modbus block starting directly after the common header.
+            # The dedicated decoder/debug hook already handles it.
+            if noah_msg and noah_msg.get("message_type") == 0x0103:
+                LOG.debug("Handled NOAH/NEO 0x0103 message for %s", device_id)
+                return
+
             # Generic modbus message
             modbus_message = GrowattModbusMessage.parse_grobro(unscrambled)
             LOG.debug("Received modbus message: %s", modbus_message)
