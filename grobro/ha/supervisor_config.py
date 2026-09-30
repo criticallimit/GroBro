@@ -6,11 +6,13 @@ import json
 import os
 import threading
 import time
+import uuid
 from datetime import datetime
 import urllib.error
 import urllib.request
 
 _SUPERVISOR_BASE = "http://supervisor"
+_PROCESS_LOG_MARKER = f"BETTER_GROBRO_SESSION_{uuid.uuid4().hex}"
 _PROCESS_STARTED_AT = datetime.now().astimezone().isoformat(timespec="seconds")
 _ALLOWED_OPTIONS = {
     "SOURCE_MQTT_HOST",
@@ -139,6 +141,11 @@ def _supervisor_request(method: str, path: str, payload=None):
         raise SupervisorConfigError("Ungültige Supervisor-Antwort") from exc
 
 
+def mark_process_log_start() -> None:
+    """Write a unique marker used to isolate the current process log session."""
+    print(f"--- {_PROCESS_LOG_MARKER} ---", flush=True)
+
+
 def _supervisor_text_request(path: str) -> str:
     """Fetch plain-text data from Supervisor endpoints such as add-on logs."""
     request = urllib.request.Request(
@@ -159,9 +166,19 @@ def _supervisor_text_request(path: str) -> str:
 
 
 def get_current_process_logs() -> dict:
-    """Return Supervisor logs from the current add-on container start only."""
+    """Return only log output produced by the current Better GroBro process."""
+    raw = _supervisor_text_request("/addons/self/logs")
+    marker = f"--- {_PROCESS_LOG_MARKER} ---"
+    position = raw.rfind(marker)
+    if position < 0:
+        return {
+            "logs": "",
+            "started_at": _PROCESS_STARTED_AT,
+            "marker_found": False,
+        }
+
     return {
-        "logs": _supervisor_text_request("/addons/self/logs/latest"),
+        "logs": raw[position + len(marker):].lstrip("\r\n"),
         "started_at": _PROCESS_STARTED_AT,
         "marker_found": True,
     }
