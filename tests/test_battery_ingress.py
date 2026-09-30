@@ -373,3 +373,18 @@ def test_sensor_retain_option_is_not_exposed_in_ingress_ui():
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_battery_assignment_labels_fixed_master_as_bat1():
+    server = start_battery_ingress_server(0)
+    _host, port = server.server_address
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=3) as response:
+            html = response.read().decode()
+
+        assert '<label for="device">Bat1 (Master)</label>' in html
+        assert '<label for="device">Gerät</label>' not in html
+        assert '"Bat1 (Master)":"Bat1 (Master)"' in html
+    finally:
+        server.shutdown()
+        server.server_close()
