@@ -104,8 +104,8 @@ _INDEX_HTML = r"""<!doctype html>
       <div class="metric"><span class="muted">Erkannte Geräte</span><strong id="summary-devices">0</strong></div>
     </div>
     <div class="card">
-      <h2>Konfigurationsquelle</h2>
-      <p>Diese Oberfläche bearbeitet direkt die offiziellen Home-Assistant-Add-on-Optionen. Die normale Konfigurationsseite und diese Oberfläche verwenden damit dieselben Werte.</p>
+      <h2>Empfohlene Konfiguration</h2>
+      <p>Verwende bevorzugt diese Better-GroBro-Oberfläche. Sie bearbeitet direkt die offiziellen Home-Assistant-Add-on-Optionen; der native Konfiguration-Tab bleibt als Fallback verfügbar und verwendet dieselben Werte.</p>
       <div class="status warning">Änderungen an Better-GroBro-Optionen werden beim Start geladen. Verwende daher nach Änderungen vorzugsweise <b>Speichern & neu starten</b>.</div>
     </div>
   </section>
@@ -208,8 +208,8 @@ const TEXTS={
   en:{
     "Konfiguration und Batterie-Zuordnung":"Configuration and battery assignment","Zurück zum Add-on":"Back to add-on",
     "Übersicht":"Overview","Batterien":"Batteries","Diagnose":"Diagnostics","Version":"Version","Add-on Status":"Add-on status",
-    "Erkannte Geräte":"Detected devices","Konfigurationsquelle":"Configuration source",
-    "Diese Oberfläche bearbeitet direkt die offiziellen Home-Assistant-Add-on-Optionen. Die normale Konfigurationsseite und diese Oberfläche verwenden damit dieselben Werte.":"This interface edits the official Home Assistant add-on options directly. The standard configuration page and this interface therefore use the same values.",
+    "Erkannte Geräte":"Detected devices","Empfohlene Konfiguration":"Recommended configuration",
+    "Verwende bevorzugt diese Better-GroBro-Oberfläche. Sie bearbeitet direkt die offiziellen Home-Assistant-Add-on-Optionen; der native Konfiguration-Tab bleibt als Fallback verfügbar und verwendet dieselben Werte.":"Prefer this Better GroBro interface. It edits the official Home Assistant add-on options directly; the native Configuration tab remains available as a fallback and uses the same values.",
     "Änderungen an Better-GroBro-Optionen werden beim Start geladen. Verwende daher nach Änderungen vorzugsweise":"Changes to Better GroBro options are loaded at startup. After changing options, preferably use",
     "Speichern & neu starten":"Save & restart","Batterie-Zuordnung":"Battery assignment","Gerät":"Device",
     "Zurück":"Back","Batterie-Zuordnung speichern":"Save battery assignment","Stabile Batteriepositionen":"Stable battery positions",
@@ -233,8 +233,8 @@ const TEXTS={
   fr:{
     "Konfiguration und Batterie-Zuordnung":"Configuration et affectation des batteries","Zurück zum Add-on":"Retour à l'add-on",
     "Übersicht":"Vue d'ensemble","Batterien":"Batteries","Diagnose":"Diagnostic","Version":"Version","Add-on Status":"État de l'add-on",
-    "Erkannte Geräte":"Appareils détectés","Konfigurationsquelle":"Source de configuration",
-    "Diese Oberfläche bearbeitet direkt die offiziellen Home-Assistant-Add-on-Optionen. Die normale Konfigurationsseite und diese Oberfläche verwenden damit dieselben Werte.":"Cette interface modifie directement les options officielles de l'add-on Home Assistant. La page de configuration standard et cette interface utilisent donc les mêmes valeurs.",
+    "Erkannte Geräte":"Appareils détectés","Empfohlene Konfiguration":"Configuration recommandée",
+    "Verwende bevorzugt diese Better-GroBro-Oberfläche. Sie bearbeitet direkt die offiziellen Home-Assistant-Add-on-Optionen; der native Konfiguration-Tab bleibt als Fallback verfügbar und verwendet dieselben Werte.":"Utilisez de préférence cette interface Better GroBro. Elle modifie directement les options officielles de l'add-on Home Assistant ; l'onglet Configuration natif reste disponible comme solution de secours et utilise les mêmes valeurs.",
     "Änderungen an Better-GroBro-Optionen werden beim Start geladen. Verwende daher nach Änderungen vorzugsweise":"Les modifications des options Better GroBro sont chargées au démarrage. Après une modification, utilisez de préférence",
     "Speichern & neu starten":"Enregistrer et redémarrer","Batterie-Zuordnung":"Affectation des batteries","Gerät":"Appareil",
     "Zurück":"Retour","Batterie-Zuordnung speichern":"Enregistrer l'affectation","Stabile Batteriepositionen":"Positions de batterie stables",
@@ -252,14 +252,14 @@ const TEXTS={
     "Roh-Nachrichten speichern":"Enregistrer les messages bruts","Raw MQTT Dump aktivieren":"Activer le dump MQTT brut","Dump-Verzeichnis":"Répertoire du dump",
     "Register-Debug":"Débogage registres","Passiven Register-Debugger aktivieren":"Activer le débogueur passif des registres","Nur Änderungen":"Modifications uniquement",
     "Nach Erstwert nur Änderungen protokollieren":"Après la première valeur, journaliser uniquement les changements","Maximales Register":"Registre maximal",
-    "Maximales Register":"Registre maximal","Register-Debug-Verzeichnis":"Répertoire de débogage des registres","Nur speichern":"Enregistrer seulement",
+    "Register-Debug-Verzeichnis":"Répertoire de débogage des registres","Nur speichern":"Enregistrer seulement",
     "Nicht belegt":"Non occupé","Noch keine Batterie erkannt":"Aucune batterie détectée"
   },
   es:{
     "Konfiguration und Batterie-Zuordnung":"Configuración y asignación de baterías","Zurück zum Add-on":"Volver al complemento",
     "Übersicht":"Resumen","Batterien":"Baterías","Diagnose":"Diagnóstico","Version":"Versión","Add-on Status":"Estado del complemento",
-    "Erkannte Geräte":"Dispositivos detectados","Konfigurationsquelle":"Fuente de configuración",
-    "Diese Oberfläche bearbeitet direkt die offiziellen Home-Assistant-Add-on-Optionen. Die normale Konfigurationsseite und diese Oberfläche verwenden damit dieselben Werte.":"Esta interfaz edita directamente las opciones oficiales del complemento de Home Assistant. La página de configuración estándar y esta interfaz usan los mismos valores.",
+    "Erkannte Geräte":"Dispositivos detectados","Empfohlene Konfiguration":"Configuración recomendada",
+    "Verwende bevorzugt diese Better-GroBro-Oberfläche. Sie bearbeitet direkt die offiziellen Home-Assistant-Add-on-Optionen; der native Konfiguration-Tab bleibt als Fallback verfügbar und verwendet dieselben Werte.":"Use preferentemente esta interfaz de Better GroBro. Edita directamente las opciones oficiales del complemento de Home Assistant; la pestaña Configuración nativa permanece disponible como respaldo y utiliza los mismos valores.",
     "Änderungen an Better-GroBro-Optionen werden beim Start geladen. Verwende daher nach Änderungen vorzugsweise":"Los cambios de Better GroBro se cargan al iniciar. Después de cambiar opciones, use preferiblemente",
     "Speichern & neu starten":"Guardar y reiniciar","Batterie-Zuordnung":"Asignación de baterías","Gerät":"Dispositivo",
     "Zurück":"Volver","Batterie-Zuordnung speichern":"Guardar asignación","Stabile Batteriepositionen":"Posiciones estables de batería",
