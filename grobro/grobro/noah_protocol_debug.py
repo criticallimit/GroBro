@@ -43,20 +43,21 @@ def decode_0106(data: bytes) -> dict | None:
     if len(data) < 44 or struct.unpack_from(">H", data, 6)[0] != 0x0106:
         return None
     register_no = struct.unpack_from(">H", data, 38)[0]
-    value = struct.unpack_from(">H", data, 40)[0]
     result = {
         "message_type": "0x0106",
         "operation": "holding_register_write",
         "device_id": _device_id(data),
         "register": register_no,
-        "value": value,
     }
-    # Real acknowledgements contain one extra status byte before the trailer.
+    # Requests carry a 16-bit value. Real acknowledgements insert one status
+    # byte before the echoed 16-bit value.
     if len(data) >= 45:
         result["kind"] = "ack"
-        result["status"] = data[42]
+        result["status"] = data[40]
+        result["value"] = struct.unpack_from(">H", data, 41)[0]
     else:
         result["kind"] = "request"
+        result["value"] = struct.unpack_from(">H", data, 40)[0]
     return result
 
 
