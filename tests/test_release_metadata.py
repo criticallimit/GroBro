@@ -23,6 +23,9 @@ def test_release_notes_remain_user_focused():
     changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
 
     assert "### What Better GroBro adds" in readme
+    assert "#### Easier Home Assistant setup" in readme
+    assert "#### Better battery handling" in readme
+    assert "#### More reliable operation" in readme
     assert "## User-relevant differences" in changelog
     assert "Comparison baseline" not in readme
     assert "Runtime architecture" not in readme

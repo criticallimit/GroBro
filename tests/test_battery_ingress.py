@@ -300,3 +300,41 @@ def test_language_is_applied_only_after_home_assistant_config_load():
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_battery_assignment_ui_respects_max_bat():
+    server = start_battery_ingress_server(0)
+    _host, port = server.server_address
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=3) as response:
+            html = response.read().decode()
+
+        assert 'id="row-slot2"' in html
+        assert 'id="row-slot3"' in html
+        assert 'id="row-slot4"' in html
+        assert "function configuredBatteryCount(device)" in html
+        assert 'configState.options.MAX_BAT' in html
+        assert "return [2,3,4].filter(slot=>slot<=maxBat);" in html
+        assert 'row.hidden=!visibleSlots.includes(slot);' in html
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_hidden_battery_assignments_are_preserved_when_saving_visible_slots():
+    server = start_battery_ingress_server(0)
+    _host, port = server.server_address
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=3) as response:
+            html = response.read().decode()
+
+        assert (
+            'for(const slot of [2,3,4])assignments[String(slot)]='
+            'd.manual[String(slot)]||AUTO;'
+        ) in html
+        assert (
+            'slots.forEach((slot,i)=>assignments[String(slot)]=values[i]);'
+        ) in html
+    finally:
+        server.shutdown()
+        server.server_close()

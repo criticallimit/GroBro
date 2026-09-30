@@ -120,9 +120,9 @@ _INDEX_HTML = r"""<!doctype html>
         </div>
       </div>
       <div id="detected" class="serials"></div>
-      <div class="battery-row"><div><label for="slot2">Bat2</label><div id="auto2" class="muted"></div></div><select id="slot2"></select></div>
-      <div class="battery-row"><div><label for="slot3">Bat3</label><div id="auto3" class="muted"></div></div><select id="slot3"></select></div>
-      <div class="battery-row"><div><label for="slot4">Bat4</label><div id="auto4" class="muted"></div></div><select id="slot4"></select></div>
+      <div id="row-slot2" class="battery-row"><div><label for="slot2">Bat2</label><div id="auto2" class="muted"></div></div><select id="slot2"></select></div>
+      <div id="row-slot3" class="battery-row"><div><label for="slot3">Bat3</label><div id="auto3" class="muted"></div></div><select id="slot3"></select></div>
+      <div id="row-slot4" class="battery-row"><div><label for="slot4">Bat4</label><div id="auto4" class="muted"></div></div><select id="slot4"></select></div>
       <div class="actions"><button id="back-bottom" type="button" class="secondary">Zurück</button><button id="battery-save" type="button">Batterie-Zuordnung speichern</button></div>
       <div id="battery-message" class="status" hidden></div>
     </div>
@@ -337,12 +337,35 @@ document.querySelectorAll("[data-tab]").forEach(b=>b.addEventListener("click",()
 document.getElementById("back-top").addEventListener("click",goBackToAddon);
 
 function currentDevice(){if(!batteryState)return null;const id=document.getElementById("device").value;return batteryState.devices.find(d=>d.device_id===id)||null;}
+function configuredBatteryCount(device){
+  const configured=configState&&configState.options?String(configState.options.MAX_BAT??"auto"):"auto";
+  if(configured!=="auto"){
+    const count=Number(configured);
+    if(Number.isInteger(count))return Math.max(1,Math.min(4,count));
+  }
+  const detected=(device&&Array.isArray(device.detected))?device.detected:[];
+  let highest=1;
+  for(const item of detected){
+    const slot=Number(item.physical_slot);
+    if(Number.isInteger(slot))highest=Math.max(highest,Math.min(4,slot));
+  }
+  return highest;
+}
+function visibleAssignmentSlots(device){
+  const maxBat=configuredBatteryCount(device);
+  return [2,3,4].filter(slot=>slot<=maxBat);
+}
 function renderBatteries(){
   const d=currentDevice(), detected=document.getElementById("detected");detected.replaceChildren();
   document.getElementById("battery-save").disabled=!d;
+  const visibleSlots=visibleAssignmentSlots(d);
+  for(const slot of [2,3,4]){
+    const row=document.getElementById("row-slot"+slot);
+    row.hidden=!visibleSlots.includes(slot);
+  }
   if(!d){for(const slot of [2,3,4]){const c=document.getElementById("slot"+slot);c.replaceChildren(option(AUTO,t("Automatisch"),true));c.disabled=true;}return;}
   for(const e of d.detected){const chip=document.createElement("span");chip.className="chip";chip.textContent=e.serial+" ("+(currentLang==="de"?"physisch":currentLang==="fr"?"physique":currentLang==="es"?"física":"physical")+" Bat"+e.physical_slot+")";detected.appendChild(chip);}
-  for(const slot of [2,3,4]){
+  for(const slot of visibleSlots){
     const c=document.getElementById("slot"+slot), selected=d.manual[String(slot)]||AUTO, serials=d.detected.map(x=>x.serial);
     c.replaceChildren(option(AUTO,t("Automatisch"),selected===AUTO),option(EMPTY,t("Nicht belegt"),selected===EMPTY));
     if(selected!==AUTO&&selected!==EMPTY&&!serials.includes(selected))c.appendChild(option(selected,selected+" ("+(currentLang==="de"?"nicht erkannt":currentLang==="fr"?"non détectée":currentLang==="es"?"no detectada":"not detected")+")",true));
@@ -375,9 +398,11 @@ document.getElementById("device").addEventListener("change",renderBatteries);
 document.getElementById("back-bottom").addEventListener("click",goBackToAddon);
 document.getElementById("battery-save").addEventListener("click",async()=>{
   const d=currentDevice();if(!d)return;
-  const values=[2,3,4].map(s=>document.getElementById("slot"+s).value),serials=values.filter(v=>v!==AUTO&&v!==EMPTY);
+  const slots=visibleAssignmentSlots(d);
+  const values=slots.map(s=>document.getElementById("slot"+s).value),serials=values.filter(v=>v!==AUTO&&v!==EMPTY);
   if(new Set(serials).size!==serials.length){showMessage("battery-message",currentLang==="de"?"Eine Seriennummer kann nur einer Position zugeordnet werden.":currentLang==="fr"?"Un numéro de série ne peut être attribué qu'à une seule position.":currentLang==="es"?"Un número de serie solo puede asignarse a una posición.":"A serial number can only be assigned to one position.","error");return;}
-  const assignments={};[2,3,4].forEach((s,i)=>assignments[String(s)]=values[i]);
+  const assignments={};for(const slot of [2,3,4])assignments[String(slot)]=d.manual[String(slot)]||AUTO;
+  slots.forEach((slot,i)=>assignments[String(slot)]=values[i]);
   const r=await fetch(apiUrl("api/assignments"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({device_id:d.device_id,assignments})});
   const out=await r.json();if(!r.ok){showMessage("battery-message",out.error||(currentLang==="de"?"Speichern fehlgeschlagen":currentLang==="fr"?"Échec de l'enregistrement":currentLang==="es"?"Error al guardar":"Save failed"),"error");return;}
   showMessage("battery-message",currentLang==="de"?"Batterie-Zuordnung gespeichert. Rückkehr zum Add-on…":currentLang==="fr"?"Affectation enregistrée. Retour à l'add-on…":currentLang==="es"?"Asignación guardada. Volviendo al complemento…":"Battery assignment saved. Returning to add-on…");setTimeout(goBackToAddon, 900);
@@ -386,6 +411,7 @@ document.getElementById("battery-save").addEventListener("click",async()=>{
 function fillConfig(options){
   for(const key of CONFIG_KEYS){const el=document.getElementById("cfg-"+key);if(!el)continue;const value=options[key];if(BOOL_KEYS.has(key))el.checked=Boolean(value);else el.value=value??"";}
 }
+document.getElementById("cfg-MAX_BAT").addEventListener("change",renderBatteries);
 function collectConfig(){
   const out={};for(const key of CONFIG_KEYS){const el=document.getElementById("cfg-"+key);if(!el)continue;if(BOOL_KEYS.has(key))out[key]=el.checked;else if(INT_KEYS.has(key))out[key]=Number(el.value);else out[key]=el.value;}return out;
 }
