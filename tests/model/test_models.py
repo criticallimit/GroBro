@@ -269,7 +269,7 @@ class TestModbusMessage:
         caplog,
     ):
         device_id = b"0PVP50ZR175T00E8".ljust(30, b"\x00")
-        payload = struct.pack(">HHB", register_no, 0, status)
+        payload = struct.pack(">HBH", register_no, 0, status)
         header = struct.pack(
             ">HHHBB30s",
             1,
@@ -292,7 +292,7 @@ class TestModbusMessage:
         assert parsed is not None
         assert parsed.write_ack is not None
         assert parsed.write_ack.register_no == register_no
-        assert parsed.write_ack.status == status
+        assert parsed.write_ack.status == 0\n        assert parsed.write_ack.value == status
         assert "Invalid register block range" not in caplog.text
 
 
