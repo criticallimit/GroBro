@@ -187,11 +187,24 @@ def publish_availability(client, device_id: str, online: bool) -> bool:
 def install_availability_runtime() -> None:
     """Install reconnect-cache and availability behavior on the HA client."""
     client_cls = ha_client_module.Client
+    original_recover = client_cls._Client__recover_after_home_assistant_restart
+
+    def recover_clean(self, client):
+        result = original_recover(self, client)
+        # A retained "online" value from an earlier process must never make
+        # stale sensor values look current after MQTT reconnect or HA Core birth.
+        # Known entities remain registered; fresh telemetry switches them online.
+        for device_id in getattr(self, "_config_cache", {}):
+            publish_availability(self, device_id, False)
+        return result
+
+    client_cls._Client__recover_after_home_assistant_restart = recover_clean
+
     original_on_connect = client_cls._Client__on_connect
 
     def on_connect_clean(self, client, userdata, flags, reason_code, properties):
         clear_reconnect_caches(self)
-        result = original_on_connect(
+        return original_on_connect(
             self,
             client,
             userdata,
@@ -199,13 +212,6 @@ def install_availability_runtime() -> None:
             reason_code,
             properties,
         )
-        # A retained "online" value from an earlier process must never make
-        # stale retained sensor values look current after reconnect/startup.
-        # Known devices stay in Home Assistant; they are only marked unavailable
-        # until fresh telemetry explicitly publishes "online" again.
-        for device_id in getattr(self, "_config_cache", {}):
-            publish_availability(self, device_id, False)
-        return result
 
     client_cls._Client__on_connect = on_connect_clean
 
