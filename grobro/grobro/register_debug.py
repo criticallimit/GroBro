@@ -165,6 +165,11 @@ def _write_noah_0103(result: dict) -> None:
                 "captured_at": now,
                 "device_timestamp": None,
                 "device_id": device_id,
+                **(
+                    {"raw_device_id": raw_device_id}
+                    if raw_device_id != device_id
+                    else {}
+                ),
                 "source": "noah_0103",
                 "message_type": "0x0103",
                 "addressing": "unknown",
