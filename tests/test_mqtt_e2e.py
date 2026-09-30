@@ -254,7 +254,7 @@ def test_real_mqtt_noah_bridge(tmp_path, monkeypatch):
         assert state
         assert any(
             key in state
-            for key in ("bat1_soc", "battery1Soc", "total_battery_soc", "Ppv")
+            for key in ("bat_1_soc_pct", "tot_bat_soc_pct", "out_power", "pv_tot_power")
         )
 
         with received_lock:
