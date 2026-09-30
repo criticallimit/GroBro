@@ -313,3 +313,42 @@ def test_restore_config_cache_registers_persisted_neo_in_inventory(tmp_path, mon
         ("NEO", device_id)
     ]
     clear_device_inventory()
+
+
+def test_client_init_immediately_populates_inventory_from_persisted_config(
+    tmp_path, monkeypatch
+):
+    install_ha_cleanup_hook()
+    clear_device_inventory()
+    monkeypatch.chdir(tmp_path)
+
+    device_id = "QMNTEST0000001"
+    config = ha_client_module.model.DeviceConfig(serial_number=device_id)
+    config.to_file(f"config_{device_id}.json")
+
+    class FakeMqttClient:
+        def __init__(self, *args, **kwargs):
+            self.on_message = None
+            self.on_connect = None
+
+        def username_pw_set(self, *args, **kwargs):
+            pass
+
+        def tls_set(self, *args, **kwargs):
+            pass
+
+        def tls_insecure_set(self, *args, **kwargs):
+            pass
+
+        def connect(self, *args, **kwargs):
+            pass
+
+    monkeypatch.setattr(ha_client_module.mqtt, "Client", FakeMqttClient)
+
+    mqtt_config = ha_client_module.model.MQTTConfig(host="localhost", port=1883)
+    ha_client_module.Client(mqtt_config)
+
+    assert [(item["display_name"], item["device_id"]) for item in get_device_inventory()] == [
+        ("NEO", device_id)
+    ]
+    clear_device_inventory()
