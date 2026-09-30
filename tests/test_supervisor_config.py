@@ -40,14 +40,21 @@ def test_normalize_options_rejects_invalid_values(key, value):
 
 
 def test_get_addon_options_merges_defaults(monkeypatch):
+    def fake_request(method, path, payload=None):
+        if path == "/addons/self/info":
+            return {
+                "version": "3.1.28",
+                "state": "started",
+                "options": {"SOURCE_MQTT_HOST": "growatt.local"},
+            }
+        if path == "/homeassistant/api/config":
+            return {"language": "de"}
+        raise AssertionError(path)
+
     monkeypatch.setattr(
         supervisor_config,
         "_supervisor_request",
-        lambda method, path, payload=None: {
-            "version": "3.1.28",
-            "state": "started",
-            "options": {"SOURCE_MQTT_HOST": "growatt.local"},
-        },
+        fake_request,
     )
 
     result = supervisor_config.get_addon_options()
@@ -57,6 +64,7 @@ def test_get_addon_options_merges_defaults(monkeypatch):
     assert result["options"]["SOURCE_MQTT_HOST"] == "growatt.local"
     assert result["options"]["TARGET_MQTT_PORT"] == 1883
     assert result["options"]["REGISTER_DEBUG"] is False
+    assert result["language"] == "de"
 
 
 def test_save_addon_options_validates_then_updates_and_preserves_unknown(monkeypatch):
@@ -149,3 +157,25 @@ def test_schedule_restart_restarts_only_this_addon(monkeypatch):
 
     assert calls == [("POST", "/addons/self/restart", {})]
     assert all("/core/" not in path for _method, path, _payload in calls)
+
+
+def test_get_home_assistant_language_uses_core_api(monkeypatch):
+    calls = []
+
+    def fake_request(method, path, payload=None):
+        calls.append((method, path, payload))
+        return {"language": "de-DE"}
+
+    monkeypatch.setattr(supervisor_config, "_supervisor_request", fake_request)
+
+    assert supervisor_config.get_home_assistant_language() == "de-DE"
+    assert calls == [("GET", "/homeassistant/api/config", None)]
+
+
+def test_get_home_assistant_language_falls_back_on_api_error(monkeypatch):
+    def fake_request(method, path, payload=None):
+        raise supervisor_config.SupervisorConfigError("unavailable")
+
+    monkeypatch.setattr(supervisor_config, "_supervisor_request", fake_request)
+
+    assert supervisor_config.get_home_assistant_language() == "en"

@@ -392,7 +392,11 @@ function collectConfig(){
 }
 async function loadConfig(){
   const r=await fetch(apiUrl("api/config"),{cache:"no-store"});const out=await r.json();if(!r.ok)throw new Error(out.error||"Konfiguration konnte nicht geladen werden");
-  configState=out;fillConfig(out.options||{});document.getElementById("summary-version").textContent=out.version||"–";document.getElementById("summary-state").textContent=out.state||"–";
+  configState=out;
+  applyLanguage(out.language || selectedHomeAssistantLanguage());
+  fillConfig(out.options||{});
+  document.getElementById("summary-version").textContent=out.version||"–";
+  document.getElementById("summary-state").textContent=out.state||"–";
 }
 async function saveConfig(restart){
   const r=await fetch(apiUrl("api/config"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({options:collectConfig(),restart})});
