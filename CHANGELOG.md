@@ -9,6 +9,7 @@ Comparison baseline: `robertzaage/GroBro` main at `e4d59b20ba472853ae6ec0b7a17cf
 - Adds automatic German, English, French and Spanish UI localization based on the Home Assistant language, with English fallback.
 - Adds stable NOAH/NEXA battery identities and optional manual Bat2/Bat3/Bat4 assignment from detected serial numbers.
 - Improves Home Assistant restart/reconnect recovery and retains important control states so values do not disappear after reloads.
+- Removes retained publishing for measurement states and uses device availability instead, preventing stale power values from remaining active when telemetry stops.
 - Reduces unnecessary MQTT/Home Assistant churn while preserving real state changes.
 - Improves NOAH/NEXA handling, supported-device clock synchronization and optional passive diagnostics.
 
