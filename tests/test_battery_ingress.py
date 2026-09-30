@@ -338,3 +338,22 @@ def test_hidden_battery_assignments_are_preserved_when_saving_visible_slots():
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_addon_status_is_localized_for_all_supervisor_states():
+    server = start_battery_ingress_server(0)
+    _host, port = server.server_address
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=3) as response:
+            html = response.read().decode()
+
+        assert 'de:{startup:"Startet",started:"Gestartet",stopped:"Gestoppt",unknown:"Unbekannt",error:"Fehler"}' in html
+        assert 'en:{startup:"Starting",started:"Started",stopped:"Stopped",unknown:"Unknown",error:"Error"}' in html
+        assert 'fr:{startup:"Démarrage",started:"Démarré",stopped:"Arrêté",unknown:"Inconnu",error:"Erreur"}' in html
+        assert 'es:{startup:"Iniciando",started:"Iniciado",stopped:"Detenido",unknown:"Desconocido",error:"Error"}' in html
+        assert "summary-state" in html
+        assert "localizedAddonState(out.state)" in html
+        assert 'summary-state").textContent=out.state' not in html
+    finally:
+        server.shutdown()
+        server.server_close()
