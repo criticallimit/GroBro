@@ -261,4 +261,4 @@ def install_ha_cleanup_hook() -> None:
     install_discovery_runtime(resolve_max_bat)
 
     _INSTALLED = True
-    LOG.info("Installed GroBro Home Assistant compatibility runtime")
+    LOG.debug("Installed GroBro Home Assistant compatibility runtime")
