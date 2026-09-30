@@ -23,9 +23,14 @@ from grobro.model.modbus_function import (
 )
 
 HA_BASE_TOPIC = os.getenv("HA_BASE_TOPIC", "homeassistant")
-DEVICE_TIMEOUT = int(os.getenv("DEVICE_TIMEOUT", 0))
 AVAILABILITY_SENSOR = os.getenv("AVAILABILITY_SENSOR", "False").lower() == "true"
 PUBLISH_SENSORS_RETAINED = os.getenv("PUBLISH_SENSORS_RETAINED", "False").lower() == "true"
+_CONFIGURED_DEVICE_TIMEOUT = int(os.getenv("DEVICE_TIMEOUT", 120))
+DEVICE_TIMEOUT = (
+    120
+    if PUBLISH_SENSORS_RETAINED and _CONFIGURED_DEVICE_TIMEOUT <= 0
+    else _CONFIGURED_DEVICE_TIMEOUT
+)
 MAX_SLOTS = int(os.getenv("MAX_SLOTS", "1"))
 MAX_BAT_RAW = os.getenv("MAX_BAT", "auto")
 try:
