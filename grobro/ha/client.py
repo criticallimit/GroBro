@@ -131,6 +131,17 @@ def _get_bat_number(name: str) -> Optional[int]:
                 break
         if digits:
             return int(digits)
+    elif name.startswith(("maxcvbat", "mincvbat")):
+        prefix = "maxcvbat" if name.startswith("maxcvbat") else "mincvbat"
+        rest = name[len(prefix):]
+        digits = ""
+        for c in rest:
+            if c.isdigit():
+                digits += c
+            else:
+                break
+        if digits:
+            return int(digits)
     return None
 
 
