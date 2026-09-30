@@ -4,7 +4,7 @@ Better GroBro is a Home Assistant focused fork of [robertzaage/GroBro](https://g
 
 This README lists only the user-relevant differences from Robert's GroBro.
 
-## Better GroBro 3.1.30
+## Better GroBro 3.1.31
 
 Compared with Robert's GroBro, Better GroBro adds:
 
