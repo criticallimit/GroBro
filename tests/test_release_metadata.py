@@ -26,3 +26,11 @@ def test_release_notes_remain_user_focused():
     assert "## User-relevant differences" in changelog
     assert "Runtime architecture" not in readme
     assert "wrapper" not in readme.lower()
+
+
+def test_runtime_dependencies_have_major_version_bounds():
+    requirements = Path("requirements.txt").read_text(encoding="utf-8")
+
+    assert "paho-mqtt>=2.1,<3" in requirements
+    assert "crc>=8,<9" in requirements
+    assert "pydantic>=2.13,<3" in requirements

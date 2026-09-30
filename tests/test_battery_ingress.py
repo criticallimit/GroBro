@@ -216,6 +216,8 @@ def test_ingress_page_uses_home_assistant_frontend_language():
             html = response.read().decode()
 
         assert 'localStorage.getItem("selectedLanguage")' in html
+        assert "JSON.parse(stored)" in html
+        assert "selectedHomeAssistantLanguage()" in html
         assert '["de","en","fr","es"]' in html
         assert '"Übersicht":"Overview"' in html
         assert '"Übersicht":"Vue d\'ensemble"' in html

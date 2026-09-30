@@ -29,14 +29,14 @@ def test_inventory_reports_known_device_families():
 
 def test_inventory_updates_existing_device_without_duplicate():
     observe_device("0PVPTEST000001")
-    first = get_device_inventory()[0]["last_seen"]
+    first = get_device_inventory()[0]
 
     observe_device("0PVPTEST000001")
     inventory = get_device_inventory()
 
     assert len(inventory) == 1
+    assert inventory[0] == first
     assert inventory[0]["display_name"] == "NOAH"
-    assert inventory[0]["last_seen"] >= first
 
 
 def test_inventory_keeps_unknown_family_visible():

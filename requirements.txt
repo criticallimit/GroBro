@@ -1,3 +1,3 @@
-paho-mqtt
-crc
-pydantic
+paho-mqtt>=2.1,<3
+crc>=8,<9
+pydantic>=2.13,<3

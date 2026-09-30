@@ -296,11 +296,23 @@ function applyLanguage(language){
   const tz=document.getElementById("cfg-TZ");
   if(tz)tz.placeholder=currentLang==="de"?"leer = Home Assistant übernehmen":currentLang==="fr"?"vide = reprendre Home Assistant":currentLang==="es"?"vacío = usar Home Assistant":"empty = use Home Assistant";
 }
-try {
-  applyLanguage(window.localStorage.getItem("selectedLanguage") || navigator.language || "en");
-} catch (error) {
-  applyLanguage(navigator.language || "en");
+function selectedHomeAssistantLanguage() {
+  const fallback = navigator.language || "en";
+  try {
+    const stored = window.localStorage.getItem("selectedLanguage");
+    if (!stored) return fallback;
+    try {
+      const parsed = JSON.parse(stored);
+      if (typeof parsed === "string" && parsed.trim()) return parsed;
+    } catch (_error) {
+      // Older/custom frontends may have stored the raw language directly.
+    }
+    return stored;
+  } catch (_error) {
+    return fallback;
+  }
 }
+applyLanguage(selectedHomeAssistantLanguage());
 const CONFIG_KEYS=[
 "SOURCE_MQTT_HOST","SOURCE_MQTT_PORT","SOURCE_MQTT_TLS","SOURCE_MQTT_USER","SOURCE_MQTT_PASS",
 "TARGET_MQTT_HOST","TARGET_MQTT_PORT","TARGET_MQTT_TLS","TARGET_MQTT_USER","TARGET_MQTT_PASS",
