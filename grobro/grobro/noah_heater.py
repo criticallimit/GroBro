@@ -97,4 +97,4 @@ def install_noah_heater_hook() -> None:
 
     client_cls._Client__on_message = on_message_with_heater
     _INSTALLED = True
-    LOG.info("Installed validated NOAH heater compatibility hook")
+    LOG.debug("Installed validated NOAH heater compatibility hook")
