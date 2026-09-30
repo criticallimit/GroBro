@@ -101,7 +101,6 @@ def _prepare_payload(
 
     get_bat_number = ha_client_module._get_bat_number
     map_enum_value = ha_client_module.map_enum_value
-    device_id = state.device_id
     payload: dict = {}
 
     for key, raw_value in state.payload.items():
