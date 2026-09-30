@@ -14,6 +14,7 @@ from grobro.ha.cleanup import (
     install_ha_cleanup_hook,
 )
 from grobro.ha import client as ha_client_module
+from grobro.ha.device_inventory import clear_device_inventory, get_device_inventory
 
 
 def test_detect_bat_count_prefers_explicit_register():
@@ -260,3 +261,30 @@ def test_time_sync_targets_every_supported_family_but_not_raq_gateway():
     }
     assert all(reg == 31 for _, reg, _ in calls)
     assert all(value == "2026-09-05 12:00:00" for _, _, value in calls)
+
+
+def test_config_discovery_registers_neo_in_device_inventory():
+    install_ha_cleanup_hook()
+    clear_device_inventory()
+    device_id = "QMNTEST0000001"
+    config = ha_client_module.model.DeviceConfig(serial_number=device_id)
+
+    client = object.__new__(ha_client_module.Client)
+    client._config_cache = {}
+    client._discovery_cache = []
+    client._discovery_signature = {}
+    client._migration_done = set()
+    client._Client__publish_device_discovery = MagicMock()
+
+    with patch.object(
+        ha_client_module.model.DeviceConfig,
+        "from_file",
+        return_value=None,
+    ), patch.object(config, "to_file"):
+        client.set_config(device_id, config)
+
+    inventory = get_device_inventory()
+    assert [(item["display_name"], item["device_id"]) for item in inventory] == [
+        ("NEO", device_id)
+    ]
+    clear_device_inventory()
