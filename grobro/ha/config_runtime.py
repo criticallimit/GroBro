@@ -34,6 +34,7 @@ def restore_config_cache_by_filename(client) -> None:
         config = ha_client_module.model.DeviceConfig.from_file(filename)
         if config is not None:
             client._config_cache[mqtt_device_id] = config
+            observe_device(mqtt_device_id)
 
 
 def install_config_runtime(migration_set) -> None:
