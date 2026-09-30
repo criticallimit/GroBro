@@ -40,6 +40,7 @@ _ALLOWED_OPTIONS = {
     "TZ",
     "KEEP_BATTERY_POSITION",
 }
+_RETIRED_OPTIONS = {"PUBLISH_SENSORS_RETAINED"}
 _DEFAULTS = {
     "SOURCE_MQTT_HOST": "homeassistant.local",
     "SOURCE_MQTT_PORT": 7006,
@@ -211,7 +212,11 @@ def get_addon_options() -> dict:
     options = dict(_DEFAULTS)
     if isinstance(raw_options, dict):
         options.update(
-            {key: value for key, value in raw_options.items() if key in _ALLOWED_OPTIONS}
+            {
+                key: value
+                for key, value in raw_options.items()
+                if key not in _RETIRED_OPTIONS
+            }
         )
     if int(options.get("DEVICE_TIMEOUT", 120) or 0) <= 0:
         options["DEVICE_TIMEOUT"] = 120
@@ -232,7 +237,9 @@ def save_addon_options(raw_changes: dict) -> dict:
         current = {}
 
     merged = {
-        key: value for key, value in current.items() if key in _ALLOWED_OPTIONS
+        key: value
+        for key, value in current.items()
+        if key not in _RETIRED_OPTIONS
     }
     merged.update(changes)
 
