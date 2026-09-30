@@ -6,7 +6,7 @@ Better GroBro builds on [Robert Zaage's GroBro](https://github.com/robertzaage/G
 
 ---
 
-## Better GroBro 3.1.54
+## Better GroBro 3.1.55
 
 ### What Better GroBro adds
 
@@ -14,6 +14,7 @@ Better GroBro builds on [Robert Zaage's GroBro](https://github.com/robertzaage/G
 
 - Built-in configuration page directly inside Home Assistant
 - Current-session add-on log viewer directly in the Better GroBro interface
+- The log viewer preserves the manual scroll position during automatic refresh while still following new entries when you stay at the bottom
 - Automatic German, English, French, Spanish and Dutch interface and Home Assistant entity names
 - Clear overview of detected Growatt families such as NOAH, NEO and NEXA
 
@@ -26,6 +27,7 @@ Better GroBro builds on [Robert Zaage's GroBro](https://github.com/robertzaage/G
 
 #### More reliable operation
 
+- Handles NOAH/NEO `0x0103` packets with their dedicated decoder so embedded serial bytes are no longer misreported as truncated register blocks
 - Correctly parses Growatt Function-6 write acknowledgements so valid NOAH register writes no longer appear as invalid register ranges
 - Improved recovery after Home Assistant, MQTT or add-on restarts
 - Stale measurement values become unavailable when telemetry stops, while entities remain in Home Assistant
