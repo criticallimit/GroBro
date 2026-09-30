@@ -146,6 +146,7 @@ class HomeassistantInputRegister(BaseModel):
     device_class: Optional[str] = None
     unit_of_measurement: Optional[str] = None
     icon: Optional[str] = None
+    suggested_display_precision: Optional[int] = None
 
 
 class HomeAssistantHoldingRegisterValue(BaseModel):
