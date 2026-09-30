@@ -205,3 +205,35 @@ def test_ingress_page_contains_full_configuration_sections():
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_ingress_page_uses_home_assistant_frontend_language():
+    server = start_battery_ingress_server(0)
+    _host, port = server.server_address
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=3) as response:
+            html = response.read().decode()
+
+        assert 'localStorage.getItem("selectedLanguage")' in html
+        assert '["de","en","fr","es"]' in html
+        assert '"Übersicht":"Overview"' in html
+        assert '"Übersicht":"Vue d\'ensemble"' in html
+        assert '"Übersicht":"Resumen"' in html
+        assert 'navigator.language || "en"' in html
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_ingress_page_marks_better_grobro_ui_as_recommended():
+    server = start_battery_ingress_server(0)
+    _host, port = server.server_address
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=3) as response:
+            html = response.read().decode()
+
+        assert "Empfohlene Konfiguration" in html
+        assert "native Konfiguration-Tab bleibt als Fallback verfügbar" in html
+    finally:
+        server.shutdown()
+        server.server_close()
