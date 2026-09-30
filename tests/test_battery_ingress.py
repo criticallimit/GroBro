@@ -223,6 +223,7 @@ def test_ingress_page_uses_home_assistant_frontend_language():
         assert '"Übersicht":"Vue d\'ensemble"' in html
         assert '"Übersicht":"Resumen"' in html
         assert 'navigator.language || "en"' in html
+        assert "applyLanguage(out.language || selectedHomeAssistantLanguage())" in html
     finally:
         server.shutdown()
         server.server_close()
