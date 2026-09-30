@@ -1,9 +1,12 @@
-# Better GroBro 3.1.52 — Differences from robertzaage/GroBro
+# Better GroBro 3.1.53 — Differences from robertzaage/GroBro
 
 Comparison baseline: `robertzaage/GroBro` main at `e4d59b20ba472853ae6ec0b7a17cf15cd774cb23` (2026-09-18).
 
 ## User-relevant differences
 
+- Normalizes shortened NEO identifiers seen in passive `0x0103` diagnostics (for example `BZP4N991ML`) back to the full `QMN000...` device identity while preserving the raw identifier for diagnostics.
+- Adds NOAH Battery 2/3/4 maximum and minimum cell-voltage sensors using validated register pairs 375/376, 382/383 and 389/390 with the same scaling and Home Assistant metadata as Battery 1.
+- Correctly parses Growatt Function-6 write acknowledgements, eliminating false `Invalid register block range` warnings for valid NOAH writes such as registers 252, 257 and 258.
 - Fixes HTTP 403 when using “Save & restart Better GroBro” by removing the forbidden Supervisor options validation endpoint and using the supported self options/restart endpoints.
 - Moves expected stable/manual battery remapping messages from WARNING to DEBUG so normal NOAH/NEXA slot stabilization no longer floods the add-on log; real battery mapping problems remain warnings.
 - Fixes the integrated log viewer on normal Home Assistant add-on permissions by using the self-log endpoint and isolating the current process session without requiring elevated Supervisor permissions.

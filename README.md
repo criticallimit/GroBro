@@ -6,7 +6,7 @@ Better GroBro builds on [Robert Zaage's GroBro](https://github.com/robertzaage/G
 
 ---
 
-## Better GroBro 3.1.52
+## Better GroBro 3.1.53
 
 ### What Better GroBro adds
 
@@ -19,11 +19,13 @@ Better GroBro builds on [Robert Zaage's GroBro](https://github.com/robertzaage/G
 
 #### Better battery handling
 
+- Publishes NOAH Bat2/Bat3/Bat4 maximum and minimum cell voltages with the same Home Assistant metadata and scaling as Bat1
 - Stable NOAH/NEXA battery identities
 - Optional manual Bat2/Bat3/Bat4 assignment by serial number
 
 #### More reliable operation
 
+- Correctly parses Growatt Function-6 write acknowledgements so valid NOAH register writes no longer appear as invalid register ranges
 - Improved recovery after Home Assistant, MQTT or add-on restarts
 - Stale measurement values become unavailable when telemetry stops, while entities remain in Home Assistant
 - Lower unnecessary MQTT traffic without suppressing real value changes
