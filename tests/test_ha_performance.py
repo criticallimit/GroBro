@@ -75,6 +75,26 @@ def test_prepare_payload_preserves_existing_value_rules(monkeypatch):
     assert state.payload["bat4_soc"] == 77
 
 
+def test_total_increasing_decrease_is_passed_through_unchanged(monkeypatch):
+    state = SimpleNamespace(
+        device_id="0PVPTEST",
+        payload={"energy": 0.0},
+    )
+    known_registers = SimpleNamespace(
+        input_registers={"energy": _reg("total_increasing")},
+    )
+    monkeypatch.setattr(ha_client, "map_enum_value", lambda _reg_def, value: value)
+
+    result = _prepare_payload(
+        SimpleNamespace(),
+        state,
+        effective_max_bat=4,
+        known_registers=known_registers,
+    )
+
+    assert result["energy"] == 0.0
+
+
 def test_prepare_payload_publishes_power_as_whole_watts(monkeypatch):
     state = SimpleNamespace(
         device_id="0PVPTEST",
