@@ -2,6 +2,7 @@ import os
 import json
 import logging
 from collections import deque
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
