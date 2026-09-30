@@ -11,7 +11,7 @@ LOG = logging.getLogger(__name__)
 _HEADER = struct.Struct(">HHHBB30s")
 _BLOCK_HEADER = struct.Struct(">HH")
 _METADATA = struct.Struct(">30s7B")
-_WRITE_SINGLE_ACK = struct.Struct(">HHB")
+_WRITE_SINGLE_ACK = struct.Struct(">HBH")
 HEADER_SIZE = _HEADER.size
 METADATA_SIZE = _METADATA.size
 WRITE_SINGLE_ACK_SIZE = _WRITE_SINGLE_ACK.size
@@ -161,7 +161,7 @@ class GrowattModbusWriteAck(BaseModel):
     """Acknowledgement returned by Growatt for Modbus function 6 writes.
 
     Device replies use a compact non-block layout:
-    register (uint16), echoed value (uint16), status (uint8), optional trailer.
+    register (uint16), status (uint8), echoed value (uint16), optional trailer.
     """
 
     register_no: int
@@ -173,7 +173,7 @@ class GrowattModbusWriteAck(BaseModel):
         if offset < 0 or len(buffer) - offset < WRITE_SINGLE_ACK_SIZE:
             return None
         try:
-            register_no, value, status = _WRITE_SINGLE_ACK.unpack_from(buffer, offset)
+            register_no, status, value = _WRITE_SINGLE_ACK.unpack_from(buffer, offset)
         except struct.error:
             return None
         return GrowattModbusWriteAck(
@@ -183,7 +183,7 @@ class GrowattModbusWriteAck(BaseModel):
         )
 
     def build_grobro(self) -> bytes:
-        return _WRITE_SINGLE_ACK.pack(self.register_no, self.value, self.status)
+        return _WRITE_SINGLE_ACK.pack(self.register_no, self.status, self.value)
 
     def size(self) -> int:
         return WRITE_SINGLE_ACK_SIZE
