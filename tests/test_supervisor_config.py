@@ -79,6 +79,7 @@ def test_save_addon_options_preserves_future_unknown_but_drops_retired(monkeypat
                     "UPSTREAM_FUTURE_OPTION": "keep-me",
                     "PUBLISH_SENSORS_RETAINED": True,
                     "FILTER_DATA_GLITCHES": True,
+                    "FILTER_DATA_GLITCHES": True,
                 }
             }
         if path == "/addons/self/options/validate":
