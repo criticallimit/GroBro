@@ -20,18 +20,22 @@ from grobro.ha.battery_ingress import start_battery_ingress_server
 from grobro.ha.cleanup import install_ha_cleanup_hook
 from grobro.ha.discovery_runtime import install_mac_runtime
 from grobro.ha.performance import install_ha_performance_hook
+from grobro.ha.supervisor_config import mark_process_log_start
 
 _LOG_FORMAT = "%(asctime)s [%(levelname)s] %(message)s"
 
 
 def configure_logging():
-    """Configure logging with the established LOG_LEVEL fallback behavior."""
+    """Apply LOG_LEVEL deterministically, even if a handler already exists."""
     log_level = os.getenv("LOG_LEVEL", "ERROR").upper()
-    try:
-        logging.basicConfig(level=log_level, format=_LOG_FORMAT)
-    except Exception as exc:  # pylint: disable=broad-exception-caught
-        logging.basicConfig(level=logging.ERROR, format=_LOG_FORMAT)
-        print(f"Failed to setup logger {exc} USING DEFAULT LOG Level(Error)")
+    level = getattr(logging, log_level, None)
+    if not isinstance(level, int):
+        log_level = "ERROR"
+        level = logging.ERROR
+        print("Invalid LOG_LEVEL; USING DEFAULT LOG Level(Error)")
+
+    logging.basicConfig(level=level, format=_LOG_FORMAT, force=True)
+    logging.getLogger().setLevel(level)
     return log_level, logging.getLogger("grobro.ha_bridge")
 
 
@@ -96,6 +100,7 @@ GROBRO_MQTT_CONFIG, HA_MQTT_CONFIG, FORWARD_MQTT_CONFIG = load_bridge_mqtt_confi
 if __name__ == "__main__":
     # Runtime patching is deliberately deferred until the executable starts.
     # Importing ha_bridge for tests/tools must not mutate Client classes globally.
+    mark_process_log_start()
     install_runtime_layers()
     install_optional_diagnostics()
 
