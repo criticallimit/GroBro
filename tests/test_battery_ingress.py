@@ -101,7 +101,7 @@ def test_ingress_rejects_duplicate_serial_assignments(tmp_path, monkeypatch):
         server.server_close()
 
 
-def test_ingress_page_has_back_navigation_and_auto_return():
+def test_ingress_page_has_single_back_navigation_and_auto_return():
     server = start_battery_ingress_server(0)
     _host, port = server.server_address
     try:
@@ -109,7 +109,7 @@ def test_ingress_page_has_back_navigation_and_auto_return():
             html = response.read().decode()
 
         assert 'id="back-top"' in html
-        assert 'id="back-bottom"' in html
+        assert 'id="back-bottom"' not in html
         assert "window.history.back()" in html
         assert "setTimeout(goBackToAddon, 900)" in html
     finally:
