@@ -484,8 +484,18 @@ def stabilize_battery_payload(
         physical_to_logical[physical_slot] = logical_slot
         used_slots.add(logical_slot)
         if physical_slot != logical_slot:
+            if use_stable_auto and serial not in explicit_slot_by_serial:
+                message = (
+                    "Battery %s reported as Bat%d but kept at stable Bat%d "
+                    "for device %s"
+                )
+            else:
+                message = (
+                    "Battery %s reported as Bat%d but manually kept at Bat%d "
+                    "for device %s"
+                )
             LOG.warning(
-                "Battery %s reported as Bat%d but kept at Bat%d for device %s",
+                message,
                 serial,
                 physical_slot,
                 logical_slot,
