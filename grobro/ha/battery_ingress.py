@@ -333,47 +333,82 @@ class BatteryIngressHandler(BaseHTTPRequestHandler):
         if path.endswith("/api/state"):
             self._send_json(load_battery_ui_state())
             return
+        if path.endswith("/api/config"):
+            try:
+                self._send_json(get_addon_options())
+            except SupervisorConfigError as exc:
+                self._send_json({"error": str(exc)}, HTTPStatus.BAD_GATEWAY)
+            return
         if path in {"", "/"} or "/api/hassio_ingress/" in path:
             self._send_html()
             return
         self.send_error(HTTPStatus.NOT_FOUND)
 
-    def do_POST(self) -> None:  # noqa: N802
-        if self._reject_untrusted_client():
-            return
-        path = urlsplit(self.path).path.rstrip("/")
-        if not path.endswith("/api/assignments"):
-            self.send_error(HTTPStatus.NOT_FOUND)
-            return
-
+    def _read_json_body(self) -> dict | None:
         try:
             content_length = int(self.headers.get("Content-Length", "0"))
         except ValueError:
             self._send_json({"error": "Ungültige Anfrage"}, HTTPStatus.BAD_REQUEST)
-            return
+            return None
         if content_length <= 0 or content_length > 65536:
             self._send_json({"error": "Ungültige Anfragegröße"}, HTTPStatus.BAD_REQUEST)
-            return
-
+            return None
         try:
             payload = json.loads(self.rfile.read(content_length))
-            device_id = str(payload["device_id"]).strip()
-            assignments = payload["assignments"]
-            if not device_id or not isinstance(assignments, dict):
-                raise ValueError
-            for slot in ("2", "3", "4"):
-                value = assignments.get(slot, AUTO_ASSIGNMENT)
-                if value not in {AUTO_ASSIGNMENT, EMPTY_ASSIGNMENT} and not _is_plausible_serial(str(value)):
-                    raise ValueError
-            save_manual_assignments(device_id, assignments)
-        except (KeyError, TypeError, ValueError, json.JSONDecodeError):
-            self._send_json(
-                {"error": "Ungültige Batterie-Zuordnung"},
-                HTTPStatus.BAD_REQUEST,
-            )
+        except json.JSONDecodeError:
+            self._send_json({"error": "Ungültiges JSON"}, HTTPStatus.BAD_REQUEST)
+            return None
+        if not isinstance(payload, dict):
+            self._send_json({"error": "Ungültige Anfrage"}, HTTPStatus.BAD_REQUEST)
+            return None
+        return payload
+
+    def do_POST(self) -> None:  # noqa: N802
+        if self._reject_untrusted_client():
+            return
+        path = urlsplit(self.path).path.rstrip("/")
+        payload = self._read_json_body()
+        if payload is None:
             return
 
-        self._send_json({"ok": True})
+        if path.endswith("/api/config"):
+            try:
+                options = payload.get("options")
+                if not isinstance(options, dict):
+                    raise SupervisorConfigError("Ungültige Optionen")
+                save_addon_options(options)
+                restart = payload.get("restart") is True
+                self._send_json({"ok": True, "restart": restart})
+                if restart:
+                    schedule_restart()
+            except SupervisorConfigError as exc:
+                self._send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+
+        if path.endswith("/api/assignments"):
+            try:
+                device_id = str(payload["device_id"]).strip()
+                assignments = payload["assignments"]
+                if not device_id or not isinstance(assignments, dict):
+                    raise ValueError
+                for slot in ("2", "3", "4"):
+                    value = assignments.get(slot, AUTO_ASSIGNMENT)
+                    if (
+                        value not in {AUTO_ASSIGNMENT, EMPTY_ASSIGNMENT}
+                        and not _is_plausible_serial(str(value))
+                    ):
+                        raise ValueError
+                save_manual_assignments(device_id, assignments)
+            except (KeyError, TypeError, ValueError):
+                self._send_json(
+                    {"error": "Ungültige Batterie-Zuordnung"},
+                    HTTPStatus.BAD_REQUEST,
+                )
+                return
+            self._send_json({"ok": True})
+            return
+
+        self.send_error(HTTPStatus.NOT_FOUND)
 
 
 def start_battery_ingress_server(port: int = INGRESS_PORT) -> ThreadingHTTPServer:
