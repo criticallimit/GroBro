@@ -238,6 +238,63 @@ class TestModbusMessage:
         result = GrowattModbusMessage.parse_grobro(b"")
         assert result is None
 
+    def test_parse_real_noah_function6_ack(self, caplog):
+        # Real decoded NOAH acknowledgement captured for register 257.
+        packet = bytes.fromhex(
+            "0001000700250106"
+            "3050565035305a5231373554303045380000000000000000000000000000"
+            "01010000d00d1c"
+        )
+
+        caplog.set_level("WARNING")
+        parsed = GrowattModbusMessage.parse_grobro(packet)
+
+        assert parsed is not None
+        assert parsed.function == GrowattModbusFunction.PRESET_SINGLE_REGISTER
+        assert parsed.register_blocks == []
+        assert parsed.write_ack is not None
+        assert parsed.write_ack.register_no == 257
+        assert parsed.write_ack.value == 0
+        assert parsed.write_ack.status == 208
+        assert "Invalid register block range" not in caplog.text
+
+    @pytest.mark.parametrize(
+        ("register_no", "status"),
+        [(252, 0), (257, 203), (258, 1)],
+    )
+    def test_function6_ack_never_enters_register_block_parser(
+        self,
+        register_no,
+        status,
+        caplog,
+    ):
+        device_id = b"0PVP50ZR175T00E8".ljust(30, b"\x00")
+        payload = struct.pack(">HHB", register_no, 0, status)
+        header = struct.pack(
+            ">HHHBB30s",
+            1,
+            7,
+            32 + len(payload),
+            1,
+            GrowattModbusFunction.PRESET_SINGLE_REGISTER,
+            device_id,
+        )
+        packet = header + payload + b"\x00\x00"
+
+        # Account for the optional two-byte trailer in the header length.
+        packet = bytearray(packet)
+        struct.pack_into(">H", packet, 4, len(packet) - 8)
+        packet = bytes(packet)
+
+        caplog.set_level("WARNING")
+        parsed = GrowattModbusMessage.parse_grobro(packet)
+
+        assert parsed is not None
+        assert parsed.write_ack is not None
+        assert parsed.write_ack.register_no == register_no
+        assert parsed.write_ack.status == status
+        assert "Invalid register block range" not in caplog.text
+
 
 class TestGrowattMetadata:
     def test_parse_invalid_timestamp(self):
