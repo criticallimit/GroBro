@@ -278,14 +278,40 @@ const TEXTS={
     "Nach Erstwert nur Änderungen protokollieren":"Tras el primer valor, registrar solo cambios","Maximales Register":"Registro máximo",
     "Register-Debug-Verzeichnis":"Directorio de depuración de registros","Nur speichern":"Solo guardar","Nicht belegt":"No ocupado",
     "Noch keine Batterie erkannt":"Aún no se detectó ninguna batería"
+  },
+  nl:{
+    "Konfiguration und Batterie-Zuordnung":"Configuratie en batterijtoewijzing","Zurück zum Add-on":"Terug naar add-on",
+    "Übersicht":"Overzicht","Batterien":"Batterijen","Diagnose":"Diagnose","Version":"Versie","Add-on Status":"Add-onstatus",
+    "Erkannte Geräte":"Gedetecteerde apparaten","Empfohlene Konfiguration":"Aanbevolen configuratie",
+    "Verwende bevorzugt diese Better-GroBro-Oberfläche. Sie bearbeitet direkt die offiziellen Home-Assistant-Add-on-Optionen; der native Konfiguration-Tab bleibt als Fallback verfügbar und verwendet dieselben Werte.":"Gebruik bij voorkeur deze Better GroBro-interface. Deze bewerkt rechtstreeks de officiële Home Assistant add-onopties; het native tabblad Configuratie blijft als fallback beschikbaar en gebruikt dezelfde waarden.",
+    "Änderungen an Better-GroBro-Optionen werden beim Start geladen. Verwende daher nach Änderungen vorzugsweise":"Wijzigingen in Better GroBro-opties worden bij het starten geladen. Gebruik daarom na wijzigingen bij voorkeur",
+    "Speichern & Better GroBro neu starten":"Opslaan en Better GroBro herstarten","Batterie-Zuordnung":"Batterijtoewijzing","Bat1 (Master)":"Bat1 (Master)",
+    "Zurück":"Terug","Batterie-Zuordnung speichern":"Batterijtoewijzing opslaan","Stabile Batteriepositionen":"Stabiele batterijposities",
+    "NOAH/NEXA per Seriennummer stabil halten":"NOAH/NEXA per serienummer op een vaste positie houden","Maximale Batterieanzahl":"Maximaal aantal batterijen",
+    "Automatisch":"Automatisch","Zeitfenster":"Tijdsloten","Anzahl der Batterie-Zeitfenster in Home Assistant.":"Aantal batterij-tijdsloten in Home Assistant.",
+    "Geräte-Timeout (Sekunden)":"Apparaattime-out (seconden)","Nach dieser Zeit ohne Telemetrie werden die Entities unavailable, bleiben aber in Home Assistant erhalten.":"Na deze tijd zonder telemetrie worden de entiteiten niet beschikbaar, maar blijven ze in Home Assistant behouden.",
+    "Availability-Sensor":"Beschikbaarheidssensor","Zusätzlichen Online-Sensor erzeugen":"Extra online-sensor maken",
+    "Messwertsprünge filtern":"Meetwaardesprongen filteren","Rücksprünge bei total_increasing unterdrücken":"Terugval bij total_increasing onderdrukken",
+    "HA Basis-Topic":"HA-basistopic","MQTT Client-Suffix":"MQTT-clientsuffix","Zeitzone":"Tijdzone",
+    "Growatt / Quell-MQTT":"Growatt / bron-MQTT","Host":"Host","Port":"Poort","Benutzername":"Gebruikersnaam","Passwort":"Wachtwoord",
+    "TLS aktivieren":"TLS inschakelen","Home Assistant / Ziel-MQTT":"Home Assistant / doel-MQTT","Cloud-Weiterleitung":"Cloud-doorsturen",
+    "Nachrichten zur/von der Growatt Cloud weiterleiten":"Berichten naar/van Growatt Cloud doorsturen","Konfigurationsfilter":"Configuratiefilter",
+    "Ferninitiierte Konfigurationsnachrichten blockieren":"Op afstand gestarte configuratieberichten blokkeren","Log-Level":"Logniveau",
+    "Roh-Nachrichten speichern":"Ruwe berichten opslaan","Raw MQTT Dump aktivieren":"Ruwe MQTT-dump inschakelen","Dump-Verzeichnis":"Dumpmap",
+    "Register-Debug":"Registerdebug","Passiven Register-Debugger aktivieren":"Passieve registerdebugger inschakelen","Nur Änderungen":"Alleen wijzigingen",
+    "Nach Erstwert nur Änderungen protokollieren":"Na de eerste waarde alleen wijzigingen loggen","Maximales Register":"Maximaal register",
+    "Register-Debug-Verzeichnis":"Registerdebugmap","Nur speichern":"Alleen opslaan","Nicht belegt":"Niet bezet",
+    "Noch keine Batterie erkannt":"Nog geen batterij gedetecteerd"
   }
 };
 function t(text){return (TEXTS[currentLang]&&TEXTS[currentLang][text])||text;}
+function l(values){return values[currentLang]||values.en;}
 const STATUS_TEXTS={
   de:{startup:"Startet",started:"Gestartet",stopped:"Gestoppt",unknown:"Unbekannt",error:"Fehler"},
   en:{startup:"Starting",started:"Started",stopped:"Stopped",unknown:"Unknown",error:"Error"},
   fr:{startup:"Démarrage",started:"Démarré",stopped:"Arrêté",unknown:"Inconnu",error:"Erreur"},
-  es:{startup:"Iniciando",started:"Iniciado",stopped:"Detenido",unknown:"Desconocido",error:"Error"}
+  es:{startup:"Iniciando",started:"Iniciado",stopped:"Detenido",unknown:"Desconocido",error:"Error"},
+  nl:{startup:"Starten",started:"Gestart",stopped:"Gestopt",unknown:"Onbekend",error:"Fout"}
 };
 function localizedAddonState(state){
   const key=String(state||"unknown").toLowerCase();
@@ -293,7 +319,7 @@ function localizedAddonState(state){
 }
 function applyLanguage(language){
   const base=String(language||"en").toLowerCase().split("-")[0];
-  currentLang=["de","en","fr","es"].includes(base)?base:"en";
+  currentLang=["de","en","fr","es","nl"].includes(base)?base:"en";
   document.documentElement.lang=currentLang;
   const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);
   const nodes=[];while(walker.nextNode())nodes.push(walker.currentNode);
@@ -303,7 +329,7 @@ function applyLanguage(language){
     const translated=t(trimmed);if(translated!==trimmed)node.nodeValue=raw.replace(trimmed,translated);
   }
   const tz=document.getElementById("cfg-TZ");
-  if(tz)tz.placeholder=currentLang==="de"?"leer = Home Assistant übernehmen":currentLang==="fr"?"vide = reprendre Home Assistant":currentLang==="es"?"vacío = usar Home Assistant":"empty = use Home Assistant";
+  if(tz)tz.placeholder=l({de:"leer = Home Assistant übernehmen",fr:"vide = reprendre Home Assistant",es:"vacío = usar Home Assistant",nl:"leeg = Home Assistant gebruiken",en:"empty = use Home Assistant"});
 }
 function selectedHomeAssistantLanguage() {
   const fallback = navigator.language || "en";
@@ -373,15 +399,15 @@ function renderBatteries(){
     row.hidden=!visibleSlots.includes(slot);
   }
   if(!d){for(const slot of [2,3,4]){const c=document.getElementById("slot"+slot);c.replaceChildren(option(AUTO,t("Automatisch"),true));c.disabled=true;}return;}
-  for(const e of d.detected){const chip=document.createElement("span");chip.className="chip";chip.textContent=e.serial+" ("+(currentLang==="de"?"physisch":currentLang==="fr"?"physique":currentLang==="es"?"física":"physical")+" Bat"+e.physical_slot+")";detected.appendChild(chip);}
+  for(const e of d.detected){const chip=document.createElement("span");chip.className="chip";chip.textContent=e.serial+" ("+l({de:"physisch",fr:"physique",es:"física",nl:"fysiek",en:"physical"})+" Bat"+e.physical_slot+")";detected.appendChild(chip);}
   for(const slot of visibleSlots){
     const c=document.getElementById("slot"+slot), selected=d.manual[String(slot)]||AUTO, serials=d.detected.map(x=>x.serial);
     c.replaceChildren(option(AUTO,t("Automatisch"),selected===AUTO),option(EMPTY,t("Nicht belegt"),selected===EMPTY));
-    if(selected!==AUTO&&selected!==EMPTY&&!serials.includes(selected))c.appendChild(option(selected,selected+" ("+(currentLang==="de"?"nicht erkannt":currentLang==="fr"?"non détectée":currentLang==="es"?"no detectada":"not detected")+")",true));
+    if(selected!==AUTO&&selected!==EMPTY&&!serials.includes(selected))c.appendChild(option(selected,selected+" ("+l({de:"nicht erkannt",fr:"non détectée",es:"no detectada",nl:"niet gedetecteerd",en:"not detected"})+")",true));
     for(const serial of serials)c.appendChild(option(serial,serial,selected===serial));
     c.disabled=false;
     const automatic=d.automatic[String(slot)];
-    document.getElementById("auto"+slot).textContent=automatic?t("Automatisch")+": "+automatic:t("Automatisch")+": "+(currentLang==="de"?"noch nicht zugeordnet":currentLang==="fr"?"pas encore attribuée":currentLang==="es"?"aún no asignada":"not assigned yet");
+    document.getElementById("auto"+slot).textContent=automatic?t("Automatisch")+": "+automatic:t("Automatisch")+": "+(l({de:"noch nicht zugeordnet",fr:"pas encore attribuée",es:"aún no asignada",nl:"nog niet toegewezen",en:"not assigned yet"}));
   }
 }
 async function loadBatteries(){
@@ -390,7 +416,7 @@ async function loadBatteries(){
   const summary=document.getElementById("summary-devices");summary.replaceChildren();
   const inventory=batteryState.inventory||[];
   if(!inventory.length){
-    const none=document.createElement("span");none.className="muted";none.textContent=currentLang==="de"?"Noch keine Live-Telemetrie":currentLang==="fr"?"Pas encore de télémétrie en direct":currentLang==="es"?"Aún no hay telemetría en vivo":"No live telemetry yet";summary.appendChild(none);
+    const none=document.createElement("span");none.className="muted";none.textContent=l({de:"Noch keine Live-Telemetrie",fr:"Pas encore de télémétrie en direct",es:"Aún no hay telemetría en vivo",nl:"Nog geen live-telemetrie",en:"No live telemetry yet"});summary.appendChild(none);
   }else{
     const counts={};
     for(const item of inventory)counts[item.display_name]=(counts[item.display_name]||0)+1;
@@ -409,12 +435,12 @@ document.getElementById("battery-save").addEventListener("click",async()=>{
   const d=currentDevice();if(!d)return;
   const slots=visibleAssignmentSlots(d);
   const values=slots.map(s=>document.getElementById("slot"+s).value),serials=values.filter(v=>v!==AUTO&&v!==EMPTY);
-  if(new Set(serials).size!==serials.length){showMessage("battery-message",currentLang==="de"?"Eine Seriennummer kann nur einer Position zugeordnet werden.":currentLang==="fr"?"Un numéro de série ne peut être attribué qu'à une seule position.":currentLang==="es"?"Un número de serie solo puede asignarse a una posición.":"A serial number can only be assigned to one position.","error");return;}
+  if(new Set(serials).size!==serials.length){showMessage("battery-message",l({de:"Eine Seriennummer kann nur einer Position zugeordnet werden.",fr:"Un numéro de série ne peut être attribué qu'à une seule position.",es:"Un número de serie solo puede asignarse a una posición.",nl:"Een serienummer kan slechts aan één positie worden toegewezen.",en:"A serial number can only be assigned to one position."}),"error");return;}
   const assignments={};for(const slot of [2,3,4])assignments[String(slot)]=d.manual[String(slot)]||AUTO;
   slots.forEach((slot,i)=>assignments[String(slot)]=values[i]);
   const r=await fetch(apiUrl("api/assignments"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({device_id:d.device_id,assignments})});
-  const out=await r.json();if(!r.ok){showMessage("battery-message",out.error||(currentLang==="de"?"Speichern fehlgeschlagen":currentLang==="fr"?"Échec de l'enregistrement":currentLang==="es"?"Error al guardar":"Save failed"),"error");return;}
-  showMessage("battery-message",currentLang==="de"?"Batterie-Zuordnung gespeichert. Rückkehr zum Add-on…":currentLang==="fr"?"Affectation enregistrée. Retour à l'add-on…":currentLang==="es"?"Asignación guardada. Volviendo al complemento…":"Battery assignment saved. Returning to add-on…");setTimeout(goBackToAddon, 900);
+  const out=await r.json();if(!r.ok){showMessage("battery-message",out.error||(l({de:"Speichern fehlgeschlagen",fr:"Échec de l'enregistrement",es:"Error al guardar",nl:"Opslaan mislukt",en:"Save failed"})),"error");return;}
+  showMessage("battery-message",l({de:"Batterie-Zuordnung gespeichert. Rückkehr zum Add-on…",fr:"Affectation enregistrée. Retour à l'add-on…",es:"Asignación guardada. Volviendo al complemento…",nl:"Batterijtoewijzing opgeslagen. Terug naar de add-on…",en:"Battery assignment saved. Returning to add-on…"}));setTimeout(goBackToAddon, 900);
 });
 
 function fillConfig(options){
@@ -434,9 +460,9 @@ async function loadConfig(){
 }
 async function saveConfig(restart){
   const r=await fetch(apiUrl("api/config"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({options:collectConfig(),restart})});
-  const out=await r.json();if(!r.ok){showMessage("config-message",out.error||(currentLang==="de"?"Speichern fehlgeschlagen":currentLang==="fr"?"Échec de l'enregistrement":currentLang==="es"?"Error al guardar":"Save failed"),"error");return;}
-  if(restart){showMessage("config-message",currentLang==="de"?"Konfiguration gespeichert. Better GroBro wird neu gestartet…":currentLang==="fr"?"Configuration enregistrée. Better GroBro redémarre…":currentLang==="es"?"Configuración guardada. Better GroBro se reinicia…":"Configuration saved. Better GroBro is restarting…");setTimeout(goBackToAddon, 900);}
-  else showMessage("config-message",currentLang==="de"?"Konfiguration gespeichert. Neustart erforderlich, damit alle Änderungen aktiv werden.":currentLang==="fr"?"Configuration enregistrée. Un redémarrage est nécessaire pour appliquer toutes les modifications.":currentLang==="es"?"Configuración guardada. Se requiere reiniciar para aplicar todos los cambios.":"Configuration saved. Restart required for all changes to become active.","warning");
+  const out=await r.json();if(!r.ok){showMessage("config-message",out.error||(l({de:"Speichern fehlgeschlagen",fr:"Échec de l'enregistrement",es:"Error al guardar",nl:"Opslaan mislukt",en:"Save failed"})),"error");return;}
+  if(restart){showMessage("config-message",l({de:"Konfiguration gespeichert. Better GroBro wird neu gestartet…",fr:"Configuration enregistrée. Better GroBro redémarre…",es:"Configuración guardada. Better GroBro se reinicia…",nl:"Configuratie opgeslagen. Better GroBro wordt herstart…",en:"Configuration saved. Better GroBro is restarting…"}));setTimeout(goBackToAddon, 900);}
+  else showMessage("config-message",l({de:"Konfiguration gespeichert. Neustart erforderlich, damit alle Änderungen aktiv werden.",fr:"Configuration enregistrée. Un redémarrage est nécessaire pour appliquer toutes les modifications.",es:"Configuración guardada. Se requiere reiniciar para aplicar todos los cambios.",nl:"Configuratie opgeslagen. Herstart vereist om alle wijzigingen toe te passen.",en:"Configuration saved. Restart required for all changes to become active."}),"warning");
 }
 for(const host of document.querySelectorAll(".config-actions")){
   const only=document.createElement("button");only.type="button";only.className="secondary";only.textContent=t("Nur speichern");only.addEventListener("click",()=>saveConfig(false).catch(showError));
