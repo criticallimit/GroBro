@@ -40,6 +40,29 @@ def cancel_runtime_timers(client) -> None:
         client._time_sync_timer = None
 
 
+def effective_device_timeout(client, device_id: str) -> float:
+    """Return a timeout long enough for the device's configured report interval.
+
+    DEVICE_TIMEOUT remains the minimum. Devices such as NEO can report only every
+    few minutes, so use the persisted data_interval plus 20% jitter allowance
+    (at least 30 seconds) before marking the device unavailable.
+    """
+    timeout = float(ha_client_module.DEVICE_TIMEOUT)
+    config = getattr(client, "_config_cache", {}).get(device_id)
+    raw_interval = getattr(config, "data_interval", None) if config is not None else None
+    try:
+        interval_minutes = float(raw_interval)
+    except (TypeError, ValueError):
+        return timeout
+
+    if not 0 < interval_minutes <= 60:
+        return timeout
+
+    interval_seconds = interval_minutes * 60.0
+    grace = max(30.0, interval_seconds * 0.20)
+    return max(timeout, interval_seconds + grace)
+
+
 def install_timer_runtime() -> None:
     """Install daemon timers, device timeout handling and shutdown cleanup."""
     ha_client_module.Timer = daemon_timer
@@ -60,9 +83,8 @@ def install_timer_runtime() -> None:
                     if last_seen is None:
                         self._device_timers.pop(d_id, None)
                         return
-                    remaining = ha_client_module.DEVICE_TIMEOUT - (
-                        time.monotonic() - last_seen
-                    )
+                    timeout = effective_device_timeout(self, d_id)
+                    remaining = timeout - (time.monotonic() - last_seen)
                     if remaining > 0:
                         timer = daemon_timer(remaining, check_timeout, args=(d_id,))
                         self._device_timers[d_id] = timer
@@ -80,7 +102,7 @@ def install_timer_runtime() -> None:
                 if timer is not None and timer.is_alive():
                     return
                 timer = daemon_timer(
-                    ha_client_module.DEVICE_TIMEOUT,
+                    effective_device_timeout(self, device_id),
                     check_timeout,
                     args=(device_id,),
                 )

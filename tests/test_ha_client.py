@@ -2,6 +2,7 @@ import os
 import json
 import logging
 from collections import deque
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -505,10 +506,20 @@ class TestClientHoldingInput:
             ],
         )
         ha_client.publish_holding_register_input(state)
-        ha_client._client.publish.assert_called_once()
-        topic = ha_client._client.publish.call_args[0][0]
-        assert "output_power_limit" in topic
-        assert "get" in topic
+        calls = ha_client._client.publish.call_args_list
+        assert any(
+            call.args[0]
+            == "homeassistant/grobro/QMN000ABC1D2E3FG/availability"
+            and call.args[1] == "online"
+            for call in calls
+        )
+        state_calls = [
+            call
+            for call in calls
+            if "output_power_limit" in call.args[0] and "/get" in call.args[0]
+        ]
+        assert len(state_calls) == 1
+        assert state_calls[0].args[1] == 80
 
     def test_publish_holding_register_error(self, caplog, ha_client):
         ha_client._client.publish.side_effect = Exception("publish error")
@@ -792,6 +803,42 @@ class TestClientAvailability:
         topics = [c[0][0] for c in ha_client._client.publish.call_args_list]
         assert any("availability" in t for t in topics)
         assert any("online" in t for t in topics)
+
+
+class TestLiveResponseAvailability:
+    def test_holding_readback_marks_device_online_and_refreshes_timeout(self, ha_client):
+        device_id = "QMN000ABC1D2E3FG"
+        ha_client._last_availability[device_id] = False
+        ha_client._client.publish.reset_mock()
+
+        ha_client.publish_holding_register_input(
+            SimpleNamespace(device_id=device_id, payload=[])
+        )
+
+        availability_calls = [
+            call
+            for call in ha_client._client.publish.call_args_list
+            if call.args[0] == f"homeassistant/grobro/{device_id}/availability"
+        ]
+        assert availability_calls
+        assert availability_calls[-1].args[1] == "online"
+        assert device_id in ha_client._device_last_seen
+
+    def test_config_read_response_marks_device_online_and_refreshes_timeout(self, ha_client):
+        device_id = "QMN000ABC1D2E3FG"
+        ha_client._last_availability[device_id] = False
+        ha_client._client.publish.reset_mock()
+
+        ha_client.handle_config_read_response(device_id, 4)
+
+        availability_calls = [
+            call
+            for call in ha_client._client.publish.call_args_list
+            if call.args[0] == f"homeassistant/grobro/{device_id}/availability"
+        ]
+        assert availability_calls
+        assert availability_calls[-1].args[1] == "online"
+        assert device_id in ha_client._device_last_seen
 
 
 class TestClientDeviceTimer:

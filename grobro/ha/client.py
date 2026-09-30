@@ -999,6 +999,11 @@ class Client:
         self.__kickoff_next_config_read(device_id)
 
     def handle_config_read_response(self, device_id: str, register_no: int):
+        # A successful config read is a direct response from the device and must
+        # refresh its availability even if regular telemetry is infrequent.
+        self.__publish_availability(device_id, True)
+        if DEVICE_TIMEOUT > 0:
+            self.__reset_device_timer(device_id)
         with self._config_read_lock:
             inflight = self._config_read_inflight.get(device_id)
             if inflight != register_no:
