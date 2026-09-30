@@ -1,6 +1,6 @@
 name: "Better GroBro"
 description: "GroBro optimized for Home Assistant with improved NOAH/NEXA support, stable battery mapping and built-in configuration"
-version: "3.1.40"
+version: "3.1.41"
 slug: "grobro_register_debug"
 init: false
 url: https://github.com/criticallimit/GroBro
@@ -49,7 +49,7 @@ options:
   REGISTER_DEBUG_MAX_REGISTER: 65535
   REGISTER_DEBUG_CHANGES_ONLY: true
   PUBLISH_SENSORS_RETAINED: false
-  DEVICE_TIMEOUT: 0
+  DEVICE_TIMEOUT: 120
   MAX_SLOTS: 1
   MAX_BAT: "auto"
   AVAILABILITY_SENSOR: false
