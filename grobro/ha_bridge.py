@@ -17,7 +17,6 @@ from grobro.grobro.raw_dump import install_raw_dump_hook
 from grobro.grobro.register_debug import install_register_debug_hook
 from grobro.grobro.signals import SignalHandler
 from grobro.ha.cleanup import install_ha_cleanup_hook
-from grobro.ha.firmware_runtime import install_firmware_runtime
 from grobro.ha.discovery_runtime import install_mac_runtime
 from grobro.ha.performance import install_ha_performance_hook
 
@@ -56,8 +55,6 @@ def install_runtime_layers() -> None:
     install_ha_cleanup_hook()
     install_ha_performance_hook()
     install_mac_runtime()
-    # Install last because it must wrap the final HA publish/discovery paths.
-    install_firmware_runtime()
 
 
 def install_optional_diagnostics() -> None:
