@@ -74,9 +74,6 @@ configuration:
   AVAILABILITY_SENSOR:
     name: Availability-Sensor
     description: Zusätzlichen Online-Binary-Sensor anzeigen. Die normale Entity-Availability bleibt unabhängig davon aktiv.
-  FILTER_DATA_GLITCHES:
-    name: Messwertsprünge filtern
-    description: Rücksprünge bei total_increasing-Sensoren wie Energiezählern unterdrücken.
   TZ:
     name: Zeitzone
     description: Lokale Zeitzone für Logs und Systemereignisse.
