@@ -66,15 +66,6 @@ def install_neo_power_runtime() -> None:
     """
     client_cls = ha_client_module.Client
 
-    original_publish_input = client_cls.publish_input_register
-
-    def publish_input_with_neo_power_read(self, state):
-        result = original_publish_input(self, state)
-        request_initial_neo_inverter_power(self, state.device_id)
-        return result
-
-    client_cls.publish_input_register = publish_input_with_neo_power_read
-
     original_on_message = client_cls._Client__on_message
 
     def on_message_with_neo_power_state(self, client, userdata, msg):
@@ -99,18 +90,5 @@ def install_neo_power_runtime() -> None:
 
     client_cls._Client__on_message = on_message_with_neo_power_state
 
-    original_publish_holding = client_cls.publish_holding_register_input
-
-    def publish_holding_with_retained_neo_power(self, ha_input):
-        result = original_publish_holding(self, ha_input)
-        if model.is_family(ha_input.device_id, "neo"):
-            for value in ha_input.payload:
-                if value.name == "inverter_power" and value.value in {"ON", "OFF"}:
-                    _publish_retained_switch_state(
-                        self,
-                        ha_input.device_id,
-                        value.value,
-                    )
-        return result
-
-    client_cls.publish_holding_register_input = publish_holding_with_retained_neo_power
+    # Holding-register state is already retained by the consolidated telemetry
+    # pipeline, so no second publish_holding_register_input wrapper is needed.

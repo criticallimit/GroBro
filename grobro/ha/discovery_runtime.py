@@ -9,6 +9,7 @@ import logging
 
 import grobro.model as model
 from grobro.ha import client as ha_client_module
+from grobro.ha.firmware_runtime import _rewrite_firmware_discovery
 
 FORK_URL = "https://github.com/criticallimit/GroBro"
 LOG = logging.getLogger(__name__)
@@ -230,6 +231,20 @@ def install_discovery_runtime(resolve_max_bat) -> None:
                 try:
                     data = json.loads(payload)
                     clean_data = clean_discovery_payload(self, device_id, data)
+
+                    # Firmware discovery rewriting is part of this single
+                    # discovery wrapper instead of a second nested wrapper.
+                    firmware_version = getattr(
+                        self,
+                        "_composed_firmware_cache",
+                        {},
+                    ).get(device_id)
+                    clean_payload = _rewrite_firmware_discovery(
+                        device_id,
+                        json.dumps(clean_data, separators=(",", ":")),
+                        firmware_version,
+                    )
+                    clean_data = json.loads(clean_payload)
 
                     if device_id not in repair_done:
                         repair_payload = json.dumps(

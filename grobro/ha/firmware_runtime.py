@@ -20,8 +20,6 @@ import logging
 from functools import lru_cache
 
 import grobro.model as model
-from grobro.ha import client as ha_client_module
-from grobro.model.growatt_registers import HomeAssistantInputRegister
 
 LOG = logging.getLogger(__name__)
 _INSTALLED = False
@@ -156,70 +154,15 @@ def _invalidate_discovery_for_firmware_change(client, device_id: str) -> None:
 
 
 def install_firmware_runtime() -> None:
-    """Install dynamic NOAH/NEXA firmware composition after the HA runtime hooks."""
+    """Backward-compatible no-op.
+
+    Firmware composition is now part of the single Home Assistant telemetry
+    runtime pipeline in grobro.ha.performance and discovery rewriting is
+    handled by grobro.ha.discovery_runtime. Keeping this function avoids
+    breaking external imports without stacking another Client wrapper.
+    """
     global _INSTALLED
     if _INSTALLED:
         return
-
-    client_cls = ha_client_module.Client
-
-    original_publish_input_register = client_cls.publish_input_register
-
-    def publish_input_register_with_firmware(self, state):
-        if _supports_combined_firmware(state.device_id):
-            config = getattr(self, "_config_cache", {}).get(state.device_id)
-            datalogger_version = getattr(config, "sw_version", None) if config else None
-            firmware_version = compose_combined_firmware(
-                state.payload,
-                datalogger_version,
-                _firmware_part_names_for_device(state.device_id),
-            )
-            if firmware_version:
-                firmware_cache = getattr(self, "_composed_firmware_cache", None)
-                if firmware_cache is None:
-                    firmware_cache = {}
-                    self._composed_firmware_cache = firmware_cache
-
-                if firmware_cache.get(state.device_id) != firmware_version:
-                    firmware_cache[state.device_id] = firmware_version
-                    _invalidate_discovery_for_firmware_change(self, state.device_id)
-
-                payload = dict(state.payload)
-                payload["fw_version"] = firmware_version
-                state = HomeAssistantInputRegister(
-                    device_id=state.device_id,
-                    payload=payload,
-                )
-
-        return original_publish_input_register(self, state)
-
-    original_publish_discovery = client_cls._Client__publish_device_discovery
-
-    def publish_discovery_with_firmware(self, device_id: str, *args, **kwargs):
-        if not _supports_combined_firmware(device_id):
-            return original_publish_discovery(self, device_id, *args, **kwargs)
-
-        mqtt_publish = self._client.publish
-        discovery_topic = f"{ha_client_module.HA_BASE_TOPIC}/device/{device_id}/config"
-        firmware_version = getattr(self, "_composed_firmware_cache", {}).get(device_id)
-
-        def publish(topic, payload=None, *publish_args, **publish_kwargs):
-            if topic == discovery_topic and payload:
-                payload = _rewrite_firmware_discovery(
-                    device_id,
-                    payload,
-                    firmware_version,
-                )
-            return mqtt_publish(topic, payload, *publish_args, **publish_kwargs)
-
-        self._client.publish = publish
-        try:
-            return original_publish_discovery(self, device_id, *args, **kwargs)
-        finally:
-            self._client.publish = mqtt_publish
-
-    client_cls.publish_input_register = publish_input_register_with_firmware
-    client_cls._Client__publish_device_discovery = publish_discovery_with_firmware
-
     _INSTALLED = True
-    LOG.info("Installed NOAH/NEXA ShinePhone-style firmware composition")
+    LOG.info("Firmware runtime is integrated into the consolidated HA pipeline")
