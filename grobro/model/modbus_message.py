@@ -11,8 +11,10 @@ LOG = logging.getLogger(__name__)
 _HEADER = struct.Struct(">HHHBB30s")
 _BLOCK_HEADER = struct.Struct(">HH")
 _METADATA = struct.Struct(">30s7B")
+_WRITE_SINGLE_ACK = struct.Struct(">HHB")
 HEADER_SIZE = _HEADER.size
 METADATA_SIZE = _METADATA.size
+WRITE_SINGLE_ACK_SIZE = _WRITE_SINGLE_ACK.size
 MIN_BLOCK_SIZE = 6  # start + end + one 16-bit register
 TRAILER_SIZE = 2  # Growatt packets commonly carry a two-byte protocol trailer/CRC
 
@@ -155,6 +157,38 @@ class GrowattMetadata(BaseModel):
         )
 
 
+class GrowattModbusWriteAck(BaseModel):
+    """Acknowledgement returned by Growatt for Modbus function 6 writes.
+
+    Device replies use a compact non-block layout:
+    register (uint16), echoed value (uint16), status (uint8), optional trailer.
+    """
+
+    register_no: int
+    value: int
+    status: int
+
+    @staticmethod
+    def parse_grobro(buffer: bytes, offset: int = 0) -> Optional["GrowattModbusWriteAck"]:
+        if offset < 0 or len(buffer) - offset < WRITE_SINGLE_ACK_SIZE:
+            return None
+        try:
+            register_no, value, status = _WRITE_SINGLE_ACK.unpack_from(buffer, offset)
+        except struct.error:
+            return None
+        return GrowattModbusWriteAck(
+            register_no=register_no,
+            value=value,
+            status=status,
+        )
+
+    def build_grobro(self) -> bytes:
+        return _WRITE_SINGLE_ACK.pack(self.register_no, self.value, self.status)
+
+    def size(self) -> int:
+        return WRITE_SINGLE_ACK_SIZE
+
+
 class GrowattModbusMessage(BaseModel):
     """
     Represents a block of modbus registers sent by the growatt device.
@@ -176,6 +210,7 @@ class GrowattModbusMessage(BaseModel):
     metadata: Optional[GrowattMetadata] = None
     function: GrowattModbusFunction
     register_blocks: list[GrowattModbusBlock]
+    write_ack: Optional[GrowattModbusWriteAck] = None
 
     @property
     def msg_len(self):
@@ -184,6 +219,8 @@ class GrowattModbusMessage(BaseModel):
             result += self.metadata.size()
         for block in self.register_blocks:
             result += block.size()
+        if self.write_ack:
+            result += self.write_ack.size()
         return result
 
     def get_data(self, pos: GrowattRegisterPosition):
@@ -241,6 +278,33 @@ class GrowattModbusMessage(BaseModel):
                     LOG.warning("Missing or truncated input-register metadata for %s", device_id)
                     return None
                 offset += METADATA_SIZE
+
+            # Growatt function 6 acknowledgements are not register blocks. Real
+            # NOAH packets use register + echoed value + one-byte status, followed
+            # by the normal optional two-byte protocol trailer/CRC.
+            if function == GrowattModbusFunction.PRESET_SINGLE_REGISTER:
+                remaining = buffer_len - offset
+                if remaining not in (
+                    WRITE_SINGLE_ACK_SIZE,
+                    WRITE_SINGLE_ACK_SIZE + TRAILER_SIZE,
+                ):
+                    LOG.debug(
+                        "Unexpected single-register write ACK size for %s: %s",
+                        device_id,
+                        remaining,
+                    )
+                    return None
+                write_ack = GrowattModbusWriteAck.parse_grobro(buffer, offset)
+                if write_ack is None:
+                    return None
+                return GrowattModbusMessage(
+                    unknown=unknown,
+                    metadata=metadata,
+                    device_id=device_id,
+                    function=function,
+                    register_blocks=[],
+                    write_ack=write_ack,
+                )
 
             # A one-register block is exactly six bytes. Equality must be accepted
             # so a final single-register block is not skipped.
