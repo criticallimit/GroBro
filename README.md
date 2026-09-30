@@ -6,12 +6,13 @@ Better GroBro builds on [Robert Zaage's GroBro](https://github.com/robertzaage/G
 
 ---
 
-## Better GroBro 3.1.55
+## Better GroBro 3.1.56
 
 ### What Better GroBro adds
 
 #### Easier Home Assistant setup
 
+- Uses one clear configuration action: saving add-on options always restarts Better GroBro so changes take effect immediately
 - Built-in configuration page directly inside Home Assistant
 - Current-session add-on log viewer directly in the Better GroBro interface
 - The log viewer preserves the manual scroll position during automatic refresh while still following new entries when you stay at the bottom
