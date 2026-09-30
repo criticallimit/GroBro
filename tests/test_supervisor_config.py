@@ -81,8 +81,6 @@ def test_save_addon_options_preserves_future_unknown_but_drops_retired(monkeypat
                     "FILTER_DATA_GLITCHES": True,
                 }
             }
-        if path == "/addons/self/options/validate":
-            return {"valid": True, "message": None}
         if path == "/addons/self/options":
             return None
         raise AssertionError(path)
@@ -102,12 +100,7 @@ def test_save_addon_options_preserves_future_unknown_but_drops_retired(monkeypat
     assert "PUBLISH_SENSORS_RETAINED" not in merged
     assert "FILTER_DATA_GLITCHES" not in merged
 
-    validate_call = calls[1]
-    save_call = calls[2]
-    assert validate_call[0:2] == ("POST", "/addons/self/options/validate")
-    assert validate_call[2]["UPSTREAM_FUTURE_OPTION"] == "keep-me"
-    assert "PUBLISH_SENSORS_RETAINED" not in validate_call[2]
-    assert "FILTER_DATA_GLITCHES" not in validate_call[2]
+    save_call = calls[1]
     assert save_call == (
         "POST",
         "/addons/self/options",
@@ -140,18 +133,26 @@ def test_get_addon_options_hides_retired_retain_option_and_normalizes_timeout(mo
     assert result["options"]["DEVICE_TIMEOUT"] == 120
 
 
-def test_save_addon_options_stops_on_supervisor_validation_failure(monkeypatch):
+def test_save_addon_options_uses_only_self_endpoints_allowed_to_addon(monkeypatch):
+    calls = []
+
     def fake_request(method, path, payload=None):
+        calls.append((method, path, payload))
         if path == "/addons/self/info":
-            return {"options": {}}
-        if path == "/addons/self/options/validate":
-            return {"valid": False, "message": "bad config"}
-        raise AssertionError("save must not be called after failed validation")
+            return {"options": {"MAX_SLOTS": 1}}
+        if path == "/addons/self/options":
+            return None
+        raise AssertionError(path)
 
     monkeypatch.setattr(supervisor_config, "_supervisor_request", fake_request)
 
-    with pytest.raises(supervisor_config.SupervisorConfigError, match="bad config"):
-        supervisor_config.save_addon_options({"MAX_SLOTS": 2})
+    supervisor_config.save_addon_options({"MAX_SLOTS": 2})
+
+    assert [path for _method, path, _payload in calls] == [
+        "/addons/self/info",
+        "/addons/self/options",
+    ]
+    assert all(path.count("/") <= 3 for _method, path, _payload in calls)
 
 
 def test_all_ingress_configuration_options_are_normalized():
