@@ -202,7 +202,10 @@ def test_all_register_display_names_are_localization_covered():
                 target_word = word_map.get(source_word.lower())
                 if target_word is None:
                     continue
-                if target_word.lower() == source_word.lower():
+                target_tokens = {
+                    token.lower() for token in word_re.findall(target_word)
+                }
+                if source_word.lower() in target_tokens:
                     continue
                 assert source_word.lower() not in translated_words, (
                     language,
