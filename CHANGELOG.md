@@ -1,9 +1,12 @@
-# Better GroBro 3.1.54 — Differences from robertzaage/GroBro
+# Better GroBro 3.1.55 — Differences from robertzaage/GroBro
 
 Comparison baseline: `robertzaage/GroBro` main at `e4d59b20ba472853ae6ec0b7a17cf15cd774cb23` (2026-09-18).
 
 ## User-relevant differences
 
+- Moves normal `Installed ...` startup messages from INFO to DEBUG so the standard INFO log is less noisy.
+- Stops NOAH/NEO `0x0103` packets from falling through to the generic Modbus block parser, removing false `Truncated register block` warnings caused by embedded device-serial bytes.
+- Fixes the integrated log viewer so manual scrolling is preserved across the 3-second auto-refresh; it only follows the newest entries automatically while the user remains near the bottom.
 - Sets Home Assistant `suggested_display_precision` to 3 for all NOAH Bat1–Bat4 maximum/minimum cell-voltage sensors, preserving the existing 0.001 V scaling while making the displayed millivolt resolution consistent.
 - Normalizes shortened NEO identifiers seen in passive `0x0103` diagnostics (for example `BZP4N991ML`) back to the full `QMN000...` device identity while preserving the raw identifier for diagnostics.
 - Adds NOAH Battery 2/3/4 maximum and minimum cell-voltage sensors using validated register pairs 375/376, 382/383 and 389/390 with the same scaling and Home Assistant metadata as Battery 1.
