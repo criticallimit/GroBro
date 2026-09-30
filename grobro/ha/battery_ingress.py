@@ -107,7 +107,6 @@ _INDEX_HTML = r"""<!doctype html>
     <div class="card">
       <h2>Empfohlene Konfiguration</h2>
       <p>Verwende bevorzugt diese Better-GroBro-Oberfläche. Sie bearbeitet direkt die offiziellen Home-Assistant-Add-on-Optionen; der native Konfiguration-Tab bleibt als Fallback verfügbar und verwendet dieselben Werte.</p>
-      <div class="status warning">Änderungen an Better-GroBro-Optionen werden beim Start geladen. Verwende daher nach Änderungen vorzugsweise <b>Speichern & neu starten</b>.</div>
     </div>
   </section>
 
