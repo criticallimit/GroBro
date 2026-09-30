@@ -74,9 +74,6 @@ configuration:
   AVAILABILITY_SENSOR:
     name: Capteur de disponibilité
     description: Exposer un capteur binaire En ligne supplémentaire. La disponibilité normale des entités reste active.
-  FILTER_DATA_GLITCHES:
-    name: Filtrer les anomalies de mesure
-    description: Supprimer les diminutions des capteurs total_increasing tels que les compteurs d'énergie.
   TZ:
     name: Fuseau horaire
     description: Fuseau horaire local utilisé pour les journaux et événements système.
