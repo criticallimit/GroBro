@@ -1,6 +1,6 @@
 name: "Better GroBro"
 description: "GroBro optimized for Home Assistant with improved NOAH/NEXA support, stable battery mapping and built-in configuration"
-version: "3.1.51"
+version: "3.1.52"
 slug: "grobro_register_debug"
 init: false
 url: https://github.com/criticallimit/GroBro
