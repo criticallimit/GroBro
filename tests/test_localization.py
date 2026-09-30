@@ -112,6 +112,11 @@ def test_idiomatic_domain_translations_are_complete_and_not_mechanical():
     assert translate_entity_name("Load power", "es") == "Potencia de consumo"
     assert translate_entity_name("Load power", "nl") == "Verbruiksvermogen"
 
+    assert translate_entity_name("Battery 2 max. Cell Voltage", "de") == "Maximale Zellspannung Batterie 2"
+    assert translate_entity_name("Battery 2 min. Cell Voltage", "de") == "Minimale Zellspannung Batterie 2"
+    assert translate_entity_name("Battery 3 max. Cell Voltage", "de") == "Maximale Zellspannung Batterie 3"
+    assert translate_entity_name("Battery 3 min. Cell Voltage", "de") == "Minimale Zellspannung Batterie 3"
+
     assert translate_entity_name("Current status of DryContact", "de") == "Status des potentialfreien Kontakts"
     assert translate_entity_name("Current status of DryContact", "fr") == "État du contact sec"
     assert translate_entity_name("Current status of DryContact", "es") == "Estado del contacto seco"
