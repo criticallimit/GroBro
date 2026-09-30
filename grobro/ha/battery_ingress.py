@@ -282,6 +282,16 @@ const TEXTS={
   }
 };
 function t(text){return (TEXTS[currentLang]&&TEXTS[currentLang][text])||text;}
+const STATUS_TEXTS={
+  de:{startup:"Startet",started:"Gestartet",stopped:"Gestoppt",unknown:"Unbekannt",error:"Fehler"},
+  en:{startup:"Starting",started:"Started",stopped:"Stopped",unknown:"Unknown",error:"Error"},
+  fr:{startup:"Démarrage",started:"Démarré",stopped:"Arrêté",unknown:"Inconnu",error:"Erreur"},
+  es:{startup:"Iniciando",started:"Iniciado",stopped:"Detenido",unknown:"Desconocido",error:"Error"}
+};
+function localizedAddonState(state){
+  const key=String(state||"unknown").toLowerCase();
+  return (STATUS_TEXTS[currentLang]&&STATUS_TEXTS[currentLang][key])||state||"–";
+}
 function applyLanguage(language){
   const base=String(language||"en").toLowerCase().split("-")[0];
   currentLang=["de","en","fr","es"].includes(base)?base:"en";
@@ -421,7 +431,7 @@ async function loadConfig(){
   applyLanguage(out.language || selectedHomeAssistantLanguage());
   fillConfig(out.options||{});
   document.getElementById("summary-version").textContent=out.version||"–";
-  document.getElementById("summary-state").textContent=out.state||"–";
+  document.getElementById("summary-state").textContent=localizedAddonState(out.state);
 }
 async function saveConfig(restart){
   const r=await fetch(apiUrl("api/config"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({options:collectConfig(),restart})});
