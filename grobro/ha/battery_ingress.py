@@ -136,7 +136,7 @@ _INDEX_HTML = r"""<!doctype html>
       <div id="row-slot2" class="battery-row"><div><label for="slot2">Bat2</label><div id="auto2" class="muted"></div></div><select id="slot2"></select></div>
       <div id="row-slot3" class="battery-row"><div><label for="slot3">Bat3</label><div id="auto3" class="muted"></div></div><select id="slot3"></select></div>
       <div id="row-slot4" class="battery-row"><div><label for="slot4">Bat4</label><div id="auto4" class="muted"></div></div><select id="slot4"></select></div>
-      <div class="actions"><button id="back-bottom" type="button" class="secondary">Zurück</button><button id="battery-save" type="button">Batterie-Zuordnung speichern</button></div>
+      <div class="actions"><button id="battery-save" type="button">Batterie-Zuordnung speichern</button></div>
       <div id="battery-message" class="status" hidden></div>
     </div>
   </section>
@@ -454,7 +454,6 @@ async function loadBatteries(){
   renderBatteries();
 }
 document.getElementById("device").addEventListener("change",renderBatteries);
-document.getElementById("back-bottom").addEventListener("click",goBackToAddon);
 document.getElementById("battery-save").addEventListener("click",async()=>{
   const d=currentDevice();if(!d)return;
   const slots=visibleAssignmentSlots(d);
