@@ -6,10 +6,14 @@ import json
 import os
 import threading
 import time
+import uuid
+from datetime import datetime
 import urllib.error
 import urllib.request
 
 _SUPERVISOR_BASE = "http://supervisor"
+_PROCESS_LOG_MARKER = f"BETTER_GROBRO_SESSION_{uuid.uuid4().hex}"
+_PROCESS_STARTED_AT = datetime.now().astimezone().isoformat(timespec="seconds")
 _ALLOWED_OPTIONS = {
     "SOURCE_MQTT_HOST",
     "SOURCE_MQTT_PORT",
@@ -135,6 +139,50 @@ def _supervisor_request(method: str, path: str, payload=None):
         return _unwrap(json.loads(raw))
     except json.JSONDecodeError as exc:
         raise SupervisorConfigError("Ungültige Supervisor-Antwort") from exc
+
+
+def mark_process_log_start() -> None:
+    """Write an unambiguous marker so the UI can show only this process' logs."""
+    print(f"--- {_PROCESS_LOG_MARKER} ---", flush=True)
+
+
+def _supervisor_text_request(path: str) -> str:
+    """Fetch plain-text data from Supervisor endpoints such as add-on logs."""
+    request = urllib.request.Request(
+        f"{_SUPERVISOR_BASE}{path}",
+        headers={
+            "Authorization": f"Bearer {_token()}",
+            "Accept": "text/plain",
+        },
+        method="GET",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=8) as response:
+            return response.read().decode("utf-8", errors="replace")
+    except urllib.error.HTTPError as exc:
+        raise SupervisorConfigError(str(exc)) from exc
+    except (OSError, urllib.error.URLError) as exc:
+        raise SupervisorConfigError(str(exc)) from exc
+
+
+def get_current_process_logs() -> dict:
+    """Return only log output produced by the current Better GroBro process."""
+    raw = _supervisor_text_request("/addons/self/logs")
+    marker = f"--- {_PROCESS_LOG_MARKER} ---"
+    position = raw.rfind(marker)
+    if position < 0:
+        return {
+            "logs": "",
+            "started_at": _PROCESS_STARTED_AT,
+            "marker_found": False,
+        }
+
+    current = raw[position + len(marker):].lstrip("\r\n")
+    return {
+        "logs": current,
+        "started_at": _PROCESS_STARTED_AT,
+        "marker_found": True,
+    }
 
 
 def normalize_options(raw: dict) -> dict:
