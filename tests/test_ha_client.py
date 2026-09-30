@@ -467,27 +467,32 @@ class TestClientPublishInput:
 
     def test_publish_input_register_bat_temp_filter(self, ha_client):
         from grobro.model.growatt_registers import HomeAssistantInputRegister
-        from grobro.model.growatt_registers import KNOWN_NEO_REGISTERS
-        bat_keys = [k for k in KNOWN_NEO_REGISTERS.input_registers.keys()
-                     if k.startswith("bat") and k.endswith("_temp")]
-        if not bat_keys:
-            pytest.skip("No batX_temp registers in NEO definition")
-        payload = {k: -273.1 for k in bat_keys}
+        from grobro.model.growatt_registers import KNOWN_NOAH_REGISTERS
+
+        bat_keys = [
+            key
+            for key in KNOWN_NOAH_REGISTERS.input_registers
+            if key.startswith("bat") and key.endswith("_temp")
+        ]
+        assert bat_keys
+        payload = {key: -273.1 for key in bat_keys}
         payload["Ppv"] = 100
         state = HomeAssistantInputRegister(
-            device_id="QMN000ABC1D2E3FG",
+            device_id="0PVP0000TEST0001",
             payload=payload,
         )
         ha_client.publish_input_register(state)
+
         published = None
+        expected_topic = "homeassistant/grobro/0PVP0000TEST0001/state"
         for call_args in ha_client._client.publish.call_args_list:
-            topic = call_args[0][0]
-            if "state" in topic:
+            if call_args[0][0] == expected_topic:
                 published = json.loads(call_args[0][1])
                 break
+
         assert published is not None
-        for k in bat_keys:
-            assert published.get(k) is None
+        for key in bat_keys:
+            assert published.get(key) is None
         assert published.get("Ppv") == 100
 
 
