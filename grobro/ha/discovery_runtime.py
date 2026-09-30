@@ -58,7 +58,7 @@ def install_mac_runtime() -> None:
 
     client_cls._Client__device_info_from_config = device_info_with_normalized_mac
     _MAC_RUNTIME_INSTALLED = True
-    LOG.info("Installed normalized NOAH/NEXA MAC device-info handling")
+    LOG.debug("Installed normalized NOAH/NEXA MAC device-info handling")
 
 
 
