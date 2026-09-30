@@ -1,0 +1,85 @@
+configuration:
+  SOURCE_MQTT_HOST:
+    name: MQTT-bronhost
+    description: Hostnaam of IP-adres van de MQTT-broker die door Growatt wordt gebruikt.
+  SOURCE_MQTT_PORT:
+    name: MQTT-bronpoort
+    description: Poort van de MQTT-broker die door Growatt wordt gebruikt.
+  SOURCE_MQTT_TLS:
+    name: MQTT-bron-TLS
+    description: TLS gebruiken voor de Growatt MQTT-verbinding.
+  SOURCE_MQTT_USER:
+    name: MQTT-brongebruiker
+    description: Gebruikersnaam voor de Growatt MQTT-broker, indien nodig.
+  SOURCE_MQTT_PASS:
+    name: MQTT-bronwachtwoord
+    description: Wachtwoord voor de Growatt MQTT-broker, indien nodig.
+  TARGET_MQTT_HOST:
+    name: Home Assistant MQTT-host
+    description: Hostnaam of IP-adres van de MQTT-broker die door Home Assistant wordt gebruikt.
+  TARGET_MQTT_PORT:
+    name: Home Assistant MQTT-poort
+    description: Poort van de MQTT-broker die door Home Assistant wordt gebruikt.
+  TARGET_MQTT_TLS:
+    name: Home Assistant MQTT-TLS
+    description: TLS gebruiken voor de Home Assistant MQTT-verbinding.
+  TARGET_MQTT_USER:
+    name: Home Assistant MQTT-gebruiker
+    description: Gebruikersnaam voor de Home Assistant MQTT-broker, indien nodig.
+  TARGET_MQTT_PASS:
+    name: Home Assistant MQTT-wachtwoord
+    description: Wachtwoord voor de Home Assistant MQTT-broker, indien nodig.
+  MQTT_CLIENT_SUFFIX:
+    name: MQTT-clientsuffix
+    description: Optioneel suffix voor MQTT-client-ID's wanneer meerdere Better GroBro-instanties dezelfde broker gebruiken.
+  HA_BASE_TOPIC:
+    name: Home Assistant-basistopic
+    description: MQTT-basistopic voor Home Assistant-discovery en statussen.
+  GROWATT_CLOUD:
+    name: Growatt Cloud-doorsturen
+    description: Berichten naar en van Growatt Cloud doorsturen.
+  GROWATT_CLOUD_CONFIG_FILTER:
+    name: Growatt Cloud-configuratiefilter
+    description: Op afstand gestarte configuratieberichten vanuit Growatt Cloud blokkeren.
+  LOG_LEVEL:
+    name: Logniveau
+    description: Logniveau dat door Better GroBro wordt gebruikt.
+  DUMP_MESSAGES:
+    name: Ruwe berichten opslaan
+    description: Elk ontvangen ruw MQTT-bericht opslaan voor latere analyse.
+  DUMP_DIR:
+    name: Map voor ruwe berichten
+    description: Map die wordt gebruikt voor ruwe berichten.
+  REGISTER_DEBUG:
+    name: Registerdebug
+    description: Passieve registerlogging inschakelen zonder extra lees- of schrijfopdrachten naar het apparaat.
+  REGISTER_DEBUG_DIR:
+    name: Registerdebugmap
+    description: Map die wordt gebruikt voor registerdebuggegevens.
+  REGISTER_DEBUG_MAX_REGISTER:
+    name: Maximaal register
+    description: Hoogste registeradres dat uit ontvangen Modbus-blokken wordt behouden.
+  REGISTER_DEBUG_CHANGES_ONLY:
+    name: Alleen wijzigingen loggen
+    description: Elke waarde eenmaal loggen en daarna alleen wanneer deze verandert.
+  MAX_SLOTS:
+    name: Batterij-tijdsloten
+    description: Aantal batterijplanningstijdsloten dat in Home Assistant wordt weergegeven.
+  MAX_BAT:
+    name: Maximaal aantal batterijen
+    description: Maximaal aantal batterijmodules dat in Home Assistant wordt weergegeven. Automatisch gebruikt het gedetecteerde aantal.
+  DEVICE_TIMEOUT:
+    name: Apparaattime-out
+    description: Minimale time-out in seconden voordat entiteiten niet beschikbaar worden. Rapportage-intervallen van apparaten worden automatisch gerespecteerd.
+  AVAILABILITY_SENSOR:
+    name: Beschikbaarheidssensor
+    description: Een extra Online binaire sensor weergeven. Normale beschikbaarheid van entiteiten blijft altijd actief.
+  FILTER_DATA_GLITCHES:
+    name: Meetfouten filteren
+    description: Terugval bij total_increasing-sensoren zoals energietellers onderdrukken.
+  TZ:
+    name: Tijdzone
+    description: Lokale tijdzone voor logs en systeemgebeurtenissen.
+  KEEP_BATTERY_POSITION:
+    name: Stabiele batterijposities
+    description: NOAH- en NEXA-batterijmodules op stabiele logische posities houden op basis van serienummer, ook na hernummering en herstarts.

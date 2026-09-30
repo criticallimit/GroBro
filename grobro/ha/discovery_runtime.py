@@ -10,6 +10,7 @@ import logging
 import grobro.model as model
 from grobro.ha import client as ha_client_module
 from grobro.ha.firmware_runtime import _rewrite_firmware_discovery
+from grobro.ha.localization import runtime_language, translate_entity_name
 
 FORK_URL = "https://github.com/criticallimit/GroBro"
 LOG = logging.getLogger(__name__)
@@ -119,10 +120,17 @@ def clean_discovery_payload(client, device_id: str, data: dict) -> dict:
         components.pop(f"grobro_{device_id}_sync_time", None)
         components.pop(f"grobro_{device_id}_cmd_system_time", None)
 
+        language = runtime_language()
         for component_id, component in components.items():
             if not isinstance(component, dict):
                 continue
-            # Keep this component exactly as Robert's GroBro generated it.
+            if isinstance(component.get("name"), str):
+                component["name"] = translate_entity_name(
+                    component["name"],
+                    language,
+                )
+            # Keep the NEO Inverter Power component structurally identical to
+            # Robert's GroBro; only its user-visible name may be localized.
             if _is_upstream_neo_inverter_power(device_id, component_id):
                 continue
             component.pop("publish", None)
@@ -180,9 +188,9 @@ def migration_set(client) -> set:
 
 def discovery_signature(
     client, device_id: str, effective_max_bat: int
-) -> tuple[int, int | None]:
+) -> tuple[int, int | None, str]:
     pv_count = getattr(client, "_neo_pv_count", {}).get(device_id)
-    return effective_max_bat, pv_count
+    return effective_max_bat, pv_count, runtime_language()
 
 
 def install_discovery_runtime(resolve_max_bat) -> None:

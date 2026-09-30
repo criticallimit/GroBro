@@ -1,88 +1,85 @@
 configuration:
   SOURCE_MQTT_HOST:
-    name: SOURCE_MQTT_HOST
-    description: Hostname or IP of the source MQTT broker (for Growatt)
+    name: Source MQTT host
+    description: Hostname or IP address of the MQTT broker used by Growatt.
   SOURCE_MQTT_PORT:
-    name: SOURCE_MQTT_PORT
-    description: Port number of the source MQTT broker
+    name: Source MQTT port
+    description: Port of the MQTT broker used by Growatt.
   SOURCE_MQTT_TLS:
-    name: SOURCE_MQTT_TLS
-    description: Set to true to enable TLS without certificate validation
+    name: Source MQTT TLS
+    description: Use TLS for the Growatt MQTT connection.
   SOURCE_MQTT_USER:
-    name: SOURCE_MQTT_USER
-    description: Username for the source MQTT broker (if authentication is required)
+    name: Source MQTT username
+    description: Username for the Growatt MQTT broker, if required.
   SOURCE_MQTT_PASS:
-    name: SOURCE_MQTT_PASS
-    description: Password for the source MQTT broker
+    name: Source MQTT password
+    description: Password for the Growatt MQTT broker, if required.
   TARGET_MQTT_HOST:
-    name: TARGET_MQTT_HOST
-    description: Hostname or IP of the target MQTT broker (for Home Assistant)
+    name: Home Assistant MQTT host
+    description: Hostname or IP address of the MQTT broker used by Home Assistant.
   TARGET_MQTT_PORT:
-    name: TARGET_MQTT_PORT
-    description: Port number of the target MQTT broker
+    name: Home Assistant MQTT port
+    description: Port of the MQTT broker used by Home Assistant.
   TARGET_MQTT_TLS:
-    name: TARGET_MQTT_TLS
-    description: Set to true to enable TLS without certificate validation
+    name: Home Assistant MQTT TLS
+    description: Use TLS for the Home Assistant MQTT connection.
   TARGET_MQTT_USER:
-    name: TARGET_MQTT_USER
-    description: Username for the target MQTT broker (if authentication is required)
+    name: Home Assistant MQTT username
+    description: Username for the Home Assistant MQTT broker, if required.
   TARGET_MQTT_PASS:
-    name: TARGET_MQTT_PASS
-    description: Password for the target MQTT broker
+    name: Home Assistant MQTT password
+    description: Password for the Home Assistant MQTT broker, if required.
   MQTT_CLIENT_SUFFIX:
-    name: MQTT_CLIENT_SUFFIX
-    description: Optional suffix for MQTT client IDs. Only needed when multiple GroBro instances share the same broker.
+    name: MQTT client suffix
+    description: Optional suffix for MQTT client IDs when multiple Better GroBro instances share one broker.
   HA_BASE_TOPIC:
-    name: HA_BASE_TOPIC
-    description: Base MQTT topic used for Home Assistant auto-discovery and sensor states
+    name: Home Assistant base topic
+    description: MQTT base topic used for Home Assistant discovery and states.
   GROWATT_CLOUD:
-    name: GROWATT_CLOUD
-    description: Set to true to forward messages to and from the Growatt server. Default is false.
+    name: Growatt Cloud forwarding
+    description: Forward messages to and from the Growatt Cloud.
   GROWATT_CLOUD_CONFIG_FILTER:
-    name: GROWATT_CLOUD_CONFIG_FILTER
-    description: Blocks forwarded configuration messages to protect the datalogger from remote setting changes initiated by the Growatt Cloud.
+    name: Growatt Cloud configuration filter
+    description: Block remotely initiated configuration messages from the Growatt Cloud.
   LOG_LEVEL:
-    name: LOG_LEVEL
-    description: Logging level ERROR, DEBUG, or INFO. Default is ERROR.
+    name: Log level
+    description: Logging level used by Better GroBro.
   DUMP_MESSAGES:
-    name: DUMP_MESSAGES
-    description: Dumps every received raw message into DUMP_DIR for later analysis.
+    name: Save raw messages
+    description: Save every received raw MQTT message for later analysis.
   DUMP_DIR:
-    name: DUMP_DIR
-    description: Directory used for raw message dumps. Default is /share/GroBro/dump.
+    name: Raw message directory
+    description: Directory used for raw message dumps.
   REGISTER_DEBUG:
-    name: REGISTER_DEBUG
-    description: Enables passive register logging. No additional read requests or register writes are sent to devices.
+    name: Register debug
+    description: Enable passive register logging without additional device reads or writes.
   REGISTER_DEBUG_DIR:
-    name: REGISTER_DEBUG_DIR
-    description: Directory used for register dumps. Default is /share/GroBro/register_debug.
+    name: Register debug directory
+    description: Directory used for register debug data.
   REGISTER_DEBUG_MAX_REGISTER:
-    name: REGISTER_DEBUG_MAX_REGISTER
-    description: Highest register address retained from actually received Modbus blocks. Default is 65535.
+    name: Maximum register
+    description: Highest register address retained from received Modbus blocks.
   REGISTER_DEBUG_CHANGES_ONLY:
-    name: REGISTER_DEBUG_CHANGES_ONLY
-    description: When enabled, every value is logged on first observation and then only when it changes.
-  PUBLISH_SENSORS_RETAINED:
-    name: PUBLISH_SENSORS_RETAINED
-    description: Publish sensor states with the MQTT retain flag. Default is false.
+    name: Log changes only
+    description: Log every value once, then only when it changes.
   MAX_SLOTS:
-    name: MAX_SLOTS
-    description: Number of battery scheduling slots shown in Home Assistant (NOAH max 9). Default is 1.
+    name: Battery time slots
+    description: Number of battery scheduling slots exposed in Home Assistant.
   MAX_BAT:
-    name: MAX_BAT
-    description: Number of battery modules shown in Home Assistant. "auto" prefers the reported battery count and falls back to detected serial fragments only when needed.
+    name: Maximum batteries
+    description: Maximum number of battery modules shown in Home Assistant. Auto uses the detected count.
   DEVICE_TIMEOUT:
-    name: DEVICE_TIMEOUT
-    description: Timeout in seconds before a device is considered unavailable. 0 disables the timeout; 300 seconds or more is recommended.
+    name: Device timeout
+    description: Minimum timeout in seconds before entities become unavailable. Device reporting intervals are respected automatically.
   AVAILABILITY_SENSOR:
-    name: AVAILABILITY_SENSOR
-    description: When enabled, an additional Online binary sensor is exposed. The normal device/entity availability topic remains active as well.
+    name: Availability sensor
+    description: Expose an additional Online binary sensor. Normal entity availability remains active regardless.
   FILTER_DATA_GLITCHES:
-    name: FILTER_DATA_GLITCHES
-    description: Suppress decreases in total_increasing sensors such as energy counters. Default is false.
+    name: Filter measurement glitches
+    description: Suppress decreases in total_increasing sensors such as energy counters.
   TZ:
     name: Timezone
-    description: Local timezone used for correct timestamps in logs and system events.
+    description: Local timezone used for logs and system events.
   KEEP_BATTERY_POSITION:
-    name: KEEP_BATTERY_POSITION
-    description: Keep NOAH and NEXA battery modules on stable Home Assistant slots by serial number. If the stack is re-enumerated, all recognized values of a module stay assigned to its original logical battery. The mapping persists across restarts.
+    name: Stable battery positions
+    description: Keep NOAH and NEXA battery modules on stable logical slots by serial number across re-enumeration and restarts.

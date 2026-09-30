@@ -6,14 +6,14 @@ Better GroBro builds on [Robert Zaage's GroBro](https://github.com/robertzaage/G
 
 ---
 
-## Better GroBro 3.1.43
+## Better GroBro 3.1.44
 
 ### What Better GroBro adds
 
 #### Easier Home Assistant setup
 
 - Built-in configuration page directly inside Home Assistant
-- Automatic German, English, French and Spanish interface
+- Automatic German, English, French, Spanish and Dutch interface and Home Assistant entity names
 - Clear overview of detected Growatt families such as NOAH, NEO and NEXA
 
 #### Better battery handling

@@ -26,6 +26,7 @@ def test_release_notes_remain_user_focused():
     assert "#### Easier Home Assistant setup" in readme
     assert "#### Better battery handling" in readme
     assert "#### More reliable operation" in readme
+    assert "German, English, French, Spanish and Dutch" in readme
     assert "## User-relevant differences" in changelog
     assert "Comparison baseline" not in readme
     assert "Runtime architecture" not in readme
