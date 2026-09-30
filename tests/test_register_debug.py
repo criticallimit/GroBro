@@ -143,3 +143,30 @@ def test_noah_0103_watch_registers_are_flagged_and_changes_retained(tmp_path, mo
     assert changed[-1]["previous"] == 800
     assert changed[-1]["uint16"] == 801
     assert changed[-1]["changed"] is True
+
+
+def test_noah_0103_short_neo_id_is_normalized(tmp_path, monkeypatch):
+    monkeypatch.setattr(register_debug, "REGISTER_DEBUG_DIR", str(tmp_path))
+    monkeypatch.setattr(register_debug, "REGISTER_DEBUG_CHANGES_ONLY", False)
+    register_debug._LAST_VALUES.clear()
+    register_debug._LAST_BLOCK_VALUES.clear()
+
+    register_debug._write_noah_0103(
+        {
+            "device_id": "BZP4N991ML",
+            "registers": [1],
+            "register_count": 1,
+        }
+    )
+
+    records = _read_jsonl(tmp_path / "registers.jsonl")
+    assert len(records) == 1
+    assert records[0]["device_id"] == "QMN000BZP4N991ML"
+    assert records[0]["raw_device_id"] == "BZP4N991ML"
+
+
+def test_noah_0103_full_device_id_is_unchanged():
+    assert (
+        register_debug._canonical_0103_device_id("QMN000BZP4N991ML")
+        == "QMN000BZP4N991ML"
+    )
