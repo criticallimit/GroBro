@@ -15,6 +15,14 @@ from types import SimpleNamespace
 
 from grobro.ha import client as ha_client_module
 from grobro.ha.battery_position import stabilize_battery_payload
+from grobro.ha.firmware_runtime import (
+    _firmware_part_names_for_device,
+    _invalidate_discovery_for_firmware_change,
+    _supports_combined_firmware,
+    compose_combined_firmware,
+)
+from grobro.ha.neo_power_runtime import request_initial_neo_inverter_power
+from grobro.model.growatt_registers import HomeAssistantInputRegister
 
 LOG = logging.getLogger(__name__)
 _INSTALLED = False
@@ -226,6 +234,32 @@ def install_ha_performance_hook() -> None:
         device_id = state.device_id
         state_payload = state.payload
 
+        # Compose NOAH/NEXA firmware before the common telemetry path so
+        # publish_input_register has one authoritative runtime wrapper.
+        if _supports_combined_firmware(device_id):
+            config = getattr(self, "_config_cache", {}).get(device_id)
+            datalogger_version = getattr(config, "sw_version", None) if config else None
+            firmware_version = compose_combined_firmware(
+                state_payload,
+                datalogger_version,
+                _firmware_part_names_for_device(device_id),
+            )
+            if firmware_version:
+                firmware_cache = getattr(self, "_composed_firmware_cache", None)
+                if firmware_cache is None:
+                    firmware_cache = {}
+                    self._composed_firmware_cache = firmware_cache
+                if firmware_cache.get(device_id) != firmware_version:
+                    firmware_cache[device_id] = firmware_version
+                    _invalidate_discovery_for_firmware_change(self, device_id)
+
+                state_payload = dict(state_payload)
+                state_payload["fw_version"] = firmware_version
+                state = HomeAssistantInputRegister(
+                    device_id=device_id,
+                    payload=state_payload,
+                )
+
         stable_logical_max = 1
         if (
             ha_client_module.KEEP_BATTERY_POSITION
@@ -303,6 +337,10 @@ def install_ha_performance_hook() -> None:
             retain=ha_client_module.PUBLISH_SENSORS_RETAINED,
         )
 
+        # Best-effort initial NEO inverter-power read. This used to be another
+        # publish_input_register wrapper; keeping it here avoids wrapper stacking.
+        request_initial_neo_inverter_power(self, device_id)
+
     def publish_holding_register_input_fast(self, ha_input):
         try:
             LOG.debug("HA: publish: %s", ha_input)
@@ -331,14 +369,7 @@ def install_ha_performance_hook() -> None:
         except Exception as exc:
             LOG.error("HA: publish msg: %s", exc)
 
-    original_on_connect = client_cls._Client__on_connect
-
-    def on_connect_clear_state_cache(self, client, userdata, flags, reason_code, properties):
-        _clear_state_publish_cache(self)
-        return original_on_connect(self, client, userdata, flags, reason_code, properties)
-
     client_cls.publish_input_register = publish_input_register_fast
     client_cls.publish_holding_register_input = publish_holding_register_input_fast
-    client_cls._Client__on_connect = on_connect_clear_state_cache
     _INSTALLED = True
     LOG.info("Installed GroBro Home Assistant telemetry performance hook")
