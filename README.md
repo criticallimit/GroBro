@@ -6,7 +6,7 @@ Better GroBro builds on [Robert Zaage's GroBro](https://github.com/robertzaage/G
 
 ---
 
-## Better GroBro 3.1.39
+## Better GroBro 3.1.40
 
 ### What Better GroBro adds
 
@@ -20,7 +20,6 @@ Better GroBro builds on [Robert Zaage's GroBro](https://github.com/robertzaage/G
 
 - Stable NOAH/NEXA battery identities
 - Optional manual Bat2/Bat3/Bat4 assignment by serial number
-- Battery assignment view follows the configured maximum battery count
 
 #### More reliable operation
 

@@ -69,6 +69,7 @@ _INDEX_HTML = r"""<!doctype html>
     .serials { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
     .chip { border:1px solid var(--border); border-radius:999px; padding:5px 9px; color:var(--muted); }
     .battery-row { display:grid; grid-template-columns:minmax(180px,1fr) minmax(280px,1.4fr); gap:18px; align-items:center; padding:12px 0; border-top:1px solid var(--border); }
+    [hidden] { display:none !important; }
     .battery-row:first-of-type { border-top:0; }
     .summary { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
     .metric { background:#151a1f; border:1px solid var(--border); border-radius:10px; padding:14px; }
