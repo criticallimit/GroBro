@@ -78,6 +78,7 @@ def test_save_addon_options_preserves_future_unknown_but_drops_retired(monkeypat
                     "SOURCE_MQTT_HOST": "old.local",
                     "UPSTREAM_FUTURE_OPTION": "keep-me",
                     "PUBLISH_SENSORS_RETAINED": True,
+                    "FILTER_DATA_GLITCHES": True,
                 }
             }
         if path == "/addons/self/options/validate":
@@ -99,12 +100,14 @@ def test_save_addon_options_preserves_future_unknown_but_drops_retired(monkeypat
     assert merged["KEEP_BATTERY_POSITION"] is True
     assert merged["UPSTREAM_FUTURE_OPTION"] == "keep-me"
     assert "PUBLISH_SENSORS_RETAINED" not in merged
+    assert "FILTER_DATA_GLITCHES" not in merged
 
     validate_call = calls[1]
     save_call = calls[2]
     assert validate_call[0:2] == ("POST", "/addons/self/options/validate")
     assert validate_call[2]["UPSTREAM_FUTURE_OPTION"] == "keep-me"
     assert "PUBLISH_SENSORS_RETAINED" not in validate_call[2]
+    assert "FILTER_DATA_GLITCHES" not in validate_call[2]
     assert save_call == (
         "POST",
         "/addons/self/options",
@@ -120,6 +123,7 @@ def test_get_addon_options_hides_retired_retain_option_and_normalizes_timeout(mo
                 "state": "started",
                 "options": {
                     "PUBLISH_SENSORS_RETAINED": True,
+                    "FILTER_DATA_GLITCHES": True,
                     "DEVICE_TIMEOUT": 0,
                 },
             }
@@ -132,6 +136,7 @@ def test_get_addon_options_hides_retired_retain_option_and_normalizes_timeout(mo
     result = supervisor_config.get_addon_options()
 
     assert "PUBLISH_SENSORS_RETAINED" not in result["options"]
+    assert "FILTER_DATA_GLITCHES" not in result["options"]
     assert result["options"]["DEVICE_TIMEOUT"] == 120
 
 
