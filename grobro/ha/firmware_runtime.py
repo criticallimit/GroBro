@@ -21,7 +21,6 @@ from functools import lru_cache
 
 import grobro.model as model
 from grobro.ha import client as ha_client_module
-from grobro.model.growatt_registers import HomeAssistantInputRegister
 
 LOG = logging.getLogger(__name__)
 _INSTALLED = False
