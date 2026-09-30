@@ -6,6 +6,7 @@ import logging
 import os
 
 from grobro.ha import client as ha_client_module
+from grobro.ha.device_inventory import observe_device
 
 LOG = logging.getLogger(__name__)
 _PERSIST_EXCLUDE = {"password", "raw"}
@@ -39,6 +40,7 @@ def install_config_runtime(migration_set) -> None:
     client_cls = ha_client_module.Client
 
     def set_config_clean(self, device_id, config):
+        observe_device(device_id)
         config_path = f"config_{device_id}.json"
         existing_config = ha_client_module.model.DeviceConfig.from_file(config_path)
         previous_config = self._config_cache.get(device_id)
