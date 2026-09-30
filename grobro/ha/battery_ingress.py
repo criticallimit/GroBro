@@ -249,7 +249,7 @@ const TEXTS={
     "Roh-Nachrichten speichern":"Store raw messages","Raw MQTT Dump aktivieren":"Enable raw MQTT dump","Dump-Verzeichnis":"Dump directory",
     "Register-Debug":"Register debug","Passiven Register-Debugger aktivieren":"Enable passive register debugger","Nur Änderungen":"Changes only",
     "Nach Erstwert nur Änderungen protokollieren":"After first value, log changes only","Maximales Register":"Maximum register",
-    "Register-Debug-Verzeichnis":"Register debug directory","Nur speichern":"Save only","Nicht belegt":"Not occupied",
+    "Register-Debug-Verzeichnis":"Register debug directory","Nicht belegt":"Not occupied",
     "Noch keine Batterie erkannt":"No battery detected yet","Seit Better-GroBro-Start:":"Since Better GroBro start:","Aktualisieren":"Refresh","Es werden nur Einträge des aktuell laufenden Better-GroBro-Prozesses angezeigt. Ältere Supervisor-Protokolle bleiben ausgeblendet.":"Only entries from the currently running Better GroBro process are shown. Older Supervisor logs remain hidden.","Protokoll wird geladen…":"Loading log…"
   },
   fr:{
@@ -273,7 +273,7 @@ const TEXTS={
     "Roh-Nachrichten speichern":"Enregistrer les messages bruts","Raw MQTT Dump aktivieren":"Activer le dump MQTT brut","Dump-Verzeichnis":"Répertoire du dump",
     "Register-Debug":"Débogage registres","Passiven Register-Debugger aktivieren":"Activer le débogueur passif des registres","Nur Änderungen":"Modifications uniquement",
     "Nach Erstwert nur Änderungen protokollieren":"Après la première valeur, journaliser uniquement les changements","Maximales Register":"Registre maximal",
-    "Register-Debug-Verzeichnis":"Répertoire de débogage des registres","Nur speichern":"Enregistrer seulement",
+    "Register-Debug-Verzeichnis":"Répertoire de débogage des registres",
     "Nicht belegt":"Non occupé","Noch keine Batterie erkannt":"Aucune batterie détectée","Seit Better-GroBro-Start:":"Depuis le démarrage de Better GroBro :","Aktualisieren":"Actualiser","Es werden nur Einträge des aktuell laufenden Better-GroBro-Prozesses angezeigt. Ältere Supervisor-Protokolle bleiben ausgeblendet.":"Seules les entrées du processus Better GroBro actuellement en cours sont affichées. Les anciens journaux Supervisor restent masqués.","Protokoll wird geladen…":"Chargement du journal…"
   },
   es:{
@@ -296,7 +296,7 @@ const TEXTS={
     "Roh-Nachrichten speichern":"Guardar mensajes sin procesar","Raw MQTT Dump aktivieren":"Activar volcado MQTT","Dump-Verzeichnis":"Directorio de volcado",
     "Register-Debug":"Depuración de registros","Passiven Register-Debugger aktivieren":"Activar depurador pasivo de registros","Nur Änderungen":"Solo cambios",
     "Nach Erstwert nur Änderungen protokollieren":"Tras el primer valor, registrar solo cambios","Maximales Register":"Registro máximo",
-    "Register-Debug-Verzeichnis":"Directorio de depuración de registros","Nur speichern":"Solo guardar","Nicht belegt":"No ocupado",
+    "Register-Debug-Verzeichnis":"Directorio de depuración de registros","Nicht belegt":"No ocupado",
     "Noch keine Batterie erkannt":"Aún no se detectó ninguna batería"
   },
   nl:{
@@ -319,7 +319,7 @@ const TEXTS={
     "Roh-Nachrichten speichern":"Ruwe berichten opslaan","Raw MQTT Dump aktivieren":"Ruwe MQTT-dump inschakelen","Dump-Verzeichnis":"Dumpmap",
     "Register-Debug":"Registerdebug","Passiven Register-Debugger aktivieren":"Passieve registerdebugger inschakelen","Nur Änderungen":"Alleen wijzigingen",
     "Nach Erstwert nur Änderungen protokollieren":"Na de eerste waarde alleen wijzigingen loggen","Maximales Register":"Maximaal register",
-    "Register-Debug-Verzeichnis":"Registerdebugmap","Nur speichern":"Alleen opslaan","Nicht belegt":"Niet bezet",
+    "Register-Debug-Verzeichnis":"Registerdebugmap","Nicht belegt":"Niet bezet",
     "Noch keine Batterie erkannt":"Nog geen batterij gedetecteerd","Seit Better-GroBro-Start:":"Sinds start van Better GroBro:","Aktualisieren":"Vernieuwen","Es werden nur Einträge des aktuell laufenden Better-GroBro-Prozesses angezeigt. Ältere Supervisor-Protokolle bleiben ausgeblendet.":"Alleen vermeldingen van het huidige Better GroBro-proces worden weergegeven. Oudere Supervisor-logboeken blijven verborgen.","Protokoll wird geladen…":"Logboek wordt geladen…"
   }
 };
@@ -482,16 +482,14 @@ async function loadConfig(){
   document.getElementById("summary-version").textContent=out.version||"–";
   document.getElementById("summary-state").textContent=localizedAddonState(out.state);
 }
-async function saveConfig(restart){
-  const r=await fetch(apiUrl("api/config"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({options:collectConfig(),restart})});
+async function saveConfig(){
+  const r=await fetch(apiUrl("api/config"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({options:collectConfig()})});
   const out=await r.json();if(!r.ok){showMessage("config-message",out.error||(l({de:"Speichern fehlgeschlagen",fr:"Échec de l'enregistrement",es:"Error al guardar",nl:"Opslaan mislukt",en:"Save failed"})),"error");return;}
-  if(restart){showMessage("config-message",l({de:"Konfiguration gespeichert. Better GroBro wird neu gestartet…",fr:"Configuration enregistrée. Better GroBro redémarre…",es:"Configuración guardada. Better GroBro se reinicia…",nl:"Configuratie opgeslagen. Better GroBro wordt herstart…",en:"Configuration saved. Better GroBro is restarting…"}));setTimeout(goBackToAddon, 900);}
-  else showMessage("config-message",l({de:"Konfiguration gespeichert. Neustart erforderlich, damit alle Änderungen aktiv werden.",fr:"Configuration enregistrée. Un redémarrage est nécessaire pour appliquer toutes les modifications.",es:"Configuración guardada. Se requiere reiniciar para aplicar todos los cambios.",nl:"Configuratie opgeslagen. Herstart vereist om alle wijzigingen toe te passen.",en:"Configuration saved. Restart required for all changes to become active."}),"warning");
+  showMessage("config-message",l({de:"Konfiguration gespeichert. Better GroBro wird neu gestartet…",fr:"Configuration enregistrée. Better GroBro redémarre…",es:"Configuración guardada. Better GroBro se reinicia…",nl:"Configuratie opgeslagen. Better GroBro wordt herstart…",en:"Configuration saved. Better GroBro is restarting…"}));setTimeout(goBackToAddon, 900);
 }
 for(const host of document.querySelectorAll(".config-actions")){
-  const only=document.createElement("button");only.type="button";only.className="secondary";only.textContent=t("Nur speichern");only.addEventListener("click",()=>saveConfig(false).catch(showError));
-  const restart=document.createElement("button");restart.type="button";restart.textContent=t("Speichern & Better GroBro neu starten");restart.addEventListener("click",()=>saveConfig(true).catch(showError));
-  host.append(only,restart);
+  const restart=document.createElement("button");restart.type="button";restart.textContent=t("Speichern & Better GroBro neu starten");restart.addEventListener("click",()=>saveConfig().catch(showError));
+  host.append(restart);
 }
 async function loadLogs(){
   const output=document.getElementById("log-output");
@@ -610,10 +608,8 @@ class BatteryIngressHandler(BaseHTTPRequestHandler):
                 if not isinstance(options, dict):
                     raise SupervisorConfigError("Ungültige Optionen")
                 save_addon_options(options)
-                restart = payload.get("restart") is True
-                self._send_json({"ok": True, "restart": restart})
-                if restart:
-                    schedule_restart()
+                self._send_json({"ok": True, "restart": True})
+                schedule_restart()
             except SupervisorConfigError as exc:
                 self._send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
             return
