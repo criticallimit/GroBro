@@ -197,7 +197,7 @@ def test_ingress_page_contains_full_configuration_sections():
             "MQTT",
             "Growatt Cloud",
             "Diagnose",
-            "Speichern & neu starten",
+            "Speichern & Better GroBro neu starten",
         ):
             assert label in html
         assert "cfg-SOURCE_MQTT_HOST" in html
@@ -263,3 +263,19 @@ def test_ingress_state_reports_detected_device_families(tmp_path, monkeypatch):
         server.shutdown()
         server.server_close()
         clear_device_inventory()
+
+
+def test_restart_button_explicitly_names_better_grobro():
+    server = start_battery_ingress_server(0)
+    _host, port = server.server_address
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=3) as response:
+            html = response.read().decode()
+
+        assert "Speichern & Better GroBro neu starten" in html
+        assert "Save & restart Better GroBro" in html
+        assert "Enregistrer et redémarrer Better GroBro" in html
+        assert "Guardar y reiniciar Better GroBro" in html
+    finally:
+        server.shutdown()
+        server.server_close()
