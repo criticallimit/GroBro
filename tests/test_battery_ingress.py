@@ -218,10 +218,13 @@ def test_ingress_page_uses_home_assistant_frontend_language():
         assert 'localStorage.getItem("selectedLanguage")' in html
         assert "JSON.parse(stored)" in html
         assert "selectedHomeAssistantLanguage()" in html
-        assert '["de","en","fr","es"]' in html
+        assert '["de","en","fr","es","nl"]' in html
         assert '"Übersicht":"Overview"' in html
         assert '"Übersicht":"Vue d\'ensemble"' in html
         assert '"Übersicht":"Resumen"' in html
+        assert '"Übersicht":"Overzicht"' in html
+        assert '"Speichern & Better GroBro neu starten":"Opslaan en Better GroBro herstarten"' in html
+        assert 'nl:{startup:"Starten",started:"Gestart",stopped:"Gestopt",unknown:"Onbekend",error:"Fout"}' in html
         assert 'navigator.language || "en"' in html
         assert "applyLanguage(out.language || selectedHomeAssistantLanguage())" in html
     finally:
