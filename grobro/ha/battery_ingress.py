@@ -203,7 +203,99 @@ _INDEX_HTML = r"""<!doctype html>
 
 <script>
 const AUTO="__auto__", EMPTY="__empty__";
-let batteryState=null, configState=null;
+let batteryState=null, configState=null, currentLang="de";
+const TEXTS={
+  en:{
+    "Konfiguration und Batterie-Zuordnung":"Configuration and battery assignment","Zurück zum Add-on":"Back to add-on",
+    "Übersicht":"Overview","Batterien":"Batteries","Diagnose":"Diagnostics","Version":"Version","Add-on Status":"Add-on status",
+    "Erkannte Geräte":"Detected devices","Konfigurationsquelle":"Configuration source",
+    "Diese Oberfläche bearbeitet direkt die offiziellen Home-Assistant-Add-on-Optionen. Die normale Konfigurationsseite und diese Oberfläche verwenden damit dieselben Werte.":"This interface edits the official Home Assistant add-on options directly. The standard configuration page and this interface therefore use the same values.",
+    "Änderungen an Better-GroBro-Optionen werden beim Start geladen. Verwende daher nach Änderungen vorzugsweise":"Changes to Better GroBro options are loaded at startup. After changing options, preferably use",
+    "Speichern & neu starten":"Save & restart","Batterie-Zuordnung":"Battery assignment","Gerät":"Device",
+    "Zurück":"Back","Batterie-Zuordnung speichern":"Save battery assignment","Stabile Batteriepositionen":"Stable battery positions",
+    "NOAH/NEXA per Seriennummer stabil halten":"Keep NOAH/NEXA stable by serial number","Maximale Batterieanzahl":"Maximum battery count",
+    "Automatisch":"Automatic","Zeitfenster":"Time slots","Anzahl der Batterie-Zeitfenster in Home Assistant.":"Number of battery scheduling slots in Home Assistant.",
+    "Geräte-Timeout (Sekunden)":"Device timeout (seconds)","0 deaktiviert den Timeout.":"0 disables the timeout.",
+    "Availability-Sensor":"Availability sensor","Zusätzlichen Online-Sensor erzeugen":"Create an additional online sensor",
+    "Messwertsprünge filtern":"Filter data glitches","Rücksprünge bei total_increasing unterdrücken":"Suppress decreases in total_increasing values",
+    "Sensorzustände retained":"Retained sensor states","MQTT retain für Sensorzustände verwenden":"Use MQTT retain for sensor states",
+    "HA Basis-Topic":"HA base topic","MQTT Client-Suffix":"MQTT client suffix","Zeitzone":"Timezone",
+    "Growatt / Quell-MQTT":"Growatt / source MQTT","Host":"Host","Port":"Port","Benutzername":"Username","Passwort":"Password",
+    "TLS aktivieren":"Enable TLS","Home Assistant / Ziel-MQTT":"Home Assistant / target MQTT","Cloud-Weiterleitung":"Cloud forwarding",
+    "Nachrichten zur/von der Growatt Cloud weiterleiten":"Forward messages to/from Growatt Cloud","Konfigurationsfilter":"Configuration filter",
+    "Ferninitiierte Konfigurationsnachrichten blockieren":"Block remotely initiated configuration messages","Log-Level":"Log level",
+    "Roh-Nachrichten speichern":"Store raw messages","Raw MQTT Dump aktivieren":"Enable raw MQTT dump","Dump-Verzeichnis":"Dump directory",
+    "Register-Debug":"Register debug","Passiven Register-Debugger aktivieren":"Enable passive register debugger","Nur Änderungen":"Changes only",
+    "Nach Erstwert nur Änderungen protokollieren":"After first value, log changes only","Maximales Register":"Maximum register",
+    "Register-Debug-Verzeichnis":"Register debug directory","Nur speichern":"Save only","Nicht belegt":"Not occupied",
+    "Noch keine Batterie erkannt":"No battery detected yet"
+  },
+  fr:{
+    "Konfiguration und Batterie-Zuordnung":"Configuration et affectation des batteries","Zurück zum Add-on":"Retour à l'add-on",
+    "Übersicht":"Vue d'ensemble","Batterien":"Batteries","Diagnose":"Diagnostic","Version":"Version","Add-on Status":"État de l'add-on",
+    "Erkannte Geräte":"Appareils détectés","Konfigurationsquelle":"Source de configuration",
+    "Diese Oberfläche bearbeitet direkt die offiziellen Home-Assistant-Add-on-Optionen. Die normale Konfigurationsseite und diese Oberfläche verwenden damit dieselben Werte.":"Cette interface modifie directement les options officielles de l'add-on Home Assistant. La page de configuration standard et cette interface utilisent donc les mêmes valeurs.",
+    "Änderungen an Better-GroBro-Optionen werden beim Start geladen. Verwende daher nach Änderungen vorzugsweise":"Les modifications des options Better GroBro sont chargées au démarrage. Après une modification, utilisez de préférence",
+    "Speichern & neu starten":"Enregistrer et redémarrer","Batterie-Zuordnung":"Affectation des batteries","Gerät":"Appareil",
+    "Zurück":"Retour","Batterie-Zuordnung speichern":"Enregistrer l'affectation","Stabile Batteriepositionen":"Positions de batterie stables",
+    "NOAH/NEXA per Seriennummer stabil halten":"Maintenir NOAH/NEXA stables par numéro de série","Maximale Batterieanzahl":"Nombre maximal de batteries",
+    "Automatisch":"Automatique","Zeitfenster":"Créneaux horaires","Anzahl der Batterie-Zeitfenster in Home Assistant.":"Nombre de créneaux de batterie dans Home Assistant.",
+    "Geräte-Timeout (Sekunden)":"Délai de l'appareil (secondes)","0 deaktiviert den Timeout.":"0 désactive le délai.",
+    "Availability-Sensor":"Capteur de disponibilité","Zusätzlichen Online-Sensor erzeugen":"Créer un capteur en ligne supplémentaire",
+    "Messwertsprünge filtern":"Filtrer les anomalies","Rücksprünge bei total_increasing unterdrücken":"Supprimer les diminutions de total_increasing",
+    "Sensorzustände retained":"États capteurs retained","MQTT retain für Sensorzustände verwenden":"Utiliser MQTT retain pour les états",
+    "HA Basis-Topic":"Topic de base HA","MQTT Client-Suffix":"Suffixe client MQTT","Zeitzone":"Fuseau horaire",
+    "Growatt / Quell-MQTT":"Growatt / MQTT source","Host":"Hôte","Port":"Port","Benutzername":"Nom d'utilisateur","Passwort":"Mot de passe",
+    "TLS aktivieren":"Activer TLS","Home Assistant / Ziel-MQTT":"Home Assistant / MQTT cible","Cloud-Weiterleitung":"Transfert cloud",
+    "Nachrichten zur/von der Growatt Cloud weiterleiten":"Transférer les messages vers/depuis Growatt Cloud","Konfigurationsfilter":"Filtre de configuration",
+    "Ferninitiierte Konfigurationsnachrichten blockieren":"Bloquer les changements de configuration distants","Log-Level":"Niveau de journal",
+    "Roh-Nachrichten speichern":"Enregistrer les messages bruts","Raw MQTT Dump aktivieren":"Activer le dump MQTT brut","Dump-Verzeichnis":"Répertoire du dump",
+    "Register-Debug":"Débogage registres","Passiven Register-Debugger aktivieren":"Activer le débogueur passif des registres","Nur Änderungen":"Modifications uniquement",
+    "Nach Erstwert nur Änderungen protokollieren":"Après la première valeur, journaliser uniquement les changements","Maximales Register":"Registre maximal",
+    "Maximales Register":"Registre maximal","Register-Debug-Verzeichnis":"Répertoire de débogage des registres","Nur speichern":"Enregistrer seulement",
+    "Nicht belegt":"Non occupé","Noch keine Batterie erkannt":"Aucune batterie détectée"
+  },
+  es:{
+    "Konfiguration und Batterie-Zuordnung":"Configuración y asignación de baterías","Zurück zum Add-on":"Volver al complemento",
+    "Übersicht":"Resumen","Batterien":"Baterías","Diagnose":"Diagnóstico","Version":"Versión","Add-on Status":"Estado del complemento",
+    "Erkannte Geräte":"Dispositivos detectados","Konfigurationsquelle":"Fuente de configuración",
+    "Diese Oberfläche bearbeitet direkt die offiziellen Home-Assistant-Add-on-Optionen. Die normale Konfigurationsseite und diese Oberfläche verwenden damit dieselben Werte.":"Esta interfaz edita directamente las opciones oficiales del complemento de Home Assistant. La página de configuración estándar y esta interfaz usan los mismos valores.",
+    "Änderungen an Better-GroBro-Optionen werden beim Start geladen. Verwende daher nach Änderungen vorzugsweise":"Los cambios de Better GroBro se cargan al iniciar. Después de cambiar opciones, use preferiblemente",
+    "Speichern & neu starten":"Guardar y reiniciar","Batterie-Zuordnung":"Asignación de baterías","Gerät":"Dispositivo",
+    "Zurück":"Volver","Batterie-Zuordnung speichern":"Guardar asignación","Stabile Batteriepositionen":"Posiciones estables de batería",
+    "NOAH/NEXA per Seriennummer stabil halten":"Mantener NOAH/NEXA estables por número de serie","Maximale Batterieanzahl":"Número máximo de baterías",
+    "Automatisch":"Automático","Zeitfenster":"Franjas horarias","Anzahl der Batterie-Zeitfenster in Home Assistant.":"Número de franjas de batería en Home Assistant.",
+    "Geräte-Timeout (Sekunden)":"Tiempo de espera del dispositivo (segundos)","0 deaktiviert den Timeout.":"0 desactiva el tiempo de espera.",
+    "Availability-Sensor":"Sensor de disponibilidad","Zusätzlichen Online-Sensor erzeugen":"Crear un sensor en línea adicional",
+    "Messwertsprünge filtern":"Filtrar anomalías","Rücksprünge bei total_increasing unterdrücken":"Suprimir descensos en total_increasing",
+    "Sensorzustände retained":"Estados retained","MQTT retain für Sensorzustände verwenden":"Usar MQTT retain para estados",
+    "HA Basis-Topic":"Topic base de HA","MQTT Client-Suffix":"Sufijo de cliente MQTT","Zeitzone":"Zona horaria",
+    "Growatt / Quell-MQTT":"Growatt / MQTT origen","Host":"Host","Port":"Puerto","Benutzername":"Usuario","Passwort":"Contraseña",
+    "TLS aktivieren":"Activar TLS","Home Assistant / Ziel-MQTT":"Home Assistant / MQTT destino","Cloud-Weiterleitung":"Reenvío a la nube",
+    "Nachrichten zur/von der Growatt Cloud weiterleiten":"Reenviar mensajes hacia/desde Growatt Cloud","Konfigurationsfilter":"Filtro de configuración",
+    "Ferninitiierte Konfigurationsnachrichten blockieren":"Bloquear cambios de configuración remotos","Log-Level":"Nivel de registro",
+    "Roh-Nachrichten speichern":"Guardar mensajes sin procesar","Raw MQTT Dump aktivieren":"Activar volcado MQTT","Dump-Verzeichnis":"Directorio de volcado",
+    "Register-Debug":"Depuración de registros","Passiven Register-Debugger aktivieren":"Activar depurador pasivo de registros","Nur Änderungen":"Solo cambios",
+    "Nach Erstwert nur Änderungen protokollieren":"Tras el primer valor, registrar solo cambios","Maximales Register":"Registro máximo",
+    "Register-Debug-Verzeichnis":"Directorio de depuración de registros","Nur speichern":"Solo guardar","Nicht belegt":"No ocupado",
+    "Noch keine Batterie erkannt":"Aún no se detectó ninguna batería"
+  }
+};
+function t(text){return (TEXTS[currentLang]&&TEXTS[currentLang][text])||text;}
+function applyLanguage(language){
+  const base=String(language||"en").toLowerCase().split("-")[0];
+  currentLang=["de","en","fr","es"].includes(base)?base:"en";
+  document.documentElement.lang=currentLang;
+  const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);
+  const nodes=[];while(walker.nextNode())nodes.push(walker.currentNode);
+  for(const node of nodes){
+    const parent=node.parentElement;if(!parent||["SCRIPT","STYLE"].includes(parent.tagName))continue;
+    const raw=node.nodeValue,trimmed=raw.trim();if(!trimmed)continue;
+    const translated=t(trimmed);if(translated!==trimmed)node.nodeValue=raw.replace(trimmed,translated);
+  }
+  const tz=document.getElementById("cfg-TZ");
+  if(tz)tz.placeholder=currentLang==="de"?"leer = Home Assistant übernehmen":currentLang==="fr"?"vide = reprendre Home Assistant":currentLang==="es"?"vacío = usar Home Assistant":"empty = use Home Assistant";
+}
 const CONFIG_KEYS=[
 "SOURCE_MQTT_HOST","SOURCE_MQTT_PORT","SOURCE_MQTT_TLS","SOURCE_MQTT_USER","SOURCE_MQTT_PASS",
 "TARGET_MQTT_HOST","TARGET_MQTT_PORT","TARGET_MQTT_TLS","TARGET_MQTT_USER","TARGET_MQTT_PASS",
@@ -232,23 +324,23 @@ function currentDevice(){if(!batteryState)return null;const id=document.getEleme
 function renderBatteries(){
   const d=currentDevice(), detected=document.getElementById("detected");detected.replaceChildren();
   document.getElementById("battery-save").disabled=!d;
-  if(!d){for(const slot of [2,3,4]){const c=document.getElementById("slot"+slot);c.replaceChildren(option(AUTO,"Automatisch",true));c.disabled=true;}return;}
-  for(const e of d.detected){const chip=document.createElement("span");chip.className="chip";chip.textContent=e.serial+" (physisch Bat"+e.physical_slot+")";detected.appendChild(chip);}
+  if(!d){for(const slot of [2,3,4]){const c=document.getElementById("slot"+slot);c.replaceChildren(option(AUTO,t("Automatisch"),true));c.disabled=true;}return;}
+  for(const e of d.detected){const chip=document.createElement("span");chip.className="chip";chip.textContent=e.serial+" ("+(currentLang==="de"?"physisch":currentLang==="fr"?"physique":currentLang==="es"?"física":"physical")+" Bat"+e.physical_slot+")";detected.appendChild(chip);}
   for(const slot of [2,3,4]){
     const c=document.getElementById("slot"+slot), selected=d.manual[String(slot)]||AUTO, serials=d.detected.map(x=>x.serial);
-    c.replaceChildren(option(AUTO,"Automatisch",selected===AUTO),option(EMPTY,"Nicht belegt",selected===EMPTY));
-    if(selected!==AUTO&&selected!==EMPTY&&!serials.includes(selected))c.appendChild(option(selected,selected+" (nicht erkannt)",true));
+    c.replaceChildren(option(AUTO,t("Automatisch"),selected===AUTO),option(EMPTY,t("Nicht belegt"),selected===EMPTY));
+    if(selected!==AUTO&&selected!==EMPTY&&!serials.includes(selected))c.appendChild(option(selected,selected+" ("+(currentLang==="de"?"nicht erkannt":currentLang==="fr"?"non détectée":currentLang==="es"?"no detectada":"not detected")+")",true));
     for(const serial of serials)c.appendChild(option(serial,serial,selected===serial));
     c.disabled=false;
     const automatic=d.automatic[String(slot)];
-    document.getElementById("auto"+slot).textContent=automatic?"Automatisch: "+automatic:"Automatisch: noch nicht zugeordnet";
+    document.getElementById("auto"+slot).textContent=automatic?t("Automatisch")+": "+automatic:t("Automatisch")+": "+(currentLang==="de"?"noch nicht zugeordnet":currentLang==="fr"?"pas encore attribuée":currentLang==="es"?"aún no asignada":"not assigned yet");
   }
 }
 async function loadBatteries(){
   const r=await fetch(apiUrl("api/state"),{cache:"no-store"});if(!r.ok)throw new Error("Batteriestatus konnte nicht geladen werden");
   batteryState=await r.json();document.getElementById("summary-devices").textContent=batteryState.devices.length;
   const select=document.getElementById("device"),previous=select.value;select.replaceChildren();
-  if(!batteryState.devices.length){select.appendChild(option("","Noch keine Batterie erkannt",true));select.disabled=true;}
+  if(!batteryState.devices.length){select.appendChild(option("",t("Noch keine Batterie erkannt"),true));select.disabled=true;}
   else{select.disabled=false;for(const d of batteryState.devices)select.appendChild(option(d.device_id,d.device_id,d.device_id===previous));if(!select.value)select.selectedIndex=0;}
   renderBatteries();
 }
@@ -257,11 +349,11 @@ document.getElementById("back-bottom").addEventListener("click",goBackToAddon);
 document.getElementById("battery-save").addEventListener("click",async()=>{
   const d=currentDevice();if(!d)return;
   const values=[2,3,4].map(s=>document.getElementById("slot"+s).value),serials=values.filter(v=>v!==AUTO&&v!==EMPTY);
-  if(new Set(serials).size!==serials.length){showMessage("battery-message","Eine Seriennummer kann nur einer Position zugeordnet werden.","error");return;}
+  if(new Set(serials).size!==serials.length){showMessage("battery-message",currentLang==="de"?"Eine Seriennummer kann nur einer Position zugeordnet werden.":currentLang==="fr"?"Un numéro de série ne peut être attribué qu'à une seule position.":currentLang==="es"?"Un número de serie solo puede asignarse a una posición.":"A serial number can only be assigned to one position.","error");return;}
   const assignments={};[2,3,4].forEach((s,i)=>assignments[String(s)]=values[i]);
   const r=await fetch(apiUrl("api/assignments"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({device_id:d.device_id,assignments})});
-  const out=await r.json();if(!r.ok){showMessage("battery-message",out.error||"Speichern fehlgeschlagen","error");return;}
-  showMessage("battery-message","Batterie-Zuordnung gespeichert. Rückkehr zum Add-on…");setTimeout(goBackToAddon, 900);
+  const out=await r.json();if(!r.ok){showMessage("battery-message",out.error||(currentLang==="de"?"Speichern fehlgeschlagen":currentLang==="fr"?"Échec de l'enregistrement":currentLang==="es"?"Error al guardar":"Save failed"),"error");return;}
+  showMessage("battery-message",currentLang==="de"?"Batterie-Zuordnung gespeichert. Rückkehr zum Add-on…":currentLang==="fr"?"Affectation enregistrée. Retour à l'add-on…":currentLang==="es"?"Asignación guardada. Volviendo al complemento…":"Battery assignment saved. Returning to add-on…");setTimeout(goBackToAddon, 900);
 });
 
 function fillConfig(options){
@@ -272,21 +364,21 @@ function collectConfig(){
 }
 async function loadConfig(){
   const r=await fetch(apiUrl("api/config"),{cache:"no-store"});const out=await r.json();if(!r.ok)throw new Error(out.error||"Konfiguration konnte nicht geladen werden");
-  configState=out;fillConfig(out.options||{});document.getElementById("summary-version").textContent=out.version||"–";document.getElementById("summary-state").textContent=out.state||"–";
+  configState=out;applyLanguage(out.language);fillConfig(out.options||{});document.getElementById("summary-version").textContent=out.version||"–";document.getElementById("summary-state").textContent=out.state||"–";
 }
 async function saveConfig(restart){
   const r=await fetch(apiUrl("api/config"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({options:collectConfig(),restart})});
-  const out=await r.json();if(!r.ok){showMessage("config-message",out.error||"Speichern fehlgeschlagen","error");return;}
-  if(restart){showMessage("config-message","Konfiguration gespeichert. Better GroBro wird neu gestartet…");setTimeout(goBackToAddon, 900);}
-  else showMessage("config-message","Konfiguration gespeichert. Neustart erforderlich, damit alle Änderungen aktiv werden.","warning");
+  const out=await r.json();if(!r.ok){showMessage("config-message",out.error||(currentLang==="de"?"Speichern fehlgeschlagen":currentLang==="fr"?"Échec de l'enregistrement":currentLang==="es"?"Error al guardar":"Save failed"),"error");return;}
+  if(restart){showMessage("config-message",currentLang==="de"?"Konfiguration gespeichert. Better GroBro wird neu gestartet…":currentLang==="fr"?"Configuration enregistrée. Better GroBro redémarre…":currentLang==="es"?"Configuración guardada. Better GroBro se reinicia…":"Configuration saved. Better GroBro is restarting…");setTimeout(goBackToAddon, 900);}
+  else showMessage("config-message",currentLang==="de"?"Konfiguration gespeichert. Neustart erforderlich, damit alle Änderungen aktiv werden.":currentLang==="fr"?"Configuration enregistrée. Un redémarrage est nécessaire pour appliquer toutes les modifications.":currentLang==="es"?"Configuración guardada. Se requiere reiniciar para aplicar todos los cambios.":"Configuration saved. Restart required for all changes to become active.","warning");
 }
 for(const host of document.querySelectorAll(".config-actions")){
-  const only=document.createElement("button");only.type="button";only.className="secondary";only.textContent="Nur speichern";only.addEventListener("click",()=>saveConfig(false).catch(showError));
-  const restart=document.createElement("button");restart.type="button";restart.textContent="Speichern & neu starten";restart.addEventListener("click",()=>saveConfig(true).catch(showError));
+  const only=document.createElement("button");only.type="button";only.className="secondary";only.textContent=t("Nur speichern");only.addEventListener("click",()=>saveConfig(false).catch(showError));
+  const restart=document.createElement("button");restart.type="button";restart.textContent=t("Speichern & neu starten");restart.addEventListener("click",()=>saveConfig(true).catch(showError));
   host.append(only,restart);
 }
 function showError(error){showMessage("config-message",error.message||String(error),"error");}
-Promise.all([loadBatteries(),loadConfig()]).catch(showError);
+loadConfig().then(loadBatteries).catch(showError);
 </script>
 </body>
 </html>
