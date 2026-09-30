@@ -27,3 +27,4 @@ def test_noah_bat2_bat3_cell_voltage_registers_are_published_like_bat1():
         assert register.homeassistant.device_class == "voltage"
         assert register.homeassistant.unit_of_measurement == "V"
         assert register.homeassistant.icon == "mdi:flash"
+        assert register.homeassistant.suggested_display_precision == 3
