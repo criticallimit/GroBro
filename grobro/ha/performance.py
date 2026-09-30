@@ -358,4 +358,4 @@ def install_ha_performance_hook() -> None:
     client_cls.publish_input_register = publish_input_register_fast
     client_cls.publish_holding_register_input = publish_holding_register_input_fast
     _INSTALLED = True
-    LOG.info("Installed GroBro Home Assistant telemetry performance hook")
+    LOG.debug("Installed GroBro Home Assistant telemetry performance hook")
