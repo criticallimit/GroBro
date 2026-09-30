@@ -2,34 +2,34 @@
 
 > **GroBro, optimized for Home Assistant.**
 
-Better GroBro is based on [Robert Zaage's GroBro](https://github.com/robertzaage/GroBro) and keeps its core behavior while extending it for tighter Home Assistant integration and improved NOAH/NEXA support.
+Better GroBro builds on [Robert Zaage's GroBro](https://github.com/robertzaage/GroBro) and keeps its core behavior while making day-to-day use in Home Assistant cleaner, easier and more reliable.
 
 ---
 
 ## Better GroBro 3.1.56
 
-### Differences from Robert Zaage's GroBro
+### What Better GroBro adds
 
-#### Home Assistant integration
+#### Easier Home Assistant setup
 
-- Built-in configuration interface directly inside Home Assistant
+- Built-in configuration page directly inside Home Assistant
+- Current-session add-on log viewer directly in the Better GroBro interface
 - Automatic German, English, French, Spanish and Dutch interface and Home Assistant entity names
-- Overview of detected Growatt device families such as NOAH, NEO and NEXA
-- Integrated log viewer for the currently running Better GroBro session
+- Clear overview of detected Growatt families such as NOAH, NEO and NEXA
 
-#### Battery handling
+#### Better battery handling
 
-- Stable NOAH/NEXA battery positions by serial number
-- Optional manual Bat2/Bat3/Bat4 assignment
-- Additional NOAH Bat2/Bat3/Bat4 maximum and minimum cell-voltage sensors
-- Consistent millivolt-resolution display for NOAH Bat1–Bat4 cell-voltage sensors
+- Publishes NOAH Bat2/Bat3/Bat4 maximum and minimum cell voltages with the same Home Assistant metadata and scaling as Bat1
+- Requests three decimal places for NOAH Bat1–Bat4 cell-voltage sensors in Home Assistant so millivolt resolution is displayed consistently
+- Stable NOAH/NEXA battery identities
+- Optional manual Bat2/Bat3/Bat4 assignment by serial number
 
-#### Reliability and operation
+#### More reliable operation
 
 - Improved NOAH/NEXA protocol handling
 - Improved recovery after Home Assistant, MQTT or add-on restarts
-- Device availability handling prevents stale measurement values from remaining active when telemetry stops
-- Reduced unnecessary MQTT/Home Assistant traffic while preserving real value changes
+- Stale measurement values become unavailable when telemetry stops, while entities remain in Home Assistant
+- Lower unnecessary MQTT traffic without suppressing real value changes
 - Supported-device clock synchronization and optional diagnostics
 
 Everything else continues to follow Robert's GroBro.
