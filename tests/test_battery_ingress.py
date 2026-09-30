@@ -7,6 +7,7 @@ from grobro.ha.battery_position import (
     AUTO_ASSIGNMENT,
     observe_battery_serials,
 )
+from grobro.ha.device_inventory import clear_device_inventory, observe_device
 
 
 def test_ingress_api_lists_and_saves_battery_assignments(tmp_path, monkeypatch):
@@ -237,3 +238,28 @@ def test_ingress_page_marks_better_grobro_ui_as_recommended():
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_ingress_state_reports_detected_device_families(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    clear_device_inventory()
+    observe_device("0PVPTEST000001")
+    observe_device("QMNTEST0000001")
+
+    server = start_battery_ingress_server(0)
+    _host, port = server.server_address
+    try:
+        with urllib.request.urlopen(
+            f"http://127.0.0.1:{port}/api/state",
+            timeout=3,
+        ) as response:
+            state = json.load(response)
+
+        assert [item["display_name"] for item in state["inventory"]] == [
+            "NEO",
+            "NOAH",
+        ]
+    finally:
+        server.shutdown()
+        server.server_close()
+        clear_device_inventory()
