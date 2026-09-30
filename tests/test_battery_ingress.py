@@ -406,3 +406,28 @@ def test_glitch_filter_option_is_removed_from_ingress_ui():
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_battery_settings_are_grouped_on_batteries_page():
+    server = start_battery_ingress_server(0)
+    _host, port = server.server_address
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=3) as response:
+            html = response.read().decode()
+
+        batteries_start = html.index('<section id="tab-batteries"')
+        ha_start = html.index('<section id="tab-ha"')
+        batteries_html = html[batteries_start:ha_start]
+        ha_html = html[ha_start:]
+
+        assert "Batterie-Einstellungen" in batteries_html
+        assert 'id="cfg-KEEP_BATTERY_POSITION"' in batteries_html
+        assert 'id="cfg-MAX_BAT"' in batteries_html
+        assert 'class="actions config-actions"' in batteries_html
+        assert 'id="cfg-KEEP_BATTERY_POSITION"' not in ha_html
+        assert 'id="cfg-MAX_BAT"' not in ha_html
+        assert "FILTER_DATA_GLITCHES" not in html
+        assert "Messwertsprünge filtern" not in html
+    finally:
+        server.shutdown()
+        server.server_close()
