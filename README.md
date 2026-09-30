@@ -9,6 +9,7 @@ This README lists only the user-relevant differences from Robert's GroBro.
 Compared with Robert's GroBro, Better GroBro adds:
 
 - A dedicated Home Assistant Ingress configuration UI for Better GroBro. It edits the official add-on options, validates them through the Supervisor, and keeps Home Assistant's native Configuration tab as a fallback.
+- A live device overview showing the actual Growatt families Better GroBro is receiving telemetry from, such as NOAH, NEO, NEXA, MOD or SPF.
 - Automatic UI language selection for German, English, French and Spanish, based on the Home Assistant language, with English fallback.
 - Stable NOAH/NEXA battery identities plus optional manual Bat2/Bat3/Bat4 assignment by detected serial number.
 - More reliable Home Assistant state recovery after Home Assistant/MQTT restarts, including retained control values that would otherwise appear blank until refreshed.
