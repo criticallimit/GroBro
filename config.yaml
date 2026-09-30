@@ -1,10 +1,11 @@
 name: "Better GroBro"
 description: "Robert Zaage's GroBro with Better GroBro Home Assistant, NOAH/NEXA, stability and runtime-efficiency improvements"
-version: "3.1.27"
+version: "3.1.28"
 slug: "grobro_register_debug"
 init: false
 url: https://github.com/criticallimit/GroBro
 ingress: true
+hassio_api: true
 ingress_port: 8099
 panel_icon: mdi:battery-sync-outline
 panel_title: Better GroBro
@@ -42,7 +43,12 @@ options:
   LOG_LEVEL: ERROR
   DUMP_MESSAGES: false
   DUMP_DIR: "/share/GroBro/dump"
+  REGISTER_DEBUG: false
+  REGISTER_DEBUG_DIR: "/share/GroBro/register_debug"
+  REGISTER_DEBUG_MAX_REGISTER: 65535
+  REGISTER_DEBUG_CHANGES_ONLY: true
   PUBLISH_SENSORS_RETAINED: false
+  DEVICE_TIMEOUT: 0
   MAX_SLOTS: 1
   MAX_BAT: "auto"
   AVAILABILITY_SENSOR: false
