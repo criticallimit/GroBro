@@ -20,6 +20,7 @@ from grobro.ha.device_inventory import get_device_inventory
 from grobro.ha.supervisor_config import (
     SupervisorConfigError,
     get_addon_options,
+    get_current_process_logs,
     save_addon_options,
     schedule_restart,
 )
@@ -75,6 +76,8 @@ _INDEX_HTML = r"""<!doctype html>
     .metric { background:#151a1f; border:1px solid var(--border); border-radius:10px; padding:14px; }
     .metric strong { display:block; font-size:20px; margin-top:4px; }
     .section-note { margin-top:12px; color:var(--muted); font-size:12px; }
+    .log-toolbar { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
+    .log-output { margin:0; min-height:420px; max-height:62vh; overflow:auto; white-space:pre-wrap; word-break:break-word; background:#0b0f12; border:1px solid var(--border); border-radius:8px; padding:14px; font:12px/1.45 ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace; color:var(--text); }
     @media (max-width:760px) {
       main{padding:15px}.grid,.summary,.battery-row{grid-template-columns:1fr}.actions button,.header button{width:100%}
     }
@@ -97,6 +100,7 @@ _INDEX_HTML = r"""<!doctype html>
     <button type="button" class="secondary" data-tab="mqtt">MQTT</button>
     <button type="button" class="secondary" data-tab="cloud">Growatt Cloud</button>
     <button type="button" class="secondary" data-tab="diagnostics">Diagnose</button>
+    <button type="button" class="secondary" data-tab="logs">Protokoll</button>
   </nav>
 
   <section id="tab-overview" class="tab active">
@@ -203,16 +207,30 @@ _INDEX_HTML = r"""<!doctype html>
     </div>
   </section>
 
+  <section id="tab-logs" class="tab">
+    <div class="card">
+      <div class="log-toolbar">
+        <div>
+          <h2>Protokoll</h2>
+          <div class="muted"><span>Seit Better-GroBro-Start:</span> <span id="log-started">–</span></div>
+        </div>
+        <button id="log-refresh" type="button" class="secondary">Aktualisieren</button>
+      </div>
+      <p class="section-note">Es werden nur Einträge des aktuell laufenden Better-GroBro-Prozesses angezeigt. Ältere Supervisor-Protokolle bleiben ausgeblendet.</p>
+      <pre id="log-output" class="log-output">Protokoll wird geladen…</pre>
+    </div>
+  </section>
+
   <div id="config-message" class="status" hidden></div>
 </main>
 
 <script>
 const AUTO="__auto__", EMPTY="__empty__";
-let batteryState=null, configState=null, currentLang="de";
+let batteryState=null, configState=null, currentLang="de", logTimer=null;
 const TEXTS={
   en:{
     "Konfiguration und Batterie-Zuordnung":"Configuration and battery assignment","Zurück zum Add-on":"Back to add-on",
-    "Übersicht":"Overview","Batterien":"Batteries","Diagnose":"Diagnostics","Version":"Version","Add-on Status":"Add-on status",
+    "Übersicht":"Overview","Batterien":"Batteries","Diagnose":"Diagnostics","Protokoll":"Log","Version":"Version","Add-on Status":"Add-on status",
     "Erkannte Geräte":"Detected devices","Empfohlene Konfiguration":"Recommended configuration",
     "Verwende bevorzugt diese Better-GroBro-Oberfläche. Sie bearbeitet direkt die offiziellen Home-Assistant-Add-on-Optionen; der native Konfiguration-Tab bleibt als Fallback verfügbar und verwendet dieselben Werte.":"Prefer this Better GroBro interface. It edits the official Home Assistant add-on options directly; the native Configuration tab remains available as a fallback and uses the same values.",
     "Änderungen an Better-GroBro-Optionen werden beim Start geladen. Verwende daher nach Änderungen vorzugsweise":"Changes to Better GroBro options are loaded at startup. After changing options, preferably use",
@@ -232,11 +250,11 @@ const TEXTS={
     "Register-Debug":"Register debug","Passiven Register-Debugger aktivieren":"Enable passive register debugger","Nur Änderungen":"Changes only",
     "Nach Erstwert nur Änderungen protokollieren":"After first value, log changes only","Maximales Register":"Maximum register",
     "Register-Debug-Verzeichnis":"Register debug directory","Nur speichern":"Save only","Nicht belegt":"Not occupied",
-    "Noch keine Batterie erkannt":"No battery detected yet"
+    "Noch keine Batterie erkannt":"No battery detected yet","Seit Better-GroBro-Start:":"Since Better GroBro start:","Aktualisieren":"Refresh","Es werden nur Einträge des aktuell laufenden Better-GroBro-Prozesses angezeigt. Ältere Supervisor-Protokolle bleiben ausgeblendet.":"Only entries from the currently running Better GroBro process are shown. Older Supervisor logs remain hidden.","Protokoll wird geladen…":"Loading log…"
   },
   fr:{
     "Konfiguration und Batterie-Zuordnung":"Configuration et affectation des batteries","Zurück zum Add-on":"Retour à l'add-on",
-    "Übersicht":"Vue d'ensemble","Batterien":"Batteries","Diagnose":"Diagnostic","Version":"Version","Add-on Status":"État de l'add-on",
+    "Übersicht":"Vue d'ensemble","Batterien":"Batteries","Diagnose":"Diagnostic","Protokoll":"Journal","Version":"Version","Add-on Status":"État de l'add-on",
     "Erkannte Geräte":"Appareils détectés","Empfohlene Konfiguration":"Configuration recommandée",
     "Verwende bevorzugt diese Better-GroBro-Oberfläche. Sie bearbeitet direkt die offiziellen Home-Assistant-Add-on-Optionen; der native Konfiguration-Tab bleibt als Fallback verfügbar und verwendet dieselben Werte.":"Utilisez de préférence cette interface Better GroBro. Elle modifie directement les options officielles de l'add-on Home Assistant ; l'onglet Configuration natif reste disponible comme solution de secours et utilise les mêmes valeurs.",
     "Änderungen an Better-GroBro-Optionen werden beim Start geladen. Verwende daher nach Änderungen vorzugsweise":"Les modifications des options Better GroBro sont chargées au démarrage. Après une modification, utilisez de préférence",
@@ -256,11 +274,11 @@ const TEXTS={
     "Register-Debug":"Débogage registres","Passiven Register-Debugger aktivieren":"Activer le débogueur passif des registres","Nur Änderungen":"Modifications uniquement",
     "Nach Erstwert nur Änderungen protokollieren":"Après la première valeur, journaliser uniquement les changements","Maximales Register":"Registre maximal",
     "Register-Debug-Verzeichnis":"Répertoire de débogage des registres","Nur speichern":"Enregistrer seulement",
-    "Nicht belegt":"Non occupé","Noch keine Batterie erkannt":"Aucune batterie détectée"
+    "Nicht belegt":"Non occupé","Noch keine Batterie erkannt":"Aucune batterie détectée","Seit Better-GroBro-Start:":"Depuis le démarrage de Better GroBro :","Aktualisieren":"Actualiser","Es werden nur Einträge des aktuell laufenden Better-GroBro-Prozesses angezeigt. Ältere Supervisor-Protokolle bleiben ausgeblendet.":"Seules les entrées du processus Better GroBro actuellement en cours sont affichées. Les anciens journaux Supervisor restent masqués.","Protokoll wird geladen…":"Chargement du journal…"
   },
   es:{
     "Konfiguration und Batterie-Zuordnung":"Configuración y asignación de baterías","Zurück zum Add-on":"Volver al complemento",
-    "Übersicht":"Resumen","Batterien":"Baterías","Diagnose":"Diagnóstico","Version":"Versión","Add-on Status":"Estado del complemento",
+    "Übersicht":"Resumen","Batterien":"Baterías","Diagnose":"Diagnóstico","Protokoll":"Registro","Version":"Versión","Add-on Status":"Estado del complemento",
     "Erkannte Geräte":"Dispositivos detectados","Empfohlene Konfiguration":"Configuración recomendada",
     "Verwende bevorzugt diese Better-GroBro-Oberfläche. Sie bearbeitet direkt die offiziellen Home-Assistant-Add-on-Optionen; der native Konfiguration-Tab bleibt als Fallback verfügbar und verwendet dieselben Werte.":"Use preferentemente esta interfaz de Better GroBro. Edita directamente las opciones oficiales del complemento de Home Assistant; la pestaña Configuración nativa permanece disponible como respaldo y utiliza los mismos valores.",
     "Änderungen an Better-GroBro-Optionen werden beim Start geladen. Verwende daher nach Änderungen vorzugsweise":"Los cambios de Better GroBro se cargan al iniciar. Después de cambiar opciones, use preferiblemente",
@@ -283,7 +301,7 @@ const TEXTS={
   },
   nl:{
     "Konfiguration und Batterie-Zuordnung":"Configuratie en batterijtoewijzing","Zurück zum Add-on":"Terug naar add-on",
-    "Übersicht":"Overzicht","Batterien":"Batterijen","Diagnose":"Diagnose","Version":"Versie","Add-on Status":"Add-onstatus",
+    "Übersicht":"Overzicht","Batterien":"Batterijen","Diagnose":"Diagnose","Protokoll":"Logboek","Version":"Versie","Add-on Status":"Add-onstatus",
     "Erkannte Geräte":"Gedetecteerde apparaten","Empfohlene Konfiguration":"Aanbevolen configuratie",
     "Verwende bevorzugt diese Better-GroBro-Oberfläche. Sie bearbeitet direkt die offiziellen Home-Assistant-Add-on-Optionen; der native Konfiguration-Tab bleibt als Fallback verfügbar und verwendet dieselben Werte.":"Gebruik bij voorkeur deze Better GroBro-interface. Deze bewerkt rechtstreeks de officiële Home Assistant add-onopties; het native tabblad Configuratie blijft als fallback beschikbaar en gebruikt dezelfde waarden.",
     "Änderungen an Better-GroBro-Optionen werden beim Start geladen. Verwende daher nach Änderungen vorzugsweise":"Wijzigingen in Better GroBro-opties worden bij het starten geladen. Gebruik daarom na wijzigingen bij voorkeur",
@@ -302,7 +320,7 @@ const TEXTS={
     "Register-Debug":"Registerdebug","Passiven Register-Debugger aktivieren":"Passieve registerdebugger inschakelen","Nur Änderungen":"Alleen wijzigingen",
     "Nach Erstwert nur Änderungen protokollieren":"Na de eerste waarde alleen wijzigingen loggen","Maximales Register":"Maximaal register",
     "Register-Debug-Verzeichnis":"Registerdebugmap","Nur speichern":"Alleen opslaan","Nicht belegt":"Niet bezet",
-    "Noch keine Batterie erkannt":"Nog geen batterij gedetecteerd"
+    "Noch keine Batterie erkannt":"Nog geen batterij gedetecteerd","Seit Better-GroBro-Start:":"Sinds start van Better GroBro:","Aktualisieren":"Vernieuwen","Es werden nur Einträge des aktuell laufenden Better-GroBro-Prozesses angezeigt. Ältere Supervisor-Protokolle bleiben ausgeblendet.":"Alleen vermeldingen van het huidige Better GroBro-proces worden weergegeven. Oudere Supervisor-logboeken blijven verborgen.","Protokoll wird geladen…":"Logboek wordt geladen…"
   }
 };
 function t(text){return (TEXTS[currentLang]&&TEXTS[currentLang][text])||text;}
@@ -368,6 +386,11 @@ function showMessage(id,text,kind="ok"){const el=document.getElementById(id);el.
 function activateTab(name){
   document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x.id==="tab-"+name));
   document.querySelectorAll("[data-tab]").forEach(x=>x.classList.toggle("active",x.dataset.tab===name));
+  if(logTimer){clearInterval(logTimer);logTimer=null;}
+  if(name==="logs"){
+    loadLogs().catch(showError);
+    logTimer=setInterval(()=>loadLogs().catch(()=>{}),3000);
+  }
 }
 document.querySelectorAll("[data-tab]").forEach(b=>b.addEventListener("click",()=>activateTab(b.dataset.tab)));
 document.getElementById("back-top").addEventListener("click",goBackToAddon);
@@ -470,6 +493,17 @@ for(const host of document.querySelectorAll(".config-actions")){
   const restart=document.createElement("button");restart.type="button";restart.textContent=t("Speichern & Better GroBro neu starten");restart.addEventListener("click",()=>saveConfig(true).catch(showError));
   host.append(only,restart);
 }
+async function loadLogs(){
+  const output=document.getElementById("log-output");
+  const wasNearBottom=output.scrollHeight-output.scrollTop-output.clientHeight<40;
+  const r=await fetch(apiUrl("api/logs"),{cache:"no-store"});
+  const out=await r.json();
+  if(!r.ok)throw new Error(out.error||"Protokoll konnte nicht geladen werden");
+  document.getElementById("log-started").textContent=out.started_at?new Date(out.started_at).toLocaleString():"–";
+  output.textContent=out.marker_found?(out.logs||l({de:"Keine Protokolleinträge seit dem Start.",en:"No log entries since startup.",fr:"Aucune entrée de journal depuis le démarrage.",es:"No hay entradas de registro desde el inicio.",nl:"Geen logboekvermeldingen sinds het starten."})):l({de:"Warte auf den aktuellen Protokollbeginn…",en:"Waiting for the current log session…",fr:"En attente du journal de la session actuelle…",es:"Esperando el registro de la sesión actual…",nl:"Wachten op het huidige logboek…"});
+  if(wasNearBottom)output.scrollTop=output.scrollHeight;
+}
+document.getElementById("log-refresh").addEventListener("click",()=>loadLogs().catch(showError));
 function showError(error){showMessage("config-message",error.message||String(error),"error");}
 loadConfig().then(loadBatteries).catch(showError);
 </script>
@@ -524,6 +558,12 @@ class BatteryIngressHandler(BaseHTTPRequestHandler):
         if path.endswith("/api/config"):
             try:
                 self._send_json(get_addon_options())
+            except SupervisorConfigError as exc:
+                self._send_json({"error": str(exc)}, HTTPStatus.BAD_GATEWAY)
+            return
+        if path.endswith("/api/logs"):
+            try:
+                self._send_json(get_current_process_logs())
             except SupervisorConfigError as exc:
                 self._send_json({"error": str(exc)}, HTTPStatus.BAD_GATEWAY)
             return
