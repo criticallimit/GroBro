@@ -1403,7 +1403,8 @@
         "state_class": "measurement",
         "device_class": "voltage",
         "unit_of_measurement": "V",
-        "icon": "mdi:flash"
+        "icon": "mdi:flash",
+        "suggested_display_precision": 3
       }
     },
     "mincvbat1": {
@@ -1427,7 +1428,8 @@
         "state_class": "measurement",
         "device_class": "voltage",
         "unit_of_measurement": "V",
-        "icon": "mdi:flash"
+        "icon": "mdi:flash",
+        "suggested_display_precision": 3
       }
     },
     "pv_tot_power": {
@@ -2060,7 +2062,8 @@
         "state_class": "measurement",
         "device_class": "voltage",
         "unit_of_measurement": "V",
-        "icon": "mdi:flash"
+        "icon": "mdi:flash",
+        "suggested_display_precision": 3
       }
     },
     "mincvbat2": {
@@ -2084,7 +2087,8 @@
         "state_class": "measurement",
         "device_class": "voltage",
         "unit_of_measurement": "V",
-        "icon": "mdi:flash"
+        "icon": "mdi:flash",
+        "suggested_display_precision": 3
       }
     },
     "maxcvbat3": {
@@ -2108,7 +2112,8 @@
         "state_class": "measurement",
         "device_class": "voltage",
         "unit_of_measurement": "V",
-        "icon": "mdi:flash"
+        "icon": "mdi:flash",
+        "suggested_display_precision": 3
       }
     },
     "mincvbat3": {
@@ -2132,7 +2137,8 @@
         "state_class": "measurement",
         "device_class": "voltage",
         "unit_of_measurement": "V",
-        "icon": "mdi:flash"
+        "icon": "mdi:flash",
+        "suggested_display_precision": 3
       }
     },
     "maxcvbat4": {
@@ -2156,7 +2162,8 @@
         "state_class": "measurement",
         "device_class": "voltage",
         "unit_of_measurement": "V",
-        "icon": "mdi:flash"
+        "icon": "mdi:flash",
+        "suggested_display_precision": 3
       }
     },
     "mincvbat4": {
@@ -2180,7 +2187,8 @@
         "state_class": "measurement",
         "device_class": "voltage",
         "unit_of_measurement": "V",
-        "icon": "mdi:flash"
+        "icon": "mdi:flash",
+        "suggested_display_precision": 3
       }
     }
   }
