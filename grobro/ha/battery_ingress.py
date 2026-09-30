@@ -495,13 +495,18 @@ for(const host of document.querySelectorAll(".config-actions")){
 }
 async function loadLogs(){
   const output=document.getElementById("log-output");
+  const previousScrollTop=output.scrollTop;
   const wasNearBottom=output.scrollHeight-output.scrollTop-output.clientHeight<40;
   const r=await fetch(apiUrl("api/logs"),{cache:"no-store"});
   const out=await r.json();
   if(!r.ok)throw new Error(out.error||"Protokoll konnte nicht geladen werden");
   document.getElementById("log-started").textContent=out.started_at?new Date(out.started_at).toLocaleString():"–";
   output.textContent=out.marker_found?(out.logs||l({de:"Keine Protokolleinträge seit dem Start.",en:"No log entries since startup.",fr:"Aucune entrée de journal depuis le démarrage.",es:"No hay entradas de registro desde el inicio.",nl:"Geen logboekvermeldingen sinds het starten."})):l({de:"Warte auf den aktuellen Protokollbeginn…",en:"Waiting for the current log session…",fr:"En attente du journal de la session actuelle…",es:"Esperando el registro de la sesión actual…",nl:"Wachten op het huidige logboek…"});
-  if(wasNearBottom)output.scrollTop=output.scrollHeight;
+  if(wasNearBottom){
+    output.scrollTop=output.scrollHeight;
+  }else{
+    output.scrollTop=Math.min(previousScrollTop,Math.max(0,output.scrollHeight-output.clientHeight));
+  }
 }
 document.getElementById("log-refresh").addEventListener("click",()=>loadLogs().catch(showError));
 function showError(error){showMessage("config-message",error.message||String(error),"error");}
