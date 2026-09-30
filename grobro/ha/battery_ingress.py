@@ -136,7 +136,7 @@ _INDEX_HTML = r"""<!doctype html>
         <div class="field"><label>Stabile Batteriepositionen</label><div class="check"><input id="cfg-KEEP_BATTERY_POSITION" type="checkbox">NOAH/NEXA per Seriennummer stabil halten</div></div>
         <div class="field"><label for="cfg-MAX_BAT">Maximale Batterieanzahl</label><select id="cfg-MAX_BAT"><option value="auto">Automatisch</option><option>1</option><option>2</option><option>3</option><option>4</option></select></div>
         <div class="field"><label for="cfg-MAX_SLOTS">Zeitfenster</label><select id="cfg-MAX_SLOTS"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option></select><div class="help">Anzahl der Batterie-Zeitfenster in Home Assistant.</div></div>
-        <div class="field"><label for="cfg-DEVICE_TIMEOUT">Geräte-Timeout (Sekunden)</label><input id="cfg-DEVICE_TIMEOUT" type="number" min="0" step="1"><div class="help">0 deaktiviert den Timeout.</div></div>
+        <div class="field"><label for="cfg-DEVICE_TIMEOUT">Geräte-Timeout (Sekunden)</label><input id="cfg-DEVICE_TIMEOUT" type="number" min="0" step="1"><div class="help">Nach dieser Zeit ohne Telemetrie werden die Entities unavailable. Bei retained Sensorzuständen werden mindestens 120 Sekunden verwendet.</div></div>
         <div class="field"><label>Availability-Sensor</label><div class="check"><input id="cfg-AVAILABILITY_SENSOR" type="checkbox">Zusätzlichen Online-Sensor erzeugen</div></div>
         <div class="field"><label>Messwertsprünge filtern</label><div class="check"><input id="cfg-FILTER_DATA_GLITCHES" type="checkbox">Rücksprünge bei total_increasing unterdrücken</div></div>
         <div class="field"><label>Sensorzustände retained</label><div class="check"><input id="cfg-PUBLISH_SENSORS_RETAINED" type="checkbox">MQTT retain für Sensorzustände verwenden</div></div>
@@ -216,7 +216,7 @@ const TEXTS={
     "Zurück":"Back","Batterie-Zuordnung speichern":"Save battery assignment","Stabile Batteriepositionen":"Stable battery positions",
     "NOAH/NEXA per Seriennummer stabil halten":"Keep NOAH/NEXA stable by serial number","Maximale Batterieanzahl":"Maximum battery count",
     "Automatisch":"Automatic","Zeitfenster":"Time slots","Anzahl der Batterie-Zeitfenster in Home Assistant.":"Number of battery scheduling slots in Home Assistant.",
-    "Geräte-Timeout (Sekunden)":"Device timeout (seconds)","0 deaktiviert den Timeout.":"0 disables the timeout.",
+    "Geräte-Timeout (Sekunden)":"Device timeout (seconds)","Nach dieser Zeit ohne Telemetrie werden die Entities unavailable. Bei retained Sensorzuständen werden mindestens 120 Sekunden verwendet.":"After this time without telemetry, entities become unavailable. Retained sensor states use a minimum of 120 seconds.",
     "Availability-Sensor":"Availability sensor","Zusätzlichen Online-Sensor erzeugen":"Create an additional online sensor",
     "Messwertsprünge filtern":"Filter data glitches","Rücksprünge bei total_increasing unterdrücken":"Suppress decreases in total_increasing values",
     "Sensorzustände retained":"Retained sensor states","MQTT retain für Sensorzustände verwenden":"Use MQTT retain for sensor states",
@@ -241,7 +241,7 @@ const TEXTS={
     "Zurück":"Retour","Batterie-Zuordnung speichern":"Enregistrer l'affectation","Stabile Batteriepositionen":"Positions de batterie stables",
     "NOAH/NEXA per Seriennummer stabil halten":"Maintenir NOAH/NEXA stables par numéro de série","Maximale Batterieanzahl":"Nombre maximal de batteries",
     "Automatisch":"Automatique","Zeitfenster":"Créneaux horaires","Anzahl der Batterie-Zeitfenster in Home Assistant.":"Nombre de créneaux de batterie dans Home Assistant.",
-    "Geräte-Timeout (Sekunden)":"Délai de l'appareil (secondes)","0 deaktiviert den Timeout.":"0 désactive le délai.",
+    "Geräte-Timeout (Sekunden)":"Délai de l'appareil (secondes)","Nach dieser Zeit ohne Telemetrie werden die Entities unavailable. Bei retained Sensorzuständen werden mindestens 120 Sekunden verwendet.":"Après ce délai sans télémétrie, les entités deviennent indisponibles. Les états retained utilisent au minimum 120 secondes.",
     "Availability-Sensor":"Capteur de disponibilité","Zusätzlichen Online-Sensor erzeugen":"Créer un capteur en ligne supplémentaire",
     "Messwertsprünge filtern":"Filtrer les anomalies","Rücksprünge bei total_increasing unterdrücken":"Supprimer les diminutions de total_increasing",
     "Sensorzustände retained":"États capteurs retained","MQTT retain für Sensorzustände verwenden":"Utiliser MQTT retain pour les états",
@@ -266,7 +266,7 @@ const TEXTS={
     "Zurück":"Volver","Batterie-Zuordnung speichern":"Guardar asignación","Stabile Batteriepositionen":"Posiciones estables de batería",
     "NOAH/NEXA per Seriennummer stabil halten":"Mantener NOAH/NEXA estables por número de serie","Maximale Batterieanzahl":"Número máximo de baterías",
     "Automatisch":"Automático","Zeitfenster":"Franjas horarias","Anzahl der Batterie-Zeitfenster in Home Assistant.":"Número de franjas de batería en Home Assistant.",
-    "Geräte-Timeout (Sekunden)":"Tiempo de espera del dispositivo (segundos)","0 deaktiviert den Timeout.":"0 desactiva el tiempo de espera.",
+    "Geräte-Timeout (Sekunden)":"Tiempo de espera del dispositivo (segundos)","Nach dieser Zeit ohne Telemetrie werden die Entities unavailable. Bei retained Sensorzuständen werden mindestens 120 Sekunden verwendet.":"Tras este tiempo sin telemetría, las entidades pasan a no disponibles. Los estados retained usan un mínimo de 120 segundos.",
     "Availability-Sensor":"Sensor de disponibilidad","Zusätzlichen Online-Sensor erzeugen":"Crear un sensor en línea adicional",
     "Messwertsprünge filtern":"Filtrar anomalías","Rücksprünge bei total_increasing unterdrücken":"Suprimir descensos en total_increasing",
     "Sensorzustände retained":"Estados retained","MQTT retain für Sensorzustände verwenden":"Usar MQTT retain para estados",
@@ -423,6 +423,10 @@ function fillConfig(options){
   for(const key of CONFIG_KEYS){const el=document.getElementById("cfg-"+key);if(!el)continue;const value=options[key];if(BOOL_KEYS.has(key))el.checked=Boolean(value);else el.value=value??"";}
 }
 document.getElementById("cfg-MAX_BAT").addEventListener("change",renderBatteries);
+document.getElementById("cfg-PUBLISH_SENSORS_RETAINED").addEventListener("change",event=>{
+  const timeout=document.getElementById("cfg-DEVICE_TIMEOUT");
+  if(event.target.checked && Number(timeout.value)<=0)timeout.value=120;
+});
 function collectConfig(){
   const out={};for(const key of CONFIG_KEYS){const el=document.getElementById("cfg-"+key);if(!el)continue;if(BOOL_KEYS.has(key))out[key]=el.checked;else if(INT_KEYS.has(key))out[key]=Number(el.value);else out[key]=el.value;}return out;
 }
