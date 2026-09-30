@@ -15,6 +15,7 @@ def test_runtime_state_is_created_per_instance():
     assert first._discovery_signature == {}
     assert first._discovery_payload_cache == {}
     assert first._last_state_payload == {}
+    assert getattr(first, "_state_publish_cache", {}) == {}
     assert first._last_availability == {}
     assert first._last_energy_values == {}
     assert first._config_read_queues == {}
