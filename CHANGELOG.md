@@ -1,4 +1,4 @@
-# Better GroBro 3.1.23 — Differences from robertzaage/GroBro
+# Better GroBro 3.1.24 — Differences from robertzaage/GroBro
 
 Comparison baseline: `robertzaage/GroBro` main at `e4d59b20ba472853ae6ec0b7a17cf15cd774cb23` (2026-09-18).
 
@@ -29,6 +29,10 @@ Comparison baseline: `robertzaage/GroBro` main at `e4d59b20ba472853ae6ec0b7a17cf
 - Improves reconnect cleanup, timer cleanup, config restore and protection against overlapping Read All cycles.
 - Re-subscribes the complete Home Assistant command surface after MQTT reconnects and reacts to Home Assistant's `homeassistant/status = online` birth message, clearing interrupted Read All/config-read state and both telemetry suppression caches even when Mosquitto itself never restarted.
 - Improves Growatt Cloud forwarding/allowlist behavior and optional cloud configuration filtering.
+
+## Runtime architecture
+
+- Consolidates overlapping Home Assistant runtime wrappers for telemetry, holding states, discovery and reconnect handling while preserving existing behavior.
 
 ## Runtime efficiency
 
