@@ -254,8 +254,8 @@ class TestModbusMessage:
         assert parsed.register_blocks == []
         assert parsed.write_ack is not None
         assert parsed.write_ack.register_no == 257
-        assert parsed.write_ack.value == 0
-        assert parsed.write_ack.status == 208
+        assert parsed.write_ack.value == 208
+        assert parsed.write_ack.status == 0
         assert "Invalid register block range" not in caplog.text
 
     @pytest.mark.parametrize(
@@ -292,7 +292,8 @@ class TestModbusMessage:
         assert parsed is not None
         assert parsed.write_ack is not None
         assert parsed.write_ack.register_no == register_no
-        assert parsed.write_ack.status == 0\n        assert parsed.write_ack.value == status
+        assert parsed.write_ack.status == 0
+        assert parsed.write_ack.value == status
         assert "Invalid register block range" not in caplog.text
 
 
