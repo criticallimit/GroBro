@@ -101,7 +101,11 @@ def install_timer_runtime() -> None:
                     self._device_timers.pop(d_id, None)
                     self._device_last_seen.pop(d_id, None)
 
-                LOG.warning("Device %s timed out. Mark it as unavailable.", d_id)
+                LOG.warning(
+                    "%s %s has stopped sending data; Home Assistant values are now unavailable",
+                    ha_client_module.get_device_type_name(d_id),
+                    d_id,
+                )
                 self._Client__publish_availability(d_id, False)
 
             with lock:
