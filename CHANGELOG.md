@@ -10,6 +10,7 @@ Comparison baseline: `robertzaage/GroBro` main at `e4d59b20ba472853ae6ec0b7a17cf
 - Automatic German, English, French, Spanish and Dutch localization for the interface and Home Assistant entity display names.
 - Device overview for detected Growatt families such as NOAH, NEO and NEXA.
 - Integrated log viewer for the current Better GroBro process.
+- User-friendly log entries clearly identify the source, target, device family, serial number and config register.
 
 ### Battery handling
 
