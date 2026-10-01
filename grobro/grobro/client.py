@@ -545,9 +545,9 @@ class Client:
             if cloud_msg_type == 0x0119 and len(unscrambled) >= 42:
                 cloud_register = struct.unpack_from(">H", unscrambled, 40)[0]
                 LOG.info(
-                    "Growatt Cloud config read for %s register=%s",
-                    device_id,
-                    cloud_register,
+                    "Growatt Cloud -> %s: request config %s",
+                    _device_label(device_id),
+                    _config_register_label(device_id, cloud_register),
                 )
             if cloud_policy.should_block_cloud_message(cloud_msg_type):
                 LOG.warning(
