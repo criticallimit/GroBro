@@ -480,6 +480,10 @@ def test_ingress_page_contains_current_session_log_viewer():
         assert 'id="log-refresh"' in html
         assert 'apiUrl("api/logs")' in html
         assert "setInterval(()=>loadLogs().catch(()=>{}),5000)" in html
+        assert "height:420px" in html
+        assert "max-height:420px" in html
+        assert "white-space:pre" in html
+        assert "touch-action:pan-y" in html
         assert "Ältere Supervisor-Protokolle bleiben ausgeblendet." in html
         assert '"Protokoll":"Log"' in html
         assert '"Protokoll":"Journal"' in html
