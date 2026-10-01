@@ -154,6 +154,7 @@ class Client:
         self._forward_ready: dict[str, threading.Event] = {}
         self._forward_pending: dict[str, deque[tuple[str, bytes, int, bool]]] = {}
         self._forward_pending_lock = threading.Lock()
+        self._forward_overflow_warned: set[str] = set()
         self._ptq_for_raq: dict[str, str] = {}
         self._smart_meter_state_cache: dict[str, str] = {}
 
@@ -174,6 +175,7 @@ class Client:
         self._forward_ready.clear()
         with self._forward_pending_lock:
             self._forward_pending.clear()
+            self._forward_overflow_warned.clear()
 
     def send_command(self, cmd: GrowattModbusFunctionSingle):
         scrambled = scramble(cmd.build_grobro())
@@ -520,7 +522,15 @@ class Client:
     ) -> None:
         key = f"forward_client_{client_id}"
         with self._forward_pending_lock:
-            queue = self._forward_pending.setdefault(key, deque(maxlen=100))
+            queue = self._forward_pending.setdefault(key, deque())
+            if len(queue) >= 100:
+                queue.popleft()
+                if key not in self._forward_overflow_warned:
+                    LOG.warning(
+                        "Growatt forwarding queue full for %s; dropping oldest packet",
+                        client_id,
+                    )
+                    self._forward_overflow_warned.add(key)
             queue.append((topic, bytes(payload), int(qos), bool(retain)))
 
     def __flush_growatt_forward_queue(self, client_id: str, client) -> None:
@@ -530,6 +540,7 @@ class Client:
                 queue = self._forward_pending.get(key)
                 if not queue:
                     self._forward_pending.pop(key, None)
+                    self._forward_overflow_warned.discard(key)
                     return
                 topic, payload, qos, retain = queue[0]
 
@@ -598,7 +609,6 @@ class Client:
     # Setup Growatt MQTT broker for forwarding messages
     def __connect_to_growatt_server(self, client_id):
         key = f"forward_client_{client_id}"
-        ready = self._forward_ready.get(key)
 
         if key not in self._forward_clients:
             LOG.info(
