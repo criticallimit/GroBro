@@ -479,7 +479,7 @@ def test_ingress_page_contains_current_session_log_viewer():
         assert 'id="log-output"' in html
         assert 'id="log-refresh"' in html
         assert 'apiUrl("api/logs")' in html
-        assert "setInterval(()=>loadLogs().catch(()=>{}),3000)" in html
+        assert "setInterval(()=>loadLogs().catch(()=>{}),5000)" in html
         assert "Ältere Supervisor-Protokolle bleiben ausgeblendet." in html
         assert '"Protokoll":"Log"' in html
         assert '"Protokoll":"Journal"' in html
