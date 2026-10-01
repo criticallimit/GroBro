@@ -77,7 +77,7 @@ _INDEX_HTML = r"""<!doctype html>
     .metric strong { display:block; font-size:20px; margin-top:4px; }
     .section-note { margin-top:12px; color:var(--muted); font-size:12px; }
     .log-toolbar { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
-    .log-output { margin:0; min-height:420px; max-height:62vh; overflow:auto; white-space:pre-wrap; word-break:break-word; background:#0b0f12; border:1px solid var(--border); border-radius:8px; padding:14px; font:12px/1.45 ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace; color:var(--text); }
+    .log-output { margin:0; min-height:420px; max-height:62vh; overflow-y:scroll; overscroll-behavior:contain; white-space:pre-wrap; word-break:break-word; background:#0b0f12; border:1px solid var(--border); border-radius:8px; padding:14px; font:12px/1.45 ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace; color:var(--text); }
     @media (max-width:760px) {
       main{padding:15px}.grid,.summary,.battery-row{grid-template-columns:1fr}.actions button,.header button{width:100%}
     }
@@ -490,19 +490,30 @@ for(const host of document.querySelectorAll(".config-actions")){
   const restart=document.createElement("button");restart.type="button";restart.textContent=t("Speichern & Better GroBro neu starten");restart.addEventListener("click",()=>saveConfig().catch(showError));
   host.append(restart);
 }
+const logOutput=document.getElementById("log-output");
+logOutput.addEventListener("scroll",()=>{
+  logFollowTail=logOutput.scrollHeight-logOutput.scrollTop-logOutput.clientHeight<20;
+});
+
 async function loadLogs(){
-  const output=document.getElementById("log-output");
-  const previousScrollTop=output.scrollTop;
-  const wasNearBottom=output.scrollHeight-output.scrollTop-output.clientHeight<40;
+  const output=logOutput;
   const r=await fetch(apiUrl("api/logs"),{cache:"no-store"});
   const out=await r.json();
   if(!r.ok)throw new Error(out.error||"Protokoll konnte nicht geladen werden");
   document.getElementById("log-started").textContent=out.started_at?new Date(out.started_at).toLocaleString():"–";
-  output.textContent=out.marker_found?(out.logs||l({de:"Keine Protokolleinträge seit dem Start.",en:"No log entries since startup.",fr:"Aucune entrée de journal depuis le démarrage.",es:"No hay entradas de registro desde el inicio.",nl:"Geen logboekvermeldingen sinds het starten."})):l({de:"Warte auf den aktuellen Protokollbeginn…",en:"Waiting for the current log session…",fr:"En attente du journal de la session actuelle…",es:"Esperando el registro de la sesión actual…",nl:"Wachten op het huidige logboek…"});
-  if(wasNearBottom){
+  const nextText=out.marker_found?(out.logs||l({de:"Keine Protokolleinträge seit dem Start.",en:"No log entries since startup.",fr:"Aucune entrée de journal depuis le démarrage.",es:"No hay entradas de registro desde el inicio.",nl:"Geen logboekvermeldingen sinds het starten."})):l({de:"Warte auf den aktuellen Protokollbeginn…",en:"Waiting for the current log session…",fr:"En attente du journal de la session actuelle…",es:"Esperando el registro de la sesión actual…",nl:"Wachten op het huidige logboek…"});
+  if(nextText===logLastText)return;
+
+  const followTail=logFollowTail;
+  const currentScrollTop=output.scrollTop;
+  output.textContent=nextText;
+  logLastText=nextText;
+
+  if(followTail){
     output.scrollTop=output.scrollHeight;
   }else{
-    output.scrollTop=Math.min(previousScrollTop,Math.max(0,output.scrollHeight-output.clientHeight));
+    output.scrollTop=Math.min(currentScrollTop,Math.max(0,output.scrollHeight-output.clientHeight));
+    logFollowTail=false;
   }
 }
 document.getElementById("log-refresh").addEventListener("click",()=>loadLogs().catch(showError));
