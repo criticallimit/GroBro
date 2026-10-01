@@ -222,7 +222,7 @@ class TestClientSend:
         topic = client._client.publish.call_args[0][0]
         assert topic == "s/33/QMN000ABC1D2E3FG"
         assert (
-            "Better GroBro config read for QMN000ABC1D2E3FG register=1280"
+            "Better GroBro -> NEO QMN000ABC1D2E3FG: request config register 1280"
             in caplog.text
         )
 
@@ -304,7 +304,7 @@ class TestClientOnMessage:
         client.on_config_read_response.assert_any_call("QMN000BZP4N991ML", 76)
         client.on_config_read_response.assert_any_call("QMN000BZP4N991ML", 5)
         assert "Received compound config response" in caplog.text
-        assert "Device config read response for QMN000BZP4N991ML reg=76" not in caplog.text
+        assert "NEO QMN000BZP4N991ML -> Better GroBro: config response" not in caplog.text
 
     def test_config_write_ack_280(self, client):
         data = (Path(DATA_DIR) / "NeoConfigWriteAck_DataInterval.bin").read_bytes()
@@ -377,7 +377,7 @@ class TestClientOnMessage:
         client._client.on_message(None, None, msg)
         client.on_config.assert_called_once()
         assert (
-            "Device config message received for 0PVP0000TEST0001"
+            "NOAH 0PVP0000TEST0001 -> Better GroBro: device config message received"
             in caplog.text
         )
 
@@ -570,7 +570,7 @@ class TestClientForward:
         )
 
         assert any(
-            "Growatt Cloud config read for QMN000ABC1D2E3FG register=76"
+            "Growatt Cloud -> NEO QMN000ABC1D2E3FG: request config \"Wi-Fi Signal Strength\" (register 76)"
             in record.message
             for record in caplog.records
         )
