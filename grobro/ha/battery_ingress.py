@@ -661,5 +661,5 @@ def start_battery_ingress_server(port: int = INGRESS_PORT) -> ThreadingHTTPServe
         daemon=True,
     )
     thread.start()
-    LOG.info("Battery assignment Ingress UI listening on port %d", port)
+    LOG.info("Battery assignment page is ready")
     return server
