@@ -324,7 +324,7 @@ class TestClientLifecycle:
             ha_client._client.on_message(ha_client._client, None, status)
 
         log_info.assert_any_call(
-            "Home Assistant online signal received; GroBro command state recovered"
+            "Home Assistant restarted; Better GroBro controls were restored"
         )
         pending_timer.cancel.assert_called_once()
         assert ha_client._read_all_active == set()
@@ -1198,8 +1198,7 @@ class TestEdgeCases:
                 c._Client__on_connect(None, None, None, 0, None)
                 assert "Connected to HA MQTT server" in caplog.text
                 assert (
-                    "Home Assistant MQTT connection established; "
-                    "GroBro command state synchronized"
+                    "Connected to Home Assistant; controls and device states are ready"
                 ) in caplog.text
                 assert "Home Assistant restart detected" not in caplog.text
 
