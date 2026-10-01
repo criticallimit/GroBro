@@ -14,6 +14,7 @@ Better GroBro builds on [Robert Zaage's GroBro](https://github.com/robertzaage/G
 
 - Built-in configuration page directly inside Home Assistant
 - Current-session add-on log viewer directly in the Better GroBro interface
+- More user-friendly log entries that clearly identify source, target, device family, serial number and config register
 - Automatic German, English, French, Spanish and Dutch interface and Home Assistant entity names
 - Clear overview of detected Growatt families such as NOAH, NEO and NEXA
 
