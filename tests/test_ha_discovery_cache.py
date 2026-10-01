@@ -51,6 +51,7 @@ def test_repeated_discovery_is_skipped_until_signature_changes(monkeypatch):
     publish_discovery(device_id, 1)
     first_publish_count = len(published)
     assert first_publish_count > 0
+    assert "publish" not in client._client.__dict__
 
     publish_discovery(device_id, 1)
     assert len(published) == first_publish_count
