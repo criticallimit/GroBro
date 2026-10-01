@@ -398,11 +398,12 @@ class Client:
         getattr(self, "_last_holding_state", {}).clear()
         getattr(self, "_last_availability", {}).clear()
 
-        LOG.info("Home Assistant restart detected; GroBro command state recovered")
-
     def __on_connect(self, client, userdata, flags, reason_code, properties):
         LOG.debug("Connected to HA MQTT server with result code %s", reason_code)
         self.__recover_after_home_assistant_restart(client)
+        LOG.info(
+            "Home Assistant MQTT connection established; GroBro command state synchronized"
+        )
 
     def __on_message(self, client, userdata, msg: mqtt.MQTTMessage):
         # A normal HA Core restart often leaves Mosquitto running, so Paho never
@@ -413,6 +414,9 @@ class Client:
             payload = msg.payload.decode(errors="ignore").strip().lower()
             if payload == "online":
                 self.__recover_after_home_assistant_restart(client)
+                LOG.info(
+                    "Home Assistant online signal received; GroBro command state recovered"
+                )
             return
 
         parts = msg.topic.removeprefix(f"{HA_BASE_TOPIC}/").split("/")
