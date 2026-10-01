@@ -5,6 +5,7 @@ from grobro.ha.cleanup import clear_reconnect_caches
 from grobro.ha.neo_power_runtime import (
     _publish_retained_switch_state,
     request_initial_neo_inverter_power,
+    request_known_neo_states,
 )
 from grobro.model.modbus_message import GrowattModbusFunction
 
@@ -67,3 +68,29 @@ def test_neo_inverter_power_state_is_retained():
         "ON",
         retain=True,
     )
+
+
+def test_failed_initial_neo_read_can_be_retried():
+    client = SimpleNamespace(
+        on_command=lambda _cmd: (4, None),
+        _neo_inverter_power_read_requested=set(),
+    )
+
+    assert request_initial_neo_inverter_power(client, "QMNTEST") is False
+    assert client._neo_inverter_power_read_requested == set()
+
+
+def test_known_neo_states_are_probed_without_waiting_for_telemetry():
+    commands = []
+    client = SimpleNamespace(
+        on_command=lambda cmd: commands.append(cmd),
+        _neo_inverter_power_read_requested=set(),
+        _config_cache={
+            "QMNTEST": object(),
+            "0PVPTEST": object(),
+        },
+    )
+
+    assert request_known_neo_states(client) == 1
+    assert len(commands) == 1
+    assert commands[0].device_id == "QMNTEST"
