@@ -389,7 +389,7 @@ function activateTab(name){
   if(logTimer){clearInterval(logTimer);logTimer=null;}
   if(name==="logs"){
     loadLogs().catch(showError);
-    logTimer=setInterval(()=>loadLogs().catch(()=>{}),3000);
+    logTimer=setInterval(()=>loadLogs().catch(()=>{}),5000);
   }
 }
 document.querySelectorAll("[data-tab]").forEach(b=>b.addEventListener("click",()=>activateTab(b.dataset.tab)));
