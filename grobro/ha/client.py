@@ -707,20 +707,22 @@ class Client:
                 if isinstance(options, dict):
                     ha_data["options"] = list(options.values())
 
-            payload["cmps"][unique_id] = {
+            component = {
                 "platform": platform,
                 "name": ha.name,
                 "unique_id": unique_id,
-                "command_topic": (
-                    f"{HA_BASE_TOPIC}/{entry['topic_root']}/grobro/"
-                    f"{device_id}/{entry['cmd_id']}/set"
-                ),
                 "state_topic": (
                     f"{HA_BASE_TOPIC}/{entry['topic_root']}/grobro/"
                     f"{device_id}/{entry['state_id']}/get"
                 ),
                 **ha_data,
             }
+            if platform != "sensor":
+                component["command_topic"] = (
+                    f"{HA_BASE_TOPIC}/{entry['topic_root']}/grobro/"
+                    f"{device_id}/{entry['cmd_id']}/set"
+                )
+            payload["cmps"][unique_id] = component
         # Config command: Restart Datalogger (Register 32 / Value 1)
         restart_uid = f"grobro_{device_id}_restart_datalogger"
         payload["cmps"][restart_uid] = {
