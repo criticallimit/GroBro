@@ -56,6 +56,22 @@ def _known_registers_for_device(device_id: str):
     return model.get_known_registers(device_id)
 
 
+def _device_label(device_id: str) -> str:
+    """Human-readable device label for user-facing logs."""
+    return f"{model.get_device_type_name(device_id)} {device_id}"
+
+
+def _config_register_label(device_id: str, register_no: int) -> str:
+    """Return a stable user-facing config register label."""
+    known_registers = _known_registers_for_device(device_id)
+    if known_registers:
+        for name, reg in known_registers.config_registers.items():
+            if reg.growatt.register_no == register_no:
+                display_name = getattr(reg.homeassistant, "name", None) or name
+                return f'"{display_name}" (register {register_no})'
+    return f"register {register_no}"
+
+
 def _publish_checked(client, topic: str, payload=None, **kwargs):
     """Publish and warn when Paho rejects the request locally."""
     result = client.publish(topic, payload, **kwargs)
@@ -195,7 +211,7 @@ class Client:
         final_payload = build_config_read_packet(device_id, register_no)
         topic = f"s/33/{device_id}"
 
-        LOG.info("Better GroBro config read for %s register=%s", device_id, register_no)
+        LOG.info(\n            "Better GroBro -> %s: request config %s",\n            _device_label(device_id),\n            _config_register_label(device_id, register_no),\n        )
         return _publish_checked(
             self._client,
             topic,
@@ -208,7 +224,7 @@ class Client:
         topic = f"s/33/{device_id}"
 
         # Never log the value: config registers can contain credentials.
-        LOG.info("Better GroBro config write for %s register=%s", device_id, register_no)
+        LOG.info(\n            "Better GroBro -> %s: write config %s",\n            _device_label(device_id),\n            _config_register_label(device_id, register_no),\n        )
         return _publish_checked(
             self._client,
             topic,
@@ -273,7 +289,7 @@ class Client:
                     or config.serial_number
                 ):
                     self.on_config(device_id, config)
-                    LOG.info("Device config message received for %s", device_id)
+                    LOG.info(\n                        "%s -> Better GroBro: device config message received",\n                        _device_label(device_id),\n                    )
                     # Extract PTQ inverter serial from ShineWeLink dongle config
                     if msg_type == 0x0129 and len(unscrambled) >= 68:
                         ptq_serial = (
