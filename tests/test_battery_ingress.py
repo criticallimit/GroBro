@@ -554,12 +554,17 @@ def test_log_viewer_preserves_manual_scroll_position():
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=3) as response:
             html = response.read().decode()
 
-        assert "const previousScrollTop=output.scrollTop;" in html
+        assert 'logOutput.addEventListener("scroll"' in html
         assert (
-            "output.scrollTop=Math.min(previousScrollTop,"
+            "logFollowTail=logOutput.scrollHeight-logOutput.scrollTop-"
+            "logOutput.clientHeight<20"
+        ) in html
+        assert "const currentScrollTop=output.scrollTop;" in html
+        assert (
+            "output.scrollTop=Math.min(currentScrollTop,"
             "Math.max(0,output.scrollHeight-output.clientHeight));"
         ) in html
-        assert "if(wasNearBottom){" in html
+        assert "if(followTail){" in html
         assert "output.scrollTop=output.scrollHeight;" in html
     finally:
         server.shutdown()
