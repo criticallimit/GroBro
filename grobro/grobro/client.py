@@ -273,7 +273,7 @@ class Client:
                     or config.serial_number
                 ):
                     self.on_config(device_id, config)
-                    LOG.info("Received config message for %s", device_id)
+                    LOG.info("Device config message received for %s", device_id)
                     # Extract PTQ inverter serial from ShineWeLink dongle config
                     if msg_type == 0x0129 and len(unscrambled) >= 68:
                         ptq_serial = (
@@ -321,7 +321,7 @@ class Client:
                     )
                 else:
                     LOG.info(
-                        "Received config read response for %s reg=%s",
+                        "Device config read response for %s reg=%s",
                         cfg["device_id"],
                         cfg["register_no"],
                     )
@@ -363,7 +363,7 @@ class Client:
             if msg_type == 280:
                 cfg = parser.parse_config_ack(unscrambled)
                 LOG.info(
-                    "Received config write response for %s reg=%s accepted",
+                    "Device config write response for %s reg=%s accepted",
                     cfg["device_id"],
                     cfg["register_no"],
                 )
