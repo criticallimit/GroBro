@@ -77,7 +77,7 @@ _INDEX_HTML = r"""<!doctype html>
     .metric strong { display:block; font-size:20px; margin-top:4px; }
     .section-note { margin-top:12px; color:var(--muted); font-size:12px; }
     .log-toolbar { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
-    .log-output { margin:0; min-height:420px; max-height:62vh; overflow-y:scroll; overscroll-behavior:contain; white-space:pre-wrap; word-break:break-word; background:#0b0f12; border:1px solid var(--border); border-radius:8px; padding:14px; font:12px/1.45 ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace; color:var(--text); }
+    .log-output { margin:0; height:420px; min-height:420px; max-height:420px; overflow-y:auto; overflow-x:auto; overscroll-behavior:contain; scrollbar-gutter:stable; touch-action:pan-y; -webkit-overflow-scrolling:touch; -webkit-text-size-adjust:100%; text-size-adjust:100%; white-space:pre; word-break:normal; background:#0b0f12; border:1px solid var(--border); border-radius:8px; padding:14px; font:12px/1.45 ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace; color:var(--text); }
     @media (max-width:760px) {
       main{padding:15px}.grid,.summary,.battery-row{grid-template-columns:1fr}.actions button,.header button{width:100%}
     }
