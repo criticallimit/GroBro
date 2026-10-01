@@ -508,6 +508,26 @@ class TestClientForward:
     @patch("grobro.grobro.client._cloud_lower", "true")
     @patch("grobro.grobro.client.GROWATT_CLOUD", "true")
     @patch("grobro.grobro.client.GROWATT_CLOUD_ENABLED", True)
+    def test_cloud_config_read_logs_requested_register(self, client, caplog):
+        caplog.set_level("INFO", logger=grobro_client.LOG.name)
+        from grobro.grobro.builder import build_config_read_packet
+
+        payload = build_config_read_packet("QMN000ABC1D2E3FG", 76)
+        client._Client__on_message_forward_client(
+            None,
+            None,
+            _msg("s/QMN000ABC1D2E3FG", payload),
+        )
+
+        assert any(
+            "Growatt Cloud config read for QMN000ABC1D2E3FG register=76"
+            in record.message
+            for record in caplog.records
+        )
+
+    @patch("grobro.grobro.client._cloud_lower", "true")
+    @patch("grobro.grobro.client.GROWATT_CLOUD", "true")
+    @patch("grobro.grobro.client.GROWATT_CLOUD_ENABLED", True)
     def test_forward_client_message(self, client):
         data = (Path(DATA_DIR) / "NeoConfigTLV_340.bin").read_bytes()
         client._Client__on_message_forward_client(
