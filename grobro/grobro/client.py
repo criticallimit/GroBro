@@ -144,7 +144,7 @@ class Client:
 
     def __init__(self, grobro_mqtt: MQTTConfig, forward_mqtt: MQTTConfig):
         LOG.info(
-            "Connecting to GroBro broker at '%s:%s'",
+            "Starting Better GroBro MQTT connection to %s:%s",
             grobro_mqtt.host,
             grobro_mqtt.port,
         )
@@ -298,7 +298,7 @@ class Client:
                 ):
                     self.on_config(device_id, config)
                     LOG.info(
-                        "%s -> Better GroBro: device config message received",
+                        "%s -> Better GroBro: device settings received",
                         _device_label(device_id),
                     )
                     # Extract PTQ inverter serial from ShineWeLink dongle config
@@ -319,7 +319,7 @@ class Client:
                                 ptq_config.sw_version = config.sw_version
                             self.on_config(ptq_serial, ptq_config)
                             LOG.info(
-                                "Registered PTQ inverter %s behind %s",
+                                "Detected NEO inverter %s behind ShineWeLink %s",
                                 ptq_serial,
                                 device_id,
                             )
@@ -348,9 +348,12 @@ class Client:
                     )
                 else:
                     LOG.info(
-                        "Device config read response for %s reg=%s",
-                        cfg["device_id"],
-                        cfg["register_no"],
+                        "%s -> Better GroBro: received %s",
+                        _device_label(cfg["device_id"]),
+                        _config_register_label(
+                            cfg["device_id"],
+                            cfg["register_no"],
+                        ),
                     )
 
                 known_registers = _known_registers_for_device(cfg["device_id"])
@@ -390,9 +393,12 @@ class Client:
             if msg_type == 280:
                 cfg = parser.parse_config_ack(unscrambled)
                 LOG.info(
-                    "Device config write response for %s reg=%s accepted",
-                    cfg["device_id"],
-                    cfg["register_no"],
+                    "%s -> Better GroBro: setting accepted for %s",
+                    _device_label(cfg["device_id"]),
+                    _config_register_label(
+                        cfg["device_id"],
+                        cfg["register_no"],
+                    ),
                 )
                 return
 
@@ -434,9 +440,9 @@ class Client:
                     config = noah_msg.get("config")
                     if config and config.serial_number:
                         LOG.info(
-                            "Device full config received for %s (sw_version=%s)",
-                            config.serial_number,
-                            config.sw_version or "?",
+                            "%s -> Better GroBro: device information received (software %s)",
+                            _device_label(config.serial_number),
+                            config.sw_version or "unknown",
                         )
                         self.on_config(device_id, config)
                         return
@@ -458,7 +464,10 @@ class Client:
                 modbus_device_id = ptq_device_id or device_id
                 known_registers = _known_registers_for_device(modbus_device_id)
                 if not known_registers:
-                    LOG.info("Modbus message from unknown device type: %s", device_id)
+                    LOG.info(
+                        "Ignoring data from unrecognized Growatt device %s",
+                        device_id,
+                    )
                     return
 
                 if modbus_message.function == GrowattModbusFunction.READ_SINGLE_REGISTER:
@@ -551,8 +560,8 @@ class Client:
                 )
             if cloud_policy.should_block_cloud_message(cloud_msg_type):
                 LOG.warning(
-                    "Blocked configuration command from Growatt Cloud for %s",
-                    device_id,
+                    "Growatt Cloud -> %s: settings change blocked by Better GroBro",
+                    _device_label(device_id),
                 )
                 return
 
@@ -586,8 +595,8 @@ class Client:
                 queue.popleft()
                 if key not in self._forward_overflow_warned:
                     LOG.warning(
-                        "Growatt forwarding queue full for %s; dropping oldest packet",
-                        client_id,
+                        "%s: Growatt Cloud connection is delayed; oldest queued message was discarded",
+                        _device_label(client_id),
                     )
                     self._forward_overflow_warned.add(key)
             queue.append((topic, bytes(payload), int(qos), bool(retain)))
@@ -671,10 +680,8 @@ class Client:
 
         if key not in self._forward_clients:
             LOG.info(
-                "Connecting to Growatt broker at '%s:%s', subscribed to '+/%s'",
-                self._forward_mqtt_config.host,
-                self._forward_mqtt_config.port,
-                client_id,
+                "%s: connecting to Growatt Cloud",
+                _device_label(client_id),
             )
             client = mqtt.Client(
                 client_id=client_id,
@@ -689,8 +696,8 @@ class Client:
             def on_connect(forward_client, _userdata, _flags, reason_code, _properties):
                 if getattr(reason_code, "is_failure", False):
                     LOG.warning(
-                        "Growatt broker connection failed for %s: %s",
-                        client_id,
+                        "%s: could not connect to Growatt Cloud (%s)",
+                        _device_label(client_id),
                         reason_code,
                     )
                     return
