@@ -226,7 +226,7 @@ _INDEX_HTML = r"""<!doctype html>
 
 <script>
 const AUTO="__auto__", EMPTY="__empty__";
-let batteryState=null, configState=null, currentLang="de", logTimer=null;
+let batteryState=null, configState=null, currentLang="de", logTimer=null, logFollowTail=true, logLastText=null;
 const TEXTS={
   en:{
     "Konfiguration und Batterie-Zuordnung":"Configuration and battery assignment","Zurück zum Add-on":"Back to add-on",
