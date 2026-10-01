@@ -580,6 +580,7 @@ class TestClientForward:
 
 
     def test_forward_queue_overflow_drops_oldest_once_with_warning(self, client, caplog):
+        caplog.set_level("WARNING", logger=grobro_client.LOG.name)
         key = "forward_client_QMN000ABC1D2E3FG"
         for index in range(101):
             client._Client__queue_growatt_forward(
