@@ -304,7 +304,7 @@ def test_log_viewer_preserves_manual_scroll_during_auto_refresh():
     assert "if(nextText===logLastText)return" in html
     assert "output.scrollTop=output.scrollHeight" in html
     assert "logFollowTail=false" in html
-    assert "overflow-y:scroll" in html
+    assert "overflow-y:auto" in html
     assert "overscroll-behavior:contain" in html
 
 
