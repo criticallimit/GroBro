@@ -40,9 +40,14 @@ def sync_supported_clocks(client, now: datetime | None = None) -> int:
             callback(device_id, _TIME_SYNC_REGISTER, value)
             synced += 1
         except Exception as exc:
-            LOG.warning("Automatic time sync failed for %s: %s", device_id, exc)
+            LOG.warning(
+                "%s %s: automatic clock synchronization failed (%s)",
+                get_device_type_name(device_id),
+                device_id,
+                exc,
+            )
     if synced:
-        LOG.info("Automatically synchronized time for %s Growatt device(s)", synced)
+        LOG.info("Growatt device clocks synchronized (%s device(s))", synced)
     return synced
 
 
