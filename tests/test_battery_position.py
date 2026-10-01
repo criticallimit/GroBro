@@ -1,3 +1,4 @@
+from threading import Thread
 from types import SimpleNamespace
 
 from grobro.ha.battery_position import (
@@ -432,3 +433,32 @@ def test_expected_battery_remap_is_debug_not_warning(tmp_path, monkeypatch, capl
         for record in caplog.records
     )
 
+
+
+def test_manual_assignment_updates_are_serialized(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+
+    def save(device_id, serial):
+        save_manual_assignments(
+            device_id,
+            {
+                "2": serial,
+                "3": AUTO_ASSIGNMENT,
+                "4": AUTO_ASSIGNMENT,
+            },
+        )
+
+    first = Thread(target=save, args=("0PVP_A", "SN00200000000001"))
+    second = Thread(target=save, args=("0PVP_B", "SN00200000000002"))
+    first.start()
+    second.start()
+    first.join()
+    second.join()
+
+    state = load_battery_ui_state()
+    manual_by_device = {
+        item["device_id"]: item["manual"]
+        for item in state["devices"]
+    }
+    assert manual_by_device["0PVP_A"]["2"] == "SN00200000000001"
+    assert manual_by_device["0PVP_B"]["2"] == "SN00200000000002"
