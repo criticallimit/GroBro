@@ -579,6 +579,29 @@ class TestClientForward:
             )
 
 
+    def test_forward_queue_overflow_drops_oldest_once_with_warning(self, client, caplog):
+        key = "forward_client_QMN000ABC1D2E3FG"
+        for index in range(101):
+            client._Client__queue_growatt_forward(
+                "QMN000ABC1D2E3FG",
+                "c/33/QMN000ABC1D2E3FG",
+                str(index).encode(),
+                0,
+                False,
+            )
+
+        queue = client._forward_pending[key]
+        assert len(queue) == 100
+        assert queue[0][1] == b"1"
+        assert queue[-1][1] == b"100"
+        assert key in client._forward_overflow_warned
+        assert sum(
+            "Growatt forwarding queue full" in record.message
+            for record in caplog.records
+        ) == 1
+
+
+
 class TestExtractDeviceId:
     def test_clean_neo_serial(self):
         from grobro.grobro.client import _extract_device_id
