@@ -238,11 +238,40 @@ def test_current_process_logs_filter_to_marker(monkeypatch):
     assert "current entry" in result["logs"]
 
 
-def test_current_process_logs_hide_history_until_marker_is_visible(monkeypatch):
+def test_current_process_logs_fall_back_to_process_start_when_marker_is_missing(monkeypatch):
+    monkeypatch.setattr(
+        supervisor_config,
+        "_PROCESS_STARTED_AT",
+        "2026-10-01T00:46:37+02:00",
+    )
     monkeypatch.setattr(
         supervisor_config,
         "_supervisor_text_request",
-        lambda _path: "2026-09-06 18:26:33 [DEBUG] old entry\n",
+        lambda _path: (
+            "2026-09-30 23:59:59,000 [INFO] old entry\n"
+            "2026-10-01 00:46:38,100 [INFO] current startup\n"
+            "2026-10-01 00:46:39,200 [INFO] current follow-up\n"
+        ),
+    )
+
+    result = supervisor_config.get_current_process_logs()
+
+    assert result["marker_found"] is True
+    assert "old entry" not in result["logs"]
+    assert result["logs"].startswith("2026-10-01 00:46:38,100")
+    assert "current follow-up" in result["logs"]
+
+
+def test_current_process_logs_still_hide_old_history_without_current_lines(monkeypatch):
+    monkeypatch.setattr(
+        supervisor_config,
+        "_PROCESS_STARTED_AT",
+        "2026-10-01T00:46:37+02:00",
+    )
+    monkeypatch.setattr(
+        supervisor_config,
+        "_supervisor_text_request",
+        lambda _path: "2026-09-30 23:59:59,000 [INFO] old entry\n",
     )
 
     result = supervisor_config.get_current_process_logs()
