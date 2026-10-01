@@ -141,19 +141,63 @@ class TestClientLifecycle:
             "forward_client_QMN000ABC1D2E3FG"
         ].is_set()
 
-    def test_forward_client_timeout_does_not_return_unconnected_client(self, client):
+    def test_forward_client_queues_until_connack(self, client):
         forward = MagicMock()
+        forward.publish.return_value = (0, MagicMock())
 
-        with patch("grobro.grobro.client.mqtt.Client", return_value=forward), patch(
-            "grobro.grobro.client.threading.Event.wait",
-            return_value=False,
-        ):
-            with pytest.raises(ConnectionError):
-                client._Client__connect_to_growatt_server(
-                    "QMN000ABC1D2E3FG"
-                )
+        with patch("grobro.grobro.client.mqtt.Client", return_value=forward):
+            connected = client._Client__connect_to_growatt_server(
+                "QMN000ABC1D2E3FG"
+            )
+            client._Client__publish_to_growatt_server(
+                "QMN000ABC1D2E3FG",
+                "c/33/QMN000ABC1D2E3FG",
+                b"payload",
+                0,
+                False,
+            )
 
+        assert connected is forward
         forward.publish.assert_not_called()
+        key = "forward_client_QMN000ABC1D2E3FG"
+        assert len(client._forward_pending[key]) == 1
+
+        reason = MagicMock()
+        reason.is_failure = False
+        forward.on_connect(forward, None, None, reason, None)
+
+        forward.subscribe.assert_called_once_with("+/QMN000ABC1D2E3FG")
+        forward.publish.assert_called_once()
+        assert key not in client._forward_pending
+
+    def test_forward_publish_no_conn_is_queued_and_flushed_after_reconnect(self, client):
+        forward = MagicMock()
+        forward.publish.side_effect = [(grobro_client.mqtt.MQTT_ERR_NO_CONN, None), (0, None)]
+
+        with patch("grobro.grobro.client.mqtt.Client", return_value=forward):
+            client._Client__connect_to_growatt_server("QMN000ABC1D2E3FG")
+
+        reason = MagicMock()
+        reason.is_failure = False
+        forward.on_connect(forward, None, None, reason, None)
+
+        client._Client__publish_to_growatt_server(
+            "QMN000ABC1D2E3FG",
+            "c/33/QMN000ABC1D2E3FG",
+            b"payload",
+            0,
+            False,
+        )
+
+        key = "forward_client_QMN000ABC1D2E3FG"
+        assert not client._forward_ready[key].is_set()
+        assert len(client._forward_pending[key]) == 1
+
+        forward.on_connect(forward, None, None, reason, None)
+
+        assert client._forward_ready[key].is_set()
+        assert key not in client._forward_pending
+        assert forward.publish.call_count == 2
 
 
 class TestClientSend:
@@ -250,15 +294,17 @@ class TestClientOnMessage:
     @patch("grobro.grobro.client.GROWATT_CLOUD_ENABLED", True)
     def test_growatt_cloud_forwarding(self, client):
         client._forward_clients = {}
-        with patch.object(client, "_Client__connect_to_growatt_server") as mock_connect:
-            fc = MagicMock()
-            fc.publish.return_value = (0, MagicMock())
-            mock_connect.return_value = fc
+        with patch.object(client, "_Client__publish_to_growatt_server") as mock_publish:
             data = (Path(DATA_DIR) / "NeoConfigTLV_340.bin").read_bytes()
             msg = _msg("c/33/QMN000ABC1D2E3FG", data)
             client._client.on_message(None, None, msg)
-            mock_connect.assert_called_once_with("QMN000ABC1D2E3FG")
-            fc.publish.assert_called_once()
+            mock_publish.assert_called_once_with(
+                "QMN000ABC1D2E3FG",
+                "c/33/QMN000ABC1D2E3FG",
+                msg.payload,
+                msg.qos,
+                msg.retain,
+            )
 
     def test_noah_type0103(self, client):
         data = (Path(DATA_DIR) / "NoahType0103_HoldingRegs.bin").read_bytes()
@@ -427,15 +473,11 @@ class TestClientCloudConfig:
     @patch("grobro.grobro.client.GROWATT_CLOUD_FILTER", set())
     @patch("grobro.grobro.client.GROWATT_CLOUD_CONFIG_FILTER", "true")
     def test_config_filter_does_not_block_device_to_cloud(self, client):
-        with patch.object(client, "_Client__connect_to_growatt_server") as mock_connect:
-            fc = MagicMock()
-            fc.publish.return_value = (0, MagicMock())
-            mock_connect.return_value = fc
+        with patch.object(client, "_Client__publish_to_growatt_server") as mock_publish:
             data = (Path(DATA_DIR) / "NeoConfigWriteAck_DataInterval.bin").read_bytes()
             msg = _msg("c/33/QMN000ABC1D2E3FG", data)
             client._client.on_message(None, None, msg)
-            mock_connect.assert_called_once_with("QMN000ABC1D2E3FG")
-            fc.publish.assert_called_once()
+            mock_publish.assert_called_once()
 
     @patch("grobro.grobro.client._cloud_lower", "true")
     @patch("grobro.grobro.client.GROWATT_CLOUD", "true")
@@ -454,7 +496,7 @@ class TestClientCloudConfig:
     @patch("grobro.grobro.client.GROWATT_CLOUD_FILTER", set())
     def test_cloud_forwarding_exception(self, client):
         with patch.object(
-            client, "_Client__connect_to_growatt_server", side_effect=Exception("boom")
+            client, "_Client__publish_to_growatt_server", side_effect=Exception("boom")
         ):
             data = (Path(DATA_DIR) / "NeoConfigTLV_340.bin").read_bytes()
             msg = _msg("c/33/QMN000ABC1D2E3FG", data)
