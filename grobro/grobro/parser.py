@@ -107,8 +107,14 @@ def find_config_offset(data):
 
 
 def parse_config_message(data: bytes):
-    config_read_struct = struct.Struct(">4sHH16s14sH1xH2x")
-    if len(data) < config_read_struct.size + 2:
+    """Parse one Growatt 0x0119 config-read response.
+
+    NEO devices can return more than one register/value TLV in a single packet.
+    Keep the historic top-level register_no/value fields for compatibility and
+    expose every decoded TLV through entries.
+    """
+    header_struct = struct.Struct(">4sHH16s14sH1x")
+    if len(data) < header_struct.size + 4 + 2:
         raise ValueError("config read response is truncated")
 
     (
@@ -118,20 +124,41 @@ def parse_config_message(data: bytes):
         device_id,
         _padding,
         config_type,
-        register_no,
-    ) = config_read_struct.unpack_from(data)
+    ) = header_struct.unpack_from(data)
 
-    # Remove the known two-byte protocol trailer/checksum.
-    value = data[config_read_struct.size:-2].decode("ascii", errors="replace")
+    # Payload after the one-byte protocol separator consists of repeated
+    # register(2) + length(2) + value(length) TLVs. The final two bytes are the
+    # Growatt protocol trailer/checksum.
+    pos = header_struct.size
+    end = len(data) - 2
+    entries = []
+    while pos + 4 <= end:
+        register_no, value_len = struct.unpack_from(">HH", data, pos)
+        pos += 4
+        if value_len <= 0 or pos + value_len > end:
+            break
+        raw_value = data[pos : pos + value_len]
+        pos += value_len
+        entries.append(
+            {
+                "register_no": register_no,
+                "value": raw_value.decode("ascii", errors="replace").strip("\x00"),
+            }
+        )
 
+    if not entries:
+        raise ValueError("config read response contains no valid register TLV")
+
+    first = entries[0]
     return {
         "header": header,
         "message_length": msg_len,
         "message_type": msg_type,
         "device_id": device_id.rstrip(b"\x00").decode("ascii", errors="replace"),
         "config_type": config_type,
-        "register_no": register_no,
-        "value": value,
+        "register_no": first["register_no"],
+        "value": first["value"],
+        "entries": entries,
     }
 
 
