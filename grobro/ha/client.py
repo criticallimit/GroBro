@@ -83,6 +83,20 @@ def get_device_type_name(device_id: str) -> str:
     return model.get_device_type_name(device_id)
 
 
+def _device_label(device_id: str) -> str:
+    return f"{get_device_type_name(device_id)} {device_id}"
+
+
+def _config_register_label(device_id: str, register_no: int) -> str:
+    known_registers = get_known_registers(device_id)
+    if known_registers:
+        for name, reg in known_registers.config_registers.items():
+            if reg.growatt.register_no == register_no:
+                display_name = getattr(reg.homeassistant, "name", None) or name
+                return f'"{display_name}" (register {register_no})'
+    return f"register {register_no}"
+
+
 def map_enum_value(reg, value):
     """Wandelt ENUM-INT_MAP-Werte in Klartext um (falls vorhanden)."""
     try:
@@ -1003,10 +1017,10 @@ class Client:
             if inflight != register_no:
                 return
 
-            LOG.warning(
-                "Config read timeout for %s register=%s",
-                device_id,
-                register_no,
+            LOG.info(
+                "%s: no response to Better GroBro config request %s; continuing",
+                _device_label(device_id),
+                _config_register_label(device_id, register_no),
             )
 
             self._config_read_inflight.pop(device_id, None)
