@@ -377,7 +377,7 @@ class TestClientOnMessage:
         client._client.on_message(None, None, msg)
         client.on_config.assert_called_once()
         assert (
-            "NOAH 0PVP0000TEST0001 -> Better GroBro: device config message received"
+            "NOAH 0PVP0000TEST0001 -> Better GroBro: device settings received"
             in caplog.text
         )
 
@@ -667,7 +667,7 @@ class TestClientForward:
         assert queue[-1][1] == b"100"
         assert key in client._forward_overflow_warned
         assert sum(
-            "Growatt forwarding queue full" in record.message
+            "Growatt Cloud connection is delayed" in record.message
             for record in caplog.records
         ) == 1
 
