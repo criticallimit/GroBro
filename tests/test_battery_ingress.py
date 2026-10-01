@@ -294,6 +294,20 @@ def test_restart_button_explicitly_names_better_grobro():
         server.server_close()
 
 
+def test_log_viewer_preserves_manual_scroll_during_auto_refresh():
+    html = battery_ingress._INDEX_HTML
+
+    assert "logFollowTail=true" in html
+    assert 'logOutput.addEventListener("scroll"' in html
+    assert "logFollowTail=logOutput.scrollHeight-logOutput.scrollTop-logOutput.clientHeight<20" in html
+    assert "const currentScrollTop=output.scrollTop" in html
+    assert "if(nextText===logLastText)return" in html
+    assert "output.scrollTop=output.scrollHeight" in html
+    assert "logFollowTail=false" in html
+    assert "overflow-y:scroll" in html
+    assert "overscroll-behavior:contain" in html
+
+
 def test_config_save_always_restarts_addon():
     server = start_battery_ingress_server(0)
     _host, port = server.server_address
