@@ -1,200 +1,83 @@
-# Configuration
+# Better GroBro configuration
 
-### 1. Prerequisites
+Better GroBro is configured from the built-in Home Assistant add-on interface. The
+Ingress page provides configuration, detected-device information, battery assignment,
+diagnostics and the current-process log.
 
-You have a valid Let’s Encrypt certificate.
+The add-on reads its settings from Home Assistant Supervisor. Saving configuration in
+the Better GroBro interface restarts only the Better GroBro add-on so the new values are
+loaded consistently.
 
-You have the following files:
-- `fullchain.pem` – contains server + intermediate certificates
-- `privkey.pem` – your private key
+## MQTT
 
-These are usually located in `/etc/letsencrypt/live/<your-domain>/`
+| Option | Default | Purpose |
+|---|---|---|
+| `SOURCE_MQTT_HOST` | `homeassistant.local` | MQTT broker receiving Growatt device traffic |
+| `SOURCE_MQTT_PORT` | `7006` | Source MQTT port |
+| `SOURCE_MQTT_TLS` | `true` | Enable TLS for the source connection |
+| `SOURCE_MQTT_USER` | empty | Optional source MQTT username |
+| `SOURCE_MQTT_PASS` | empty | Optional source MQTT password |
+| `TARGET_MQTT_HOST` | `homeassistant.local` | Home Assistant MQTT broker |
+| `TARGET_MQTT_PORT` | `1883` | Target MQTT port |
+| `TARGET_MQTT_TLS` | `false` | Enable TLS for the target connection |
+| `TARGET_MQTT_USER` | empty | Optional target MQTT username |
+| `TARGET_MQTT_PASS` | empty | Optional target MQTT password |
+| `MQTT_CLIENT_SUFFIX` | empty | Optional suffix when multiple Better GroBro instances share a broker |
+| `HA_BASE_TOPIC` | `homeassistant` | Home Assistant MQTT discovery prefix |
 
-Our setup needs the full trust chain including the root. Head over to the [Certificates Guide](CERTIFICATES.md) for details:
-```bash
-curl -o root.pem https://letsencrypt.org/certs/isrgrootx2.pem
-cat fullchain.pem root.pem > chain-full.pem
-```
+## Growatt Cloud forwarding
 
-So now you have:
-- `chain-full.pem` (cert chain including ISRG Root X2 certificate)
-- `privkey.pem` (private key)
+| Option | Default | Purpose |
+|---|---|---|
+| `GROWATT_CLOUD` | `false` | Forward supported traffic between the local broker and Growatt Cloud |
+| `GROWATT_CLOUD_CONFIG_FILTER` | `false` | Block cloud-originated configuration/control traffic while allowing telemetry forwarding |
 
-### 2. Mosquitto TLS Configuration
+Cloud forwarding is optional. Local Home Assistant operation does not require it.
 
-Create a Mosquitto config file:
-```
-# Listener on port 7006 for TLS
-listener 7006
+## Device and Home Assistant behavior
 
-# Path to certs and key
-certfile /mosquitto/certs/chain-full.pem
-keyfile /mosquitto/certs/privkey.pem
-cafile /mosquitto/certs/root.pem
+| Option | Default | Purpose |
+|---|---|---|
+| `DEVICE_TIMEOUT` | `120` | Minimum inactivity time in seconds before a device becomes unavailable |
+| `MAX_SLOTS` | `1` | Maximum number of schedule slots exposed where supported |
+| `MAX_BAT` | `auto` | Battery count; `auto` uses detected/device-reported information |
+| `AVAILABILITY_SENSOR` | `false` | Also expose a dedicated availability binary sensor |
+| `KEEP_BATTERY_POSITION` | `false` | Keep supported battery modules on stable logical slots by serial number |
+| `TZ` | empty | Optional timezone override; otherwise the Home Assistant timezone is used |
 
-# Allow anonymous connections
-allow_anonymous true
-```
+### Battery assignment
 
-### 3. Run the Mosquitto TLS Container
+For supported NOAH/NEXA layouts, Better GroBro can keep battery identities stable even
+when the device changes its physical enumeration. Manual Bat2/Bat3/Bat4 assignments can
+be configured from the Batteries page. Bat1 is the master and is not manually reordered.
 
-Make sure your volume mounts place the certs and config properly:
-```
-/mosquitto
-├── config
-│   └── mosquitto.conf
-├── certs
-│   ├── chain-full.pem
-│   ├── privkey.pem
-│   └── root.pem
-```
+## Logging and diagnostics
 
-Now run the Mosquitto container like this and check the logs for any errors:
-```bash
-docker run --detach \
-  --name mosquitto-tls \
-  --publish 7006:7006 \
-  --volume ./mosquitto-tls/conf:/mosquitto/config \
-  --volume ./mosquitto-tls/data:/mosquitto/data \
-  --volume ./mosquitto-tls/certs:/mosquitto/certs \
-  docker.io/library/eclipse-mosquitto:latest
-```
+| Option | Default | Purpose |
+|---|---|---|
+| `LOG_LEVEL` | `ERROR` | `ERROR`, `INFO` or `DEBUG` |
+| `DUMP_MESSAGES` | `false` | Enable raw-message diagnostics |
+| `DUMP_DIR` | `/share/GroBro/dump` | Raw-message diagnostic output directory |
+| `REGISTER_DEBUG` | `false` | Enable register diagnostics |
+| `REGISTER_DEBUG_DIR` | `/share/GroBro/register_debug` | Register diagnostic output directory |
+| `REGISTER_DEBUG_MAX_REGISTER` | `65535` | Highest register considered by register diagnostics |
+| `REGISTER_DEBUG_CHANGES_ONLY` | `true` | Record only changed register values where applicable |
 
-### 4. Setup the Growatt Device
+Diagnostics are intended for troubleshooting and can generate substantial data. Leave
+them disabled for normal operation.
 
-_Note: Server and IP configuration isn't possible through the ShinePhone app anymore._
+## Persistent runtime data
 
-Open the [openapi.growatt.com](https://openapi.growatt.com) dashboard and click on `All Devices` in the `My Photovoltaic Devices` section. Select the inverter or battery you want to configure for your own MQTT server and tap `Datalogger Setting`.
-Configuration cannot be performed at night when the inverter is off and not connected to the internet.
+Better GroBro stores its runtime state under `/data/GroBro`, including persisted device
+configuration and battery-position information. These files survive normal add-on
+updates/rebuilds.
 
-![Step 1](assets/config_dashboard.png)
+Diagnostic output under `/share/GroBro` is separate from the runtime state.
 
-Next, click `All Devices` in the `My Photovoltaic Devices` section. After that select the device you want to reconfigure and click `Datalogger Setting`.
+## Updating
 
-![Step 2](assets/config_menu.png)
+Install and update Better GroBro from the Home Assistant Add-on Store using:
 
-First enter the password, which is based on the current date:
+`https://github.com/criticallimit/GroBro`
 
-`growatt<YYYYMMDD>`
-
-Only when entered correctly the settings can be modified. For `Set Domain`, enter the address of your Mosquitto instance configured for TLS. Do the same for the `Port` field.
-Next, click `Yes`.
-
-Additionally: Block the device from accessing the internet after configuration to prevent it from reverting settings or syncing with the cloud.
-
-### 5. Run the GroBro HA Bridge
-
-This example demonstrates how to run the GroBro HA bridge with a dedicated TLS-secured Mosquitto instance for the Growatt device as the source, and a separate MQTT broker for Home Assistant as the target:
-```bash
-docker run --detach \
-  --name grobro-bridge \
-  --env SOURCE_MQTT_HOST=<source-mqtt-host> \
-  --env SOURCE_MQTT_PORT=<source-mqtt-port> \
-  --env SOURCE_MQTT_TLS=true \
-  --env TARGET_MQTT_HOST=<target-mqtt-host> \
-  --env TARGET_MQTT_PORT=<target-mqtt-port> \
-  ghcr.io/robertzaage/grobro:latest
-```
-
-### Environment Variable Reference
-
-| Variable             | Required | Description                                                                 |
-|----------------------|----------|-----------------------------------------------------------------------------|
-| `SOURCE_MQTT_HOST`   | ✅ Yes   | Hostname or IP of the source MQTT broker (for Growatt)                     |
-| `SOURCE_MQTT_PORT`   | ✅ Yes   | Port number of the source MQTT broker                                      |
-| `SOURCE_MQTT_TLS`    | ❌ No    | Set to `true` to enable TLS without certificate validation                 |
-| `SOURCE_MQTT_USER`   | ❌ No    | Username for the source MQTT broker (if authentication is required)        |
-| `SOURCE_MQTT_PASS`   | ❌ No    | Password for the source MQTT broker                                        |
-| `TARGET_MQTT_HOST`   | ✅ Yes   | Hostname or IP of the target MQTT broker (for Home Assistant)              |
-| `TARGET_MQTT_PORT`   | ✅ Yes   | Port number of the target MQTT broker                                      |
-| `TARGET_MQTT_TLS`    | ❌ No    | Set to `true` to enable TLS without certificate validation                 |
-| `TARGET_MQTT_USER`   | ❌ No    | Username for the target MQTT broker (if authentication is required)        |
-| `TARGET_MQTT_PASS`   | ❌ No    | Password for the target MQTT broker                                        |
-| `MQTT_CLIENT_SUFFIX` | ❌ No    | Optional suffix appended to all MQTT client IDs (grobro-ha and grobro-grobro). Allows running multiple GroBro instances in parallel against the same MQTT broker (e.g. prod, test). |
-| `HA_BASE_TOPIC`      | ❌ No    | Base MQTT topic used for Home Assistant auto-discovery and sensor states   |
-| `GROWATT_CLOUD`      | ❌ No    | Set to `true` to redirect messages to and from the Growatt Cloud. This is turned off by default. Supports a comma-separated list of device serials (e.g. `123456789,987654321`) for selective forwarding. |
-| `GROWATT_CLOUD_CONFIG_FILTER`  | ❌ No | Set to `true` to block configuration/control messages coming **from the Growatt Cloud to the local device**. Normal device telemetry can still be forwarded to the cloud. |
-| `LOG_LEVEL`          | ❌ No    | Sets the logging level to either `ERROR`, `DEBUG`, or `INFO`. If not set `ERROR` is used. |
-| `DUMP_MESSAGES`      | ❌ No    | Dumps every received raw MQTT message for later inspection. In this debug fork all messages are appended to `DUMP_DIR/messages.jsonl`; the original payload bytes are preserved as Base64 instead of creating one `.bin` file per message. |
-| `DEVICE_TIMEOUT` | ❌ No | Set the timeout in seconds for device communication. Default is `0` (disabled). Note: This must be greater than 0 for any availability/online tracking to work. Recommended: `300`+ seconds. After this time without data, the device is considered "offline." |
-| `AVAILABILITY_SENSOR` | ❌ No | Requires `DEVICE_TIMEOUT > 0`. Set to `true` to expose availability as a dedicated `online` binary sensor in addition to the main MQTT availability state. |
-| `MAX_SLOTS`     | ❌ No    | Set max available Slots for Battery configuration (NOAH = max 9). |
-| `MAX_BAT`       | ❌ No    | Battery pack count in Home Assistant. Default `"auto"` prefers the device-reported battery count (`bat_cnt` on NOAH, `batteryPackageQuantity` on NEXA) and falls back conservatively to detected battery serials. Set a number (e.g. `3`) to override. |
-| `PUBLISH_SENSORS_RETAINED`     | ❌ No    | Set to `true` to publish sensor states with the MQTT retain flag enabled. Default is `false`.  |
-| `KEEP_BATTERY_POSITION` | ❌ No | Set to `true` to keep NOAH/NEXA battery modules on stable Home Assistant slots by serial number. If the device re-enumerates the stack after a module disappears, all recognized values of the remaining battery are remapped together back to their original Bat2/Bat3/Bat4 position and the mapping is persisted across restarts. Default is `false`. |
-
-# Example Setup with DuckDNS and HA-MQTT
-
-### 1. Set up DynDNS Address and Certificates
-There are many guides available on how to do this. I use a DuckDNS address and the DuckDNS add-on to create the certificates. Just follow their guide. Your certificate should then be located at `/ssl/fullchain.pem` and your key at `/ssl/privkey.pem`.
-
-### 2. Open Port in Your Router and Redirect to Home Assistant
-If you completed step 1, you should already know how to do this. Open port **7006** and redirect it to your Home Assistant instance. Example on a FritzBox:
-![Step 2](assets/example_setup_1.png)
-
-(It might also be possible to use the default MQTT TLS port **8883**. In that case, you must also change the port in the ShinePhone app as described in step 4 of the configuration guide above. Alternatively, you can open external port **7006** and redirect it internally to **8883** — there are many ways to set it up 😉.)
-
-### 3. Set up HA-MQTT
-You just need to create a new user.
-The username must be the serial number of your inverter. (If you are unsure, enable debug logging and check the logs while reconfiguring your inverter or Noah. You should see a line like `"checking auth cache for <username>"` in the logs.)
-
-The password is **Growatt**.
-
-Make sure the certificate names from step 1 are correctly configured:
-![Step 3](assets/example_setup_2.png)
-
-Start your MQTT server on port **7006** (or on the default TLS port, as described above):
-![Step 3](assets/example_setup_3.png)
-
-### 4. Check If Everything Works
-You can use MQTT Explorer (https://github.com/thomasnordquist/MQTT-Explorer) for this.  
-Make sure that **Validate certificate** and **Encryption** are enabled.  
-If you can log in, everything is working correctly!
-![Step 4](assets/example_setup_4.png)
-
-### 5. Optional: DNS Rewrite
-To stay fully local, you can set up a DNS server (like AdGuard) to rewrite your `*.duckdns.org` address to the IP of your Home Assistant instance. The certificates will remain valid.
-
-
-# Hardware Safety & Best Practices (Nexa 2000 & NOAH 2000)
-
-### 1. High-Frequency Modbus Writing (Shadow RAM)
-A common concern for users creating dynamic "Zero Export" automations in Home Assistant is that updating power limits every few seconds might destroy the device's Flash/EEPROM memory. 
-
-According to internal Growatt R&D information, **high-frequency Modbus writes for dynamic power control are 100% hardware-safe**, provided you use the Time Slot registers. 
-
-Both the Nexa 2000 and NOAH 2000 utilize a highly optimized **"Shadow RAM / Lazy Write"** mechanism. When GroBro sends a Modbus write command to the power settings, the MCU immediately applies this value to the volatile RAM, adjusting the output instantly *without* triggering physical EEPROM erase/write cycles. The system only commits these RAM values into the non-volatile EEPROM during a graceful system shutdown. Therefore, updating parameters like `slot1_power` every 30 seconds generates literally zero wear on the flash memory over the lifetime of the device.
-
-### 2. Recommended "Zero Export" Setup via Home Assistant
-To ensure a reliable and clean local control loop without relying on cloud APIs, the following setup is highly recommended by Growatt engineers for HA users:
-
-**The Fail-Safe Baseline (Do this once):**
-* Set `default_power` to a conservative, fixed value (e.g. 100 W or 150 W). The register differs by product: **NOAH uses Reg 252; NEXA uses Reg 322**.
-* *Why?* Because dynamic values are only stored in RAM, a sudden power loss will wipe them. If the device reboots and Home Assistant is offline, the inverter will safely fall back to this basic household load baseline stored in the EEPROM.
-
-**Configure Static Slot Parameters (Do this once):**
-To keep Modbus traffic clean and reduce unnecessary bus load, configure the static parameters on Slot 1 just once:
-*   `slot1_start_time` (Reg 254) = 00:00
-*   `slot1_end_time` (Reg 255) = 23:59
-*   `slot1_mode` (Reg 256) = 0 (Load First)
-*   `slot1_enabled` (Reg 258) = 1 (ON)
-
-**The Dynamic Control (Automation Loop):**
-*   Let your Home Assistant automation continuously update **only** `slot1_power` (Reg 257) based on your local smart meter readings.
-
-### 3. Important Safety Warning Regarding AC Charging (Nexa 2000)
-Currently, dynamic adjustment of AC charging power (up to 700W) is handled entirely internally by the MCU via a closed-loop algorithm based on grid conditions. **There is no exposed Modbus register for third-party control over the AC charging limit.** 
-
-*   Do **not** attempt to reverse-engineer or force write custom values to the charging controller limits. 
-*   Accidentally bypassing the native BMS and charging electronics limits can result in catastrophic hardware failure, severe thermal runaway, or an explosion/fire hazard. Let the native electronics make the final call on charging. 
-
-*(Note: The technical insights in this section were provided by a Growatt employee acting out of personal enthusiasm for the Home Assistant community. Growatt does not officially support this project at this time, and these insights do not represent official company directives).*
-
-### 4. NEO Inverter Power Switch (Register 0)
-The NEO holding-register map exposes an **Inverter Power** switch on register 0 (function `0x06` Modbus write, value `0x0000` = OFF, `0x0001` = ON). This is the same command Growatt's cloud sends when the user taps on/off in ShinePhone, and it works against the local broker without an active cloud session.
-
-Use it when you need a true off — the existing `output_power_limit` (Reg 3) enforces a hardware floor of ~30 W at 0 %, so it can't fully stop AC output. The on/off switch can.
-
-Caveats:
-*   EEPROM-wear characteristics of register 0 are not documented. Until verified, treat it as a coarse-grained control: occasional automation triggers (e.g., negative grid pricing, export caps), not high-frequency dynamic control. Use `output_power_limit` for continuous setpoint loops.
-*   After an OFF, the inverter takes several seconds to actually drop AC output (cloud-style command propagation delay). The HA-side `Inverter_Status` sensor (`StandbyStatus`/`NormalStatus`) reflects the real state.
+Existing supported settings are retained during normal in-place updates.

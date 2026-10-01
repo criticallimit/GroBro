@@ -106,7 +106,6 @@ def _current_cloud_policy() -> CloudForwardingPolicy:
 
 
 DUMP_MESSAGES = os.getenv("DUMP_MESSAGES", "false").lower() == "true"
-PUBLISH_SENSORS_RETAINED = os.getenv("PUBLISH_SENSORS_RETAINED", "False").lower() == "true"
 DUMP_DIR = os.getenv("DUMP_DIR", "/dump")
 
 # Property to flag messages forwarded from growatt cloud
@@ -116,10 +115,6 @@ MQTT_PROP_FORWARD_GROWATT.UserProperty = [("forwarded-for", "growatt")]
 # Property to flag messages as forwarded from ha
 MQTT_PROP_FORWARD_HA = mqtt.Properties(mqtt.PacketTypes.PUBLISH)
 MQTT_PROP_FORWARD_HA.UserProperty = [("forwarded-for", "ha")]
-
-# Property to flag messages as dry-run for debugging purposes
-MQTT_PROP_DRY_RUN = mqtt.Properties(mqtt.PacketTypes.PUBLISH)
-MQTT_PROP_DRY_RUN.UserProperty = [("dry-run", "true")]
 
 
 class Client:
@@ -373,7 +368,7 @@ class Client:
                     self._client,
                     topic,
                     smart_meter_data,
-                    retain=PUBLISH_SENSORS_RETAINED,
+                    retain=False,
                 )
                 self._smart_meter_state_cache[smart_meter_device_id] = smart_meter_data
                 return
