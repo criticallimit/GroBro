@@ -377,7 +377,7 @@ class TestClientOnMessage:
         client._client.on_message(None, None, msg)
         client.on_config.assert_called_once()
         assert (
-            "Device full config received for 0PVP0000TEST0001"
+            "Device config message received for 0PVP0000TEST0001"
             in caplog.text
         )
 
