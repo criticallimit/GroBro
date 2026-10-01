@@ -110,7 +110,11 @@ def install_config_runtime(migration_set) -> None:
             or needs_sensitive_cleanup
             or disk_stable_data != current_stable_data
         ):
-            LOG.info("Saving updated device metadata for %s", device_id)
+            LOG.info(
+                "%s %s: saved updated device information",
+                ha_client_module.get_device_type_name(device_id),
+                device_id,
+            )
             effective_config.to_file(config_path)
         else:
             LOG.debug("Device metadata unchanged for %s; skipping config save", device_id)
