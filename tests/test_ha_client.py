@@ -320,8 +320,12 @@ class TestClientLifecycle:
         ha_client._client.subscribe.reset_mock()
 
         status = _msg("homeassistant/status", b"online")
-        ha_client._client.on_message(ha_client._client, None, status)
+        with patch("grobro.ha.client.LOG.info") as log_info:
+            ha_client._client.on_message(ha_client._client, None, status)
 
+        log_info.assert_any_call(
+            "Home Assistant online signal received; GroBro command state recovered"
+        )
         pending_timer.cancel.assert_called_once()
         assert ha_client._read_all_active == set()
         assert ha_client._config_read_queues == {}
@@ -1193,6 +1197,11 @@ class TestEdgeCases:
                 caplog.set_level("DEBUG")
                 c._Client__on_connect(None, None, None, 0, None)
                 assert "Connected to HA MQTT server" in caplog.text
+                assert (
+                    "Home Assistant MQTT connection established; "
+                    "GroBro command state synchronized"
+                ) in caplog.text
+                assert "Home Assistant restart detected" not in caplog.text
 
     def test_slot_name_parse_error(self, ha_client):
         msg = _msg("homeassistant/button/grobro/QMN000ABC1D2E3FG/read_all/read")
