@@ -147,7 +147,29 @@ def parse_config_message(data: bytes):
         )
 
     if not entries:
-        raise ValueError("config read response contains no valid register TLV")
+        # Compatibility with older/single-value 0x0119 packets that use the
+        # historic fixed layout: register(2) + reserved(2) + value.
+        legacy_struct = struct.Struct(">4sHH16s14sH1xH2x")
+        if len(data) < legacy_struct.size + 2:
+            raise ValueError("config read response contains no valid register value")
+        (
+            _header,
+            _msg_len,
+            _msg_type,
+            _device_id,
+            _padding,
+            _config_type,
+            legacy_register,
+        ) = legacy_struct.unpack_from(data)
+        legacy_value = data[legacy_struct.size:-2].decode(
+            "ascii", errors="replace"
+        ).strip("\x00")
+        entries.append(
+            {
+                "register_no": legacy_register,
+                "value": legacy_value,
+            }
+        )
 
     first = entries[0]
     return {
