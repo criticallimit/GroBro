@@ -266,6 +266,16 @@ class Client:
 
     # ------------------- Publishing -------------------
 
+    def _publish_discovery_message(self, topic, payload=None, *args, **kwargs):
+        """Publish one discovery-related MQTT message.
+
+        Better GroBro installs a permanent wrapper around this method for
+        discovery cleanup/localization. Keeping discovery publishing behind this
+        method avoids temporarily replacing the shared MQTT client's publish
+        callback while other threads may be publishing normal state.
+        """
+        return self._client.publish(topic, payload, *args, **kwargs)
+
     def publish_input_register(self, state: HomeAssistantInputRegister):
         LOG.debug("HA: publish: %s", state)
         effective_max_bat = _resolve_max_bat(state.device_id, state.payload)
@@ -854,43 +864,43 @@ class Client:
             if device_id not in self._discovery_cache:
                 self._discovery_cache.append(device_id)
             # trotzdem States aktualisieren
-            self._client.publish(f"{HA_BASE_TOPIC}/grobro/{device_id}/serial", device_id, retain=True)
-            self._client.publish(f"{HA_BASE_TOPIC}/grobro/{device_id}/type", get_device_type_name(device_id), retain=True)
-            self._client.publish(f"{HA_BASE_TOPIC}/grobro/{device_id}/sw_version", device_id, retain=True)
+            self._publish_discovery_message(f"{HA_BASE_TOPIC}/grobro/{device_id}/serial", device_id, retain=True)
+            self._publish_discovery_message(f"{HA_BASE_TOPIC}/grobro/{device_id}/type", get_device_type_name(device_id), retain=True)
+            self._publish_discovery_message(f"{HA_BASE_TOPIC}/grobro/{device_id}/sw_version", device_id, retain=True)
             return
 
         LOG.info("Publishing updated discovery for %s", device_id)
-        self._client.publish(topic, "", retain=True)  # force HA to refresh
-        self._client.publish(topic, payload_str, retain=True)
+        self._publish_discovery_message(topic, "", retain=True)  # force HA to refresh
+        self._publish_discovery_message(topic, payload_str, retain=True)
         self._discovery_payload_cache[device_id] = payload_str
         if device_id not in self._discovery_cache:
             self._discovery_cache.append(device_id)
 
-        self._client.publish(f"{HA_BASE_TOPIC}/grobro/{device_id}/serial", device_id, retain=True)
-        self._client.publish(f"{HA_BASE_TOPIC}/grobro/{device_id}/type", get_device_type_name(device_id), retain=True)
+        self._publish_discovery_message(f"{HA_BASE_TOPIC}/grobro/{device_id}/serial", device_id, retain=True)
+        self._publish_discovery_message(f"{HA_BASE_TOPIC}/grobro/{device_id}/type", get_device_type_name(device_id), retain=True)
 
     def __migrate_entity_discovery(self, device_id: str, known_registers: GroBroRegisters):
         old_entities = [("set_wirk", "number")]
         for e_name, e_type in old_entities:
-            self._client.publish(
+            self._publish_discovery_message(
                 f"{HA_BASE_TOPIC}/{e_type}/grobro/{device_id}_{e_name}/config",
                 json.dumps({"migrate_discovery": True}),
                 retain=True,
             )
         for cmd_name, cmd in known_registers.holding_registers.items():
             cmd_type = cmd.homeassistant.type
-            self._client.publish(
+            self._publish_discovery_message(
                 f"{HA_BASE_TOPIC}/{cmd_type}/grobro/{device_id}_{cmd_name}/config",
                 json.dumps({"migrate_discovery": True}),
                 retain=True,
             )
-            self._client.publish(
+            self._publish_discovery_message(
                 f"{HA_BASE_TOPIC}/{cmd_type}/grobro/{device_id}_{cmd_name}_read/config",
                 json.dumps({"migrate_discovery": True}),
                 retain=True,
             )
         for state_name in known_registers.input_registers:
-            self._client.publish(
+            self._publish_discovery_message(
                 f"{HA_BASE_TOPIC}/sensor/grobro/{device_id}_{state_name}/config",
                 json.dumps({"migrate_discovery": True}),
                 retain=True,
