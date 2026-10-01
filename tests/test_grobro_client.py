@@ -119,6 +119,43 @@ class TestClientLifecycle:
         assert client._smart_meter_state_cache == {}
 
 
+    def test_forward_client_waits_for_connack_before_use(self, client):
+        forward = MagicMock()
+
+        def complete_connect():
+            reason = MagicMock()
+            reason.is_failure = False
+            forward.on_connect(forward, None, None, reason, None)
+
+        forward.loop_start.side_effect = complete_connect
+
+        with patch("grobro.grobro.client.mqtt.Client", return_value=forward):
+            connected = client._Client__connect_to_growatt_server(
+                "QMN000ABC1D2E3FG"
+            )
+
+        assert connected is forward
+        forward.connect.assert_called_once_with("forward.com", 7006, 60)
+        forward.subscribe.assert_called_once_with("+/QMN000ABC1D2E3FG")
+        assert client._forward_ready[
+            "forward_client_QMN000ABC1D2E3FG"
+        ].is_set()
+
+    def test_forward_client_timeout_does_not_return_unconnected_client(self, client):
+        forward = MagicMock()
+
+        with patch("grobro.grobro.client.mqtt.Client", return_value=forward), patch(
+            "grobro.grobro.client.threading.Event.wait",
+            return_value=False,
+        ):
+            with pytest.raises(ConnectionError):
+                client._Client__connect_to_growatt_server(
+                    "QMN000ABC1D2E3FG"
+                )
+
+        forward.publish.assert_not_called()
+
+
 class TestClientSend:
     def test_send_command(self, client):
         from grobro.model.modbus_function import GrowattModbusFunctionSingle
