@@ -476,6 +476,34 @@ def test_ingress_page_contains_current_session_log_viewer():
         server.server_close()
 
 
+def test_log_viewer_falls_back_to_process_start_when_marker_is_missing(monkeypatch):
+    monkeypatch.setattr(
+        battery_ingress,
+        "get_current_process_logs",
+        lambda: {
+            "logs": "2026-10-01 00:46:38,100 [INFO] current startup\n"
+                    "2026-10-01 00:46:39,100 [INFO] current follow-up",
+            "started_at": "2026-10-01T00:46:37+02:00",
+            "marker_found": True,
+        },
+    )
+
+    server = start_battery_ingress_server(0)
+    _host, port = server.server_address
+    try:
+        with urllib.request.urlopen(
+            f"http://127.0.0.1:{port}/api/logs",
+            timeout=3,
+        ) as response:
+            result = json.load(response)
+
+        assert result["marker_found"] is True
+        assert result["logs"].startswith("2026-10-01 00:46:38,100")
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
 def test_ingress_logs_api_returns_current_process_only(monkeypatch):
     monkeypatch.setattr(
         battery_ingress,
