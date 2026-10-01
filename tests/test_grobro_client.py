@@ -254,12 +254,19 @@ class TestClientOnMessage:
         client._client.on_message(None, None, msg)
         client.on_config.assert_called_once()
 
-    def test_compound_config_read_fixture_is_not_published_as_single_register(self, client):
+    def test_compound_config_read_fixture_publishes_individual_registers(self, client):
         data = (Path(DATA_DIR) / "NeoConfigReadResponse_337.bin").read_bytes()
         msg = _msg("c/33/QMN000ABC1D2E3FG", data)
         client._client.on_message(None, None, msg)
-        client._client.publish.assert_not_called()
-        client.on_config_read_response.assert_not_called()
+
+        topics = [
+            call.args[0]
+            for call in client._client.publish.call_args_list
+            if call.args
+        ]
+        assert "homeassistant/config/grobro/QMN000ABC1D2E3FG/4/get" in topics
+        assert "homeassistant/config/grobro/QMN000ABC1D2E3FG/5/get" in topics
+        assert client.on_config_read_response.call_count > 1
 
     def test_compound_neo_config_read_publishes_each_tlv(self, client, caplog):
         data = bytes.fromhex(
