@@ -479,11 +479,20 @@ class TestClientForward:
         with patch("grobro.grobro.client.mqtt.Client") as mc:
             fc = MagicMock()
             mc.return_value = fc
+
+            def complete_connect():
+                reason = MagicMock()
+                reason.is_failure = False
+                fc.on_connect(fc, None, None, reason, None)
+
+            fc.loop_start.side_effect = complete_connect
+
             result = client._Client__connect_to_growatt_server("test-dev")
             assert result is fc
             fc.connect.assert_called_once()
             fc.subscribe.assert_called_once_with("+/test-dev")
             fc.loop_start.assert_called_once()
+
             result2 = client._Client__connect_to_growatt_server("test-dev")
             assert result2 is fc
             assert mc.call_count == 1
