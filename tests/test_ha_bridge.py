@@ -88,3 +88,34 @@ class TestModule:
             assert source.port == 1883
             assert target.host == "target.local"
             assert target.port == 2883
+
+
+def test_run_clients_logs_successful_startup():
+    import grobro.ha_bridge as mod
+
+    class FakeClient:
+        def __init__(self):
+            self.started = False
+            self.stopped = False
+
+        def start(self):
+            self.started = True
+
+        def stop(self):
+            self.stopped = True
+
+    class FakeSignal:
+        def wait(self):
+            return None
+
+    ha_client = FakeClient()
+    grobro_client = FakeClient()
+
+    with patch.object(mod.LOG, "info") as log_info:
+        mod.run_clients(ha_client, grobro_client, FakeSignal())
+
+    assert ha_client.started is True
+    assert grobro_client.started is True
+    assert ha_client.stopped is True
+    assert grobro_client.stopped is True
+    log_info.assert_any_call("Better GroBro started successfully")
