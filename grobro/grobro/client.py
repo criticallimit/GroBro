@@ -211,7 +211,11 @@ class Client:
         final_payload = build_config_read_packet(device_id, register_no)
         topic = f"s/33/{device_id}"
 
-        LOG.info(\n            "Better GroBro -> %s: request config %s",\n            _device_label(device_id),\n            _config_register_label(device_id, register_no),\n        )
+        LOG.info(
+            "Better GroBro -> %s: request config %s",
+            _device_label(device_id),
+            _config_register_label(device_id, register_no),
+        )
         return _publish_checked(
             self._client,
             topic,
@@ -224,7 +228,11 @@ class Client:
         topic = f"s/33/{device_id}"
 
         # Never log the value: config registers can contain credentials.
-        LOG.info(\n            "Better GroBro -> %s: write config %s",\n            _device_label(device_id),\n            _config_register_label(device_id, register_no),\n        )
+        LOG.info(
+            "Better GroBro -> %s: write config %s",
+            _device_label(device_id),
+            _config_register_label(device_id, register_no),
+        )
         return _publish_checked(
             self._client,
             topic,
@@ -289,7 +297,10 @@ class Client:
                     or config.serial_number
                 ):
                     self.on_config(device_id, config)
-                    LOG.info(\n                        "%s -> Better GroBro: device config message received",\n                        _device_label(device_id),\n                    )
+                    LOG.info(
+                        "%s -> Better GroBro: device config message received",
+                        _device_label(device_id),
+                    )
                     # Extract PTQ inverter serial from ShineWeLink dongle config
                     if msg_type == 0x0129 and len(unscrambled) >= 68:
                         ptq_serial = (
