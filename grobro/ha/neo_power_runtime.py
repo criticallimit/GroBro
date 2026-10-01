@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import grobro.model as model
 from grobro.ha import client as ha_client_module
+from grobro.ha.timer_runtime import daemon_timer
 from grobro.model.modbus_message import GrowattModbusFunction
 
 
@@ -31,13 +32,22 @@ def request_initial_neo_inverter_power(client, device_id: str) -> bool:
     if not register or not callable(getattr(client, "on_command", None)):
         return False
 
-    client.on_command(
+    result = client.on_command(
         ha_client_module.make_modbus_command(
             device_id,
             GrowattModbusFunction.READ_SINGLE_REGISTER,
             register.growatt.position.register_no,
         )
     )
+    status = getattr(result, "rc", None)
+    if status is None:
+        try:
+            status = result[0]
+        except (TypeError, IndexError, KeyError):
+            status = None
+    if status not in (None, 0):
+        return False
+
     requested.add(device_id)
     return True
 
@@ -46,6 +56,46 @@ def clear_neo_inverter_power_read_cache(client) -> None:
     requested = getattr(client, "_neo_inverter_power_read_requested", None)
     if requested is not None:
         requested.clear()
+
+
+def request_known_neo_states(client) -> int:
+    """Actively probe persisted NEO devices instead of waiting for telemetry."""
+    requested = 0
+    for device_id in tuple(getattr(client, "_config_cache", {})):
+        if request_initial_neo_inverter_power(client, device_id):
+            requested += 1
+    return requested
+
+
+def schedule_known_neo_state_probe(client, delay: float = 1.0) -> None:
+    """Probe known NEOs after startup/recovery and retry briefly if MQTT is not ready."""
+    previous = getattr(client, "_neo_startup_probe_timer", None)
+    if previous is not None:
+        try:
+            previous.cancel()
+        except Exception:
+            pass
+
+    def run(attempt: int = 0):
+        client._neo_startup_probe_timer = None
+        request_known_neo_states(client)
+
+        known_neos = {
+            device_id
+            for device_id in getattr(client, "_config_cache", {})
+            if model.is_family(device_id, "neo")
+        }
+        requested = getattr(client, "_neo_inverter_power_read_requested", set())
+        if known_neos.issubset(requested) or attempt >= 3:
+            return
+
+        timer = daemon_timer(2.0 * (attempt + 1), run, args=(attempt + 1,))
+        client._neo_startup_probe_timer = timer
+        timer.start()
+
+    timer = daemon_timer(delay, run)
+    client._neo_startup_probe_timer = timer
+    timer.start()
 
 
 def _publish_retained_switch_state(client, device_id: str, state: str) -> None:
@@ -65,6 +115,25 @@ def install_neo_power_runtime() -> None:
     also retained and therefore replaces the fallback state.
     """
     client_cls = ha_client_module.Client
+
+    original_start = client_cls.start
+
+    def start_with_neo_probe(self):
+        result = original_start(self)
+        schedule_known_neo_state_probe(self)
+        return result
+
+    client_cls.start = start_with_neo_probe
+
+    original_recover = client_cls._Client__recover_after_home_assistant_restart
+
+    def recover_with_neo_probe(self, client):
+        result = original_recover(self, client)
+        clear_neo_inverter_power_read_cache(self)
+        schedule_known_neo_state_probe(self, delay=0.5)
+        return result
+
+    client_cls._Client__recover_after_home_assistant_restart = recover_with_neo_probe
 
     original_on_message = client_cls._Client__on_message
 
