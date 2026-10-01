@@ -10,6 +10,7 @@ import re
 import ssl
 import struct
 import threading
+from collections import deque
 from functools import lru_cache
 from typing import Callable
 
@@ -151,6 +152,8 @@ class Client:
         self._forward_mqtt_config = forward_mqtt
         self._forward_clients: dict[str, mqtt.Client] = {}
         self._forward_ready: dict[str, threading.Event] = {}
+        self._forward_pending: dict[str, deque[tuple[str, bytes, int, bool]]] = {}
+        self._forward_pending_lock = threading.Lock()
         self._ptq_for_raq: dict[str, str] = {}
         self._smart_meter_state_cache: dict[str, str] = {}
 
@@ -169,6 +172,8 @@ class Client:
                 forward_client.disconnect()
         self._forward_clients.clear()
         self._forward_ready.clear()
+        with self._forward_pending_lock:
+            self._forward_pending.clear()
 
     def send_command(self, cmd: GrowattModbusFunctionSingle):
         scrambled = scramble(cmd.build_grobro())
@@ -235,13 +240,12 @@ class Client:
             cloud_policy = _current_cloud_policy()
             if cloud_policy.allows_device(device_id):
                 try:
-                    forward_client = self.__connect_to_growatt_server(device_id)
-                    _publish_checked(
-                        forward_client,
+                    self.__publish_to_growatt_server(
+                        device_id,
                         msg.topic,
-                        payload=msg.payload,
-                        qos=msg.qos,
-                        retain=msg.retain,
+                        msg.payload,
+                        msg.qos,
+                        msg.retain,
                     )
                 except Exception as exc:
                     LOG.error("Forwarding to Growatt Cloud failed: %s", exc)
@@ -506,6 +510,91 @@ class Client:
         except Exception as exc:
             LOG.exception("Unexpected Growatt forwarding error: %s", exc)
 
+    def __queue_growatt_forward(
+        self,
+        client_id: str,
+        topic: str,
+        payload: bytes,
+        qos: int,
+        retain: bool,
+    ) -> None:
+        key = f"forward_client_{client_id}"
+        with self._forward_pending_lock:
+            queue = self._forward_pending.setdefault(key, deque(maxlen=100))
+            queue.append((topic, bytes(payload), int(qos), bool(retain)))
+
+    def __flush_growatt_forward_queue(self, client_id: str, client) -> None:
+        key = f"forward_client_{client_id}"
+        while True:
+            with self._forward_pending_lock:
+                queue = self._forward_pending.get(key)
+                if not queue:
+                    self._forward_pending.pop(key, None)
+                    return
+                topic, payload, qos, retain = queue[0]
+
+            result = client.publish(
+                topic,
+                payload=payload,
+                qos=qos,
+                retain=retain,
+            )
+            status = getattr(result, "rc", None)
+            if status is None:
+                try:
+                    status = result[0]
+                except (TypeError, IndexError, KeyError):
+                    status = None
+
+            if status == mqtt.MQTT_ERR_NO_CONN:
+                ready = self._forward_ready.get(key)
+                if ready is not None:
+                    ready.clear()
+                return
+            if status not in (None, mqtt.MQTT_ERR_SUCCESS):
+                LOG.warning(
+                    "MQTT publish failed for topic %s: rc=%s",
+                    topic,
+                    status,
+                )
+                return
+
+            with self._forward_pending_lock:
+                queue = self._forward_pending.get(key)
+                if queue:
+                    queue.popleft()
+
+    def __publish_to_growatt_server(
+        self,
+        client_id: str,
+        topic: str,
+        payload: bytes,
+        qos: int,
+        retain: bool,
+    ) -> None:
+        client = self.__connect_to_growatt_server(client_id)
+        key = f"forward_client_{client_id}"
+        ready = self._forward_ready[key]
+
+        if not ready.is_set():
+            self.__queue_growatt_forward(client_id, topic, payload, qos, retain)
+            return
+
+        result = client.publish(topic, payload=payload, qos=qos, retain=retain)
+        status = getattr(result, "rc", None)
+        if status is None:
+            try:
+                status = result[0]
+            except (TypeError, IndexError, KeyError):
+                status = None
+
+        if status == mqtt.MQTT_ERR_NO_CONN:
+            ready.clear()
+            self.__queue_growatt_forward(client_id, topic, payload, qos, retain)
+            return
+        if status not in (None, mqtt.MQTT_ERR_SUCCESS):
+            LOG.warning("MQTT publish failed for topic %s: rc=%s", topic, status)
+
     # Setup Growatt MQTT broker for forwarding messages
     def __connect_to_growatt_server(self, client_id):
         key = f"forward_client_{client_id}"
@@ -538,6 +627,7 @@ class Client:
                     return
                 forward_client.subscribe(f"+/{client_id}")
                 ready.set()
+                self.__flush_growatt_forward_queue(client_id, forward_client)
 
             def on_disconnect(
                 _forward_client,
@@ -559,13 +649,7 @@ class Client:
             self._forward_clients[key] = client
             self._forward_ready[key] = ready
 
-        client = self._forward_clients[key]
-        ready = self._forward_ready[key]
-        if not ready.wait(timeout=5.0):
-            raise ConnectionError(
-                f"Growatt broker connection not ready for {client_id}"
-            )
-        return client
+        return self._forward_clients[key]
 
 
 # Ensure that the dump directory exists
