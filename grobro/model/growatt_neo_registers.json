@@ -73,6 +73,23 @@
         "type": "text",
         "icon": "mdi:clock-outline"
       }
+    },
+    "wifi_signal_strength": {
+      "growatt": {
+        "register_no": 76,
+        "data": {
+          "data_type": "INT"
+        }
+      },
+      "homeassistant": {
+        "publish": true,
+        "name": "Wi-Fi Signal Strength",
+        "type": "sensor",
+        "state_class": "measurement",
+        "device_class": "signal_strength",
+        "unit_of_measurement": "dBm",
+        "icon": "mdi:wifi"
+      }
     }
   },
   "holding_registers": {
