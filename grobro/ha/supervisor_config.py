@@ -7,7 +7,7 @@ import os
 import threading
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 import urllib.error
 import urllib.request
 
@@ -165,22 +165,51 @@ def _supervisor_text_request(path: str) -> str:
         raise SupervisorConfigError(str(exc)) from exc
 
 
+def _logs_since_process_start(raw: str) -> str:
+    """Fallback session slicing when the explicit marker is not in Supervisor logs."""
+    try:
+        started = datetime.fromisoformat(_PROCESS_STARTED_AT)
+    except ValueError:
+        return ""
+
+    # Logging timestamps have millisecond precision but no timezone suffix.
+    # Compare them in the process-local timezone and allow a small bootstrap
+    # tolerance so the very first startup messages are not lost.
+    threshold = started - timedelta(seconds=2)
+    lines = raw.splitlines()
+    for index, line in enumerate(lines):
+        stamp = line[:23]
+        try:
+            line_time = datetime.strptime(stamp, "%Y-%m-%d %H:%M:%S,%f")
+        except ValueError:
+            continue
+        line_time = line_time.replace(tzinfo=started.tzinfo)
+        if line_time >= threshold:
+            return "\n".join(lines[index:])
+    return ""
+
+
 def get_current_process_logs() -> dict:
     """Return only log output produced by the current Better GroBro process."""
     raw = _supervisor_text_request("/addons/self/logs")
     marker = f"--- {_PROCESS_LOG_MARKER} ---"
     position = raw.rfind(marker)
-    if position < 0:
+    if position >= 0:
+        logs = raw[position + len(marker):].lstrip("\r\n")
         return {
-            "logs": "",
+            "logs": logs,
             "started_at": _PROCESS_STARTED_AT,
-            "marker_found": False,
+            "marker_found": True,
         }
 
+    # Some Supervisor/container startup paths do not retain the early stdout
+    # marker. Fall back to the process start timestamp instead of leaving the
+    # integrated viewer waiting forever.
+    logs = _logs_since_process_start(raw)
     return {
-        "logs": raw[position + len(marker):].lstrip("\r\n"),
+        "logs": logs,
         "started_at": _PROCESS_STARTED_AT,
-        "marker_found": True,
+        "marker_found": bool(logs),
     }
 
 
