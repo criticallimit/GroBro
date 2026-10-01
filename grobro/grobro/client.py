@@ -9,6 +9,7 @@ import os
 import re
 import ssl
 import struct
+import threading
 from functools import lru_cache
 from typing import Callable
 
@@ -154,6 +155,7 @@ class Client:
         self._client.on_connect = self.__on_connect
         self._forward_mqtt_config = forward_mqtt
         self._forward_clients: dict[str, mqtt.Client] = {}
+        self._forward_ready: dict[str, threading.Event] = {}
         self._ptq_for_raq: dict[str, str] = {}
         self._smart_meter_state_cache: dict[str, str] = {}
 
@@ -171,6 +173,7 @@ class Client:
             finally:
                 forward_client.disconnect()
         self._forward_clients.clear()
+        self._forward_ready.clear()
 
     def send_command(self, cmd: GrowattModbusFunctionSingle):
         scrambled = scramble(cmd.build_grobro())
@@ -511,6 +514,8 @@ class Client:
     # Setup Growatt MQTT broker for forwarding messages
     def __connect_to_growatt_server(self, client_id):
         key = f"forward_client_{client_id}"
+        ready = self._forward_ready.get(key)
+
         if key not in self._forward_clients:
             LOG.info(
                 "Connecting to Growatt broker at '%s:%s', subscribed to '+/%s'",
@@ -525,15 +530,47 @@ class Client:
             client.tls_set(cert_reqs=ssl.CERT_NONE)
             client.tls_insecure_set(True)
             client.on_message = self.__on_message_forward_client
+
+            ready = threading.Event()
+
+            def on_connect(forward_client, _userdata, _flags, reason_code, _properties):
+                if getattr(reason_code, "is_failure", False):
+                    LOG.warning(
+                        "Growatt broker connection failed for %s: %s",
+                        client_id,
+                        reason_code,
+                    )
+                    return
+                forward_client.subscribe(f"+/{client_id}")
+                ready.set()
+
+            def on_disconnect(
+                _forward_client,
+                _userdata,
+                _disconnect_flags,
+                _reason_code,
+                _properties,
+            ):
+                ready.clear()
+
+            client.on_connect = on_connect
+            client.on_disconnect = on_disconnect
             client.connect(
                 self._forward_mqtt_config.host,
                 self._forward_mqtt_config.port,
                 60,
             )
-            client.subscribe(f"+/{client_id}")
             client.loop_start()
             self._forward_clients[key] = client
-        return self._forward_clients[key]
+            self._forward_ready[key] = ready
+
+        client = self._forward_clients[key]
+        ready = self._forward_ready[key]
+        if not ready.wait(timeout=5.0):
+            raise ConnectionError(
+                f"Growatt broker connection not ready for {client_id}"
+            )
+        return client
 
 
 # Ensure that the dump directory exists
