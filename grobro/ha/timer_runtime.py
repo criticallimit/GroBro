@@ -39,6 +39,14 @@ def cancel_runtime_timers(client) -> None:
             pass
         client._time_sync_timer = None
 
+    neo_probe_timer = getattr(client, "_neo_startup_probe_timer", None)
+    if neo_probe_timer is not None:
+        try:
+            neo_probe_timer.cancel()
+        except Exception:  # pragma: no cover
+            pass
+        client._neo_startup_probe_timer = None
+
 
 def effective_device_timeout(client, device_id: str) -> float:
     """Return a timeout long enough for the device's configured report interval.
