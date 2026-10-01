@@ -62,3 +62,37 @@ def test_parse_config_type_no_params():
     data = b"\xff\xff\x00\x00\x00\xff"
     config = parser.parse_config_type(data, 0)
     assert config.model_dump().get("raw") is not None
+
+
+def test_parse_compound_neo_config_read_response():
+    data = bytes.fromhex(
+        "00 01 00 07 00 30 01 19 "
+        "51 4d 4e 30 30 30 42 5a 50 34 4e 39 39 31 4d 4c "
+        "00 00 00 00 00 00 00 00 00 00 00 00 00 00 "
+        "00 02 00 "
+        "00 4c 00 04 2d 30 36 31 "
+        "00 05 00 01 31 "
+        "44 58"
+    )
+
+    result = parser.parse_config_message(data)
+
+    assert result["device_id"] == "QMN000BZP4N991ML"
+    assert result["config_type"] == 2
+    assert result["register_no"] == 76
+    assert result["value"] == "-061"
+    assert result["entries"] == [
+        {"register_no": 76, "value": "-061"},
+        {"register_no": 5, "value": "1"},
+    ]
+
+
+def test_neo_wifi_signal_register_is_known():
+    from grobro.model.growatt_registers import KNOWN_NEO_REGISTERS
+
+    reg = KNOWN_NEO_REGISTERS.config_registers["wifi_signal_strength"]
+    assert reg.growatt.register_no == 76
+    assert reg.growatt.data.data_type.value == "INT"
+    assert reg.homeassistant.type == "sensor"
+    assert reg.homeassistant.device_class == "signal_strength"
+    assert reg.homeassistant.unit_of_measurement == "dBm"
