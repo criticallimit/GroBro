@@ -261,6 +261,39 @@ class TestClientOnMessage:
         client._client.publish.assert_not_called()
         client.on_config_read_response.assert_not_called()
 
+    def test_compound_neo_config_read_publishes_each_tlv(self, client, caplog):
+        data = bytes.fromhex(
+            "00 01 00 07 00 30 01 19 "
+            "51 4d 4e 30 30 30 42 5a 50 34 4e 39 39 31 4d 4c "
+            "00 00 00 00 00 00 00 00 00 00 00 00 00 00 "
+            "00 02 00 "
+            "00 4c 00 04 2d 30 36 31 "
+            "00 05 00 01 31 "
+            "44 58"
+        )
+        msg = _msg("c/33/QMN000BZP4N991ML", b"wire")
+        caplog.set_level("DEBUG", logger=grobro_client.LOG.name)
+
+        with patch("grobro.grobro.client.parser.unscramble", return_value=data):
+            client._client.on_message(None, None, msg)
+
+        publishes = {
+            call.args[0]: call.args[1]
+            for call in client._client.publish.call_args_list
+            if len(call.args) >= 2
+        }
+        assert publishes[
+            "homeassistant/config/grobro/QMN000BZP4N991ML/76/get"
+        ] == -61
+        assert publishes[
+            "homeassistant/config/grobro/QMN000BZP4N991ML/5/get"
+        ] == "1"
+        assert client.on_config_read_response.call_count == 2
+        client.on_config_read_response.assert_any_call("QMN000BZP4N991ML", 76)
+        client.on_config_read_response.assert_any_call("QMN000BZP4N991ML", 5)
+        assert "Received compound config response" in caplog.text
+        assert "Received config read response for QMN000BZP4N991ML reg=76" not in caplog.text
+
     def test_config_write_ack_280(self, client):
         data = (Path(DATA_DIR) / "NeoConfigWriteAck_DataInterval.bin").read_bytes()
         msg = _msg("c/33/QMN000ABC1D2E3FG", data)
