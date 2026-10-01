@@ -215,11 +215,16 @@ class TestClientSend:
         assert args[0][0] == "s/33/QMN000ABC1D2E3FG"
         assert len(args[0][1]) > 0
 
-    def test_send_config_read_message(self, client):
+    def test_send_config_read_message(self, client, caplog):
+        caplog.set_level("INFO", logger=grobro_client.LOG.name)
         client.send_config_read_message("QMN000ABC1D2E3FG", 1280)
         client._client.publish.assert_called_once()
         topic = client._client.publish.call_args[0][0]
         assert topic == "s/33/QMN000ABC1D2E3FG"
+        assert (
+            "Better GroBro config read for QMN000ABC1D2E3FG register=1280"
+            in caplog.text
+        )
 
     def test_send_config_message(self, client):
         client.send_config_message("QMN000ABC1D2E3FG", 1280, "60")
@@ -299,7 +304,7 @@ class TestClientOnMessage:
         client.on_config_read_response.assert_any_call("QMN000BZP4N991ML", 76)
         client.on_config_read_response.assert_any_call("QMN000BZP4N991ML", 5)
         assert "Received compound config response" in caplog.text
-        assert "Received config read response for QMN000BZP4N991ML reg=76" not in caplog.text
+        assert "Device config read response for QMN000BZP4N991ML reg=76" not in caplog.text
 
     def test_config_write_ack_280(self, client):
         data = (Path(DATA_DIR) / "NeoConfigWriteAck_DataInterval.bin").read_bytes()
@@ -365,11 +370,16 @@ class TestClientOnMessage:
         msg = _msg("c/33/0PVP0000TEST0001", data)
         client._client.on_message(None, None, msg)
 
-    def test_noah_type_fe19_config(self, client):
+    def test_noah_type_fe19_config(self, client, caplog):
+        caplog.set_level("INFO", logger=grobro_client.LOG.name)
         data = (Path(DATA_DIR) / "NoahTypeFE19_Config.bin").read_bytes()
         msg = _msg("c/33/0PVP0000TEST0001", data)
         client._client.on_message(None, None, msg)
         client.on_config.assert_called_once()
+        assert (
+            "Device full config received for 0PVP0000TEST0001"
+            in caplog.text
+        )
 
     def test_noah_type_fe19_config2(self, client):
         data = (Path(DATA_DIR) / "NoahTypeFE19_Config2.bin").read_bytes()
