@@ -490,6 +490,17 @@ class Client:
 
             # Cloud configuration filtering belongs in the Cloud -> device path.
             cloud_msg_type = struct.unpack_from(">H", unscrambled, 6)[0]
+
+            # Config register reads (0x0119) can be issued periodically by
+            # Growatt Cloud. Log the requested register at INFO so these reads
+            # can be distinguished from Better GroBro's own explicit reads.
+            if cloud_msg_type == 0x0119 and len(unscrambled) >= 42:
+                cloud_register = struct.unpack_from(">H", unscrambled, 40)[0]
+                LOG.info(
+                    "Growatt Cloud config read for %s register=%s",
+                    device_id,
+                    cloud_register,
+                )
             if cloud_policy.should_block_cloud_message(cloud_msg_type):
                 LOG.warning(
                     "Blocked configuration command from Growatt Cloud for %s",
