@@ -6,12 +6,14 @@ import json
 import logging
 import os
 import re
+from threading import RLock
 
 LOG = logging.getLogger(__name__)
 
 _POSITION_FILE = "battery_positions.json"
 _MANUAL_POSITION_FILE = "battery_manual_positions.json"
 _DETECTED_FILE = "battery_detected.json"
+_PERSISTENCE_LOCK = RLock()
 _TRACKED_SLOTS = (2, 3, 4)
 AUTO_ASSIGNMENT = "__auto__"
 EMPTY_ASSIGNMENT = "__empty__"
@@ -278,6 +280,11 @@ def _load_detected_serials(path: str = _DETECTED_FILE) -> dict[str, list[dict]]:
 
 def save_manual_assignments(device_id: str, assignments: dict) -> None:
     """Validate and persist the three manual logical-slot selections."""
+    with _PERSISTENCE_LOCK:
+        _save_manual_assignments_locked(device_id, assignments)
+
+
+def _save_manual_assignments_locked(device_id: str, assignments: dict) -> None:
     device_id = str(device_id).strip()
     if not device_id:
         raise ValueError("device_id is required")
@@ -304,6 +311,11 @@ def save_manual_assignments(device_id: str, assignments: dict) -> None:
 
 def load_battery_ui_state() -> dict:
     """Return persisted automatic/manual mappings and last detected serials."""
+    with _PERSISTENCE_LOCK:
+        return _load_battery_ui_state_locked()
+
+
+def _load_battery_ui_state_locked() -> dict:
     automatic = _load_all_positions()
     manual = _load_manual_positions()
     detected = _load_detected_serials()
@@ -348,16 +360,18 @@ def _position_maps(client) -> dict[str, dict[str, int]]:
 
 def observe_battery_serials(client, device_id: str, payload: dict) -> None:
     """Persist the currently detected battery serials for the Ingress UI."""
-    _record_detected_serials(client, device_id, _serials_from_payload(payload))
+    with _PERSISTENCE_LOCK:
+        _record_detected_serials(client, device_id, _serials_from_payload(payload))
 
 
 def has_manual_assignments(client, device_id: str) -> bool:
     """Return whether at least one slot has a non-automatic manual choice."""
-    assignments = _manual_positions(client).get(device_id, {})
-    return any(value != AUTO_ASSIGNMENT for value in assignments.values())
+    with _PERSISTENCE_LOCK:
+        assignments = _manual_positions(client).get(device_id, {})
+        return any(value != AUTO_ASSIGNMENT for value in assignments.values())
 
 
-def stabilize_battery_payload(
+def _stabilize_battery_payload_locked(
     client,
     device_id: str,
     payload: dict,
@@ -522,3 +536,20 @@ def stabilize_battery_payload(
         remapped[_remap_key(key, logical_slot)] = value
 
     return remapped, max(physical_to_logical.values(), default=1)
+
+def stabilize_battery_payload(
+    client,
+    device_id: str,
+    payload: dict,
+    *,
+    use_stable_auto: bool = True,
+) -> tuple[dict, int]:
+    """Thread-safe wrapper for stable/manual battery slot remapping."""
+    with _PERSISTENCE_LOCK:
+        return _stabilize_battery_payload_locked(
+            client,
+            device_id,
+            payload,
+            use_stable_auto=use_stable_auto,
+        )
+
