@@ -206,6 +206,104 @@ def install_discovery_runtime(resolve_max_bat) -> None:
 
     client_cls._Client__migrate_entity_discovery = migrate_once
     original_publish_discovery = client_cls._Client__publish_device_discovery
+    original_discovery_publish = client_cls._publish_discovery_message
+
+    def publish_discovery_message_clean(self, topic, payload=None, *args, **kwargs):
+        device_id = None
+        base = ha_client_module.HA_BASE_TOPIC
+        prefix = f"{base}/device/"
+        suffix = "/config"
+        is_device_config = topic.startswith(prefix) and topic.endswith(suffix)
+        if is_device_config:
+            device_id = topic[len(prefix) : -len(suffix)]
+
+        if device_id is None:
+            parts = topic.split("/")
+            if len(parts) >= 4 and parts[0] == base and parts[1] == "grobro":
+                device_id = parts[2]
+
+        if not device_id:
+            return original_discovery_publish(self, topic, payload, *args, **kwargs)
+
+        repair_done = getattr(self, "_better_312_discovery_repair_done", None)
+        if repair_done is None:
+            repair_done = set()
+            self._better_312_discovery_repair_done = repair_done
+
+        legacy_cleanup_done = getattr(self, "_legacy_discovery_cleanup_done", None)
+        if legacy_cleanup_done is None:
+            legacy_cleanup_done = set()
+            self._legacy_discovery_cleanup_done = legacy_cleanup_done
+
+        if is_device_config and payload:
+            try:
+                data = json.loads(payload)
+                clean_data = clean_discovery_payload(self, device_id, data)
+
+                firmware_version = getattr(
+                    self,
+                    "_composed_firmware_cache",
+                    {},
+                ).get(device_id)
+                clean_payload = _rewrite_firmware_discovery(
+                    device_id,
+                    json.dumps(clean_data, separators=(",", ":")),
+                    firmware_version,
+                )
+                clean_data = json.loads(clean_payload)
+
+                if device_id not in repair_done:
+                    repair_payload = json.dumps(
+                        build_discovery_repair_payload(device_id, clean_data),
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    )
+                    original_discovery_publish(
+                        self,
+                        topic,
+                        repair_payload,
+                        *args,
+                        **kwargs,
+                    )
+                    repair_done.add(device_id)
+
+                payload = json.dumps(
+                    clean_data,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                )
+            except (TypeError, ValueError):
+                pass
+
+        if topic == f"{base}/grobro/{device_id}/serial":
+            payload = configured_serial(self, device_id)
+
+        if topic == f"{base}/grobro/{device_id}/sw_version":
+            config = getattr(self, "_config_cache", {}).get(device_id)
+            sw_version = getattr(config, "sw_version", None) if config else None
+            if not sw_version:
+                return None
+            payload = sw_version
+
+        result = original_discovery_publish(self, topic, payload, *args, **kwargs)
+
+        if is_device_config and payload and device_id not in legacy_cleanup_done:
+            clear_legacy_component_discovery(
+                lambda topic, payload=None, *a, **kw: original_discovery_publish(
+                    self,
+                    topic,
+                    payload,
+                    *a,
+                    **kw,
+                ),
+                device_id,
+            )
+            legacy_cleanup_done.add(device_id)
+            original_discovery_publish(self, topic, payload, *args, **kwargs)
+
+        return result
+
+    client_cls._publish_discovery_message = publish_discovery_message_clean
 
     def publish_discovery_clean(self, device_id: str, effective_max_bat=None):
         if effective_max_bat is None:
@@ -219,83 +317,8 @@ def install_discovery_runtime(resolve_max_bat) -> None:
         if device_id in self._discovery_cache and signatures.get(device_id) == signature:
             return None
 
-        original_publish = self._client.publish
-        repair_done = getattr(self, "_better_312_discovery_repair_done", None)
-        if repair_done is None:
-            repair_done = set()
-            self._better_312_discovery_repair_done = repair_done
-
-        legacy_cleanup_done = getattr(self, "_legacy_discovery_cleanup_done", None)
-        if legacy_cleanup_done is None:
-            legacy_cleanup_done = set()
-            self._legacy_discovery_cleanup_done = legacy_cleanup_done
-
-        def publish(topic, payload=None, *args, **kwargs):
-            is_device_config = (
-                topic
-                == f"{ha_client_module.HA_BASE_TOPIC}/device/{device_id}/config"
-            )
-            if is_device_config and payload:
-                try:
-                    data = json.loads(payload)
-                    clean_data = clean_discovery_payload(self, device_id, data)
-
-                    # Firmware discovery rewriting is part of this single
-                    # discovery wrapper instead of a second nested wrapper.
-                    firmware_version = getattr(
-                        self,
-                        "_composed_firmware_cache",
-                        {},
-                    ).get(device_id)
-                    clean_payload = _rewrite_firmware_discovery(
-                        device_id,
-                        json.dumps(clean_data, separators=(",", ":")),
-                        firmware_version,
-                    )
-                    clean_data = json.loads(clean_payload)
-
-                    if device_id not in repair_done:
-                        repair_payload = json.dumps(
-                            build_discovery_repair_payload(device_id, clean_data),
-                            sort_keys=True,
-                            separators=(",", ":"),
-                        )
-                        original_publish(topic, repair_payload, *args, **kwargs)
-                        repair_done.add(device_id)
-
-                    payload = json.dumps(
-                        clean_data,
-                        sort_keys=True,
-                        separators=(",", ":"),
-                    )
-                except (TypeError, ValueError):
-                    pass
-
-            if topic == f"{ha_client_module.HA_BASE_TOPIC}/grobro/{device_id}/serial":
-                payload = configured_serial(self, device_id)
-
-            if topic == f"{ha_client_module.HA_BASE_TOPIC}/grobro/{device_id}/sw_version":
-                config = getattr(self, "_config_cache", {}).get(device_id)
-                sw_version = getattr(config, "sw_version", None) if config else None
-                if not sw_version:
-                    return None
-                payload = sw_version
-
-            result = original_publish(topic, payload, *args, **kwargs)
-
-            if is_device_config and payload and device_id not in legacy_cleanup_done:
-                clear_legacy_component_discovery(original_publish, device_id)
-                legacy_cleanup_done.add(device_id)
-                original_publish(topic, payload, *args, **kwargs)
-
-            return result
-
-        self._client.publish = publish
-        try:
-            result = original_publish_discovery(self, device_id, effective_max_bat)
-            signatures[device_id] = signature
-            return result
-        finally:
-            self._client.publish = original_publish
+        result = original_publish_discovery(self, device_id, effective_max_bat)
+        signatures[device_id] = signature
+        return result
 
     client_cls._Client__publish_device_discovery = publish_discovery_clean
