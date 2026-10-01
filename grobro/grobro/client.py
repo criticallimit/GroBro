@@ -195,7 +195,7 @@ class Client:
         final_payload = build_config_read_packet(device_id, register_no)
         topic = f"s/33/{device_id}"
 
-        LOG.info("Sending config read to %s register=%s", device_id, register_no)
+        LOG.info("Better GroBro config read for %s register=%s", device_id, register_no)
         return _publish_checked(
             self._client,
             topic,
@@ -208,7 +208,7 @@ class Client:
         topic = f"s/33/{device_id}"
 
         # Never log the value: config registers can contain credentials.
-        LOG.info("Sending config message to %s register=%s", device_id, register_no)
+        LOG.info("Better GroBro config write for %s register=%s", device_id, register_no)
         return _publish_checked(
             self._client,
             topic,
@@ -407,7 +407,7 @@ class Client:
                     config = noah_msg.get("config")
                     if config and config.serial_number:
                         LOG.info(
-                            "Received config for %s (sw_version=%s)",
+                            "Device full config received for %s (sw_version=%s)",
                             config.serial_number,
                             config.sw_version or "?",
                         )
