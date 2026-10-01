@@ -86,6 +86,7 @@ def run_clients(ha_client, grobro_client, signal_handler) -> None:
     """Start both clients, wait for shutdown, and always stop both cleanly."""
     ha_client.start()
     grobro_client.start()
+    LOG.info("Better GroBro started successfully")
     try:
         signal_handler.wait()
     finally:
