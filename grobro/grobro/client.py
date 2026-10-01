@@ -298,44 +298,65 @@ class Client:
                             )
                 return
 
-            # Config READ response (281)
+            # Config READ response (281). NEO can bundle multiple config
+            # register TLVs in one response (observed: R76 Wi-Fi RSSI + R5).
             if msg_type == 281:
                 cfg = parser.parse_config_message(unscrambled)
-                LOG.info(
-                    "Received config read response for %s reg=%s",
-                    cfg["device_id"],
-                    cfg["register_no"],
-                )
+                entries = cfg.get("entries") or [
+                    {
+                        "register_no": cfg["register_no"],
+                        "value": cfg["value"],
+                    }
+                ]
+                is_compound = len(entries) > 1
 
-                topic = (
-                    f"{HA_BASE_TOPIC}/config/grobro/"
-                    f"{cfg['device_id']}/{cfg['register_no']}/get"
-                )
-                value = cfg["value"]
-
-                known_registers = _known_registers_for_device(cfg["device_id"])
-                if known_registers:
-                    for reg in known_registers.config_registers.values():
-                        if reg.growatt.register_no == cfg["register_no"]:
-                            if reg.growatt.data.data_type == "INT":
-                                try:
-                                    value = int(value)
-                                except (TypeError, ValueError):
-                                    LOG.debug(
-                                        "Invalid integer config value for %s reg=%s",
-                                        cfg["device_id"],
-                                        cfg["register_no"],
-                                    )
-                                    return
-                            break
-
-                _publish_checked(self._client, topic, value, retain=True)
-
-                if self.on_config_read_response:
-                    self.on_config_read_response(
+                if is_compound:
+                    LOG.debug(
+                        "Received compound config response for %s: %s",
+                        cfg["device_id"],
+                        ", ".join(
+                            f"reg={entry['register_no']} value={entry['value']!r}"
+                            for entry in entries
+                        ),
+                    )
+                else:
+                    LOG.info(
+                        "Received config read response for %s reg=%s",
                         cfg["device_id"],
                         cfg["register_no"],
                     )
+
+                known_registers = _known_registers_for_device(cfg["device_id"])
+                for entry in entries:
+                    register_no = entry["register_no"]
+                    value = entry["value"]
+
+                    if known_registers:
+                        for reg in known_registers.config_registers.values():
+                            if reg.growatt.register_no == register_no:
+                                if reg.growatt.data.data_type == "INT":
+                                    try:
+                                        value = int(value)
+                                    except (TypeError, ValueError):
+                                        LOG.debug(
+                                            "Invalid integer config value for %s reg=%s",
+                                            cfg["device_id"],
+                                            register_no,
+                                        )
+                                        break
+                                break
+
+                    topic = (
+                        f"{HA_BASE_TOPIC}/config/grobro/"
+                        f"{cfg['device_id']}/{register_no}/get"
+                    )
+                    _publish_checked(self._client, topic, value, retain=True)
+
+                    if self.on_config_read_response:
+                        self.on_config_read_response(
+                            cfg["device_id"],
+                            register_no,
+                        )
                 return
 
             # Config WRITE response (280)
