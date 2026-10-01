@@ -214,7 +214,11 @@ class Client:
 
     def __init__(self, mqtt_config: model.MQTTConfig):
         # Setup target MQTT client for publishing
-        LOG.info(f"Connecting to HA broker at '{mqtt_config.host}:{mqtt_config.port}'")
+        LOG.info(
+            "Connecting Better GroBro to Home Assistant MQTT at %s:%s",
+            mqtt_config.host,
+            mqtt_config.port,
+        )
 
         client_id_suffix = os.getenv("MQTT_CLIENT_SUFFIX", "")
         client_id = f"grobro-ha{('-' + client_id_suffix) if client_id_suffix else ''}"
@@ -416,7 +420,7 @@ class Client:
         LOG.debug("Connected to HA MQTT server with result code %s", reason_code)
         self.__recover_after_home_assistant_restart(client)
         LOG.info(
-            "Home Assistant MQTT connection established; GroBro command state synchronized"
+            "Connected to Home Assistant; controls and device states are ready"
         )
 
     def __on_message(self, client, userdata, msg: mqtt.MQTTMessage):
@@ -429,7 +433,7 @@ class Client:
             if payload == "online":
                 self.__recover_after_home_assistant_restart(client)
                 LOG.info(
-                    "Home Assistant online signal received; GroBro command state recovered"
+                    "Home Assistant restarted; Better GroBro controls were restored"
                 )
             return
 
@@ -630,7 +634,10 @@ class Client:
 
     def __reset_device_timer(self, device_id: str):
         def set_device_unavailable(d_id: str):
-            LOG.warning("Device %s timed out. Mark it as unavailable.", d_id)
+            LOG.warning(
+                "%s has stopped sending data; Home Assistant values are now unavailable",
+                _device_label(d_id),
+            )
             self.__publish_availability(d_id, False)
 
         if device_id in self._device_timers:
@@ -669,7 +676,10 @@ class Client:
 
         if pv > 0:
             if abs(pv - (p1 + p2 + p3 + p4)) < 10 and (p3 > 0 or p4 > 0):
-                LOG.info("Detected NEO 4-PV-input inverter: %s (Ppv=%s, sum4=%s)", device_id, pv, p1 + p2 + p3 + p4)
+                LOG.info(
+                    "%s: detected four PV inputs",
+                    _device_label(device_id),
+                )
                 self._neo_pv_count[device_id] = 4
                 return
             if abs(pv - (p1 + p2)) < 10:
@@ -679,7 +689,10 @@ class Client:
     def __publish_device_discovery(self, device_id: str, effective_max_bat: int | None = None):
         known_registers = get_known_registers(device_id)
         if not known_registers:
-            LOG.info("Unable to publish unknown device type: %s", device_id)
+            LOG.info(
+                "Home Assistant setup skipped for unrecognized Growatt device %s",
+                device_id,
+            )
             return
         if effective_max_bat is None:
             effective_max_bat = _resolve_max_bat(device_id)
@@ -889,7 +902,10 @@ class Client:
             self._publish_discovery_message(f"{HA_BASE_TOPIC}/grobro/{device_id}/sw_version", device_id, retain=True)
             return
 
-        LOG.info("Publishing updated discovery for %s", device_id)
+        LOG.info(
+            "Home Assistant: updating entities for %s",
+            _device_label(device_id),
+        )
         self._publish_discovery_message(topic, "", retain=True)  # force HA to refresh
         self._publish_discovery_message(topic, payload_str, retain=True)
         self._discovery_payload_cache[device_id] = payload_str
@@ -935,14 +951,20 @@ class Client:
         if not config:
             config = model.DeviceConfig.from_file(config_path)
             self._config_cache[device_id] = config
-            LOG.info(f"Loaded cached config for {device_id} from file (fallback)")
+            LOG.info(
+                "%s: restored saved device information",
+                _device_label(device_id),
+            )
 
         # Fallback 2: save minimal config if it was neither in cache nor on disk
         if not config:
             config = model.DeviceConfig(serial_number=device_id)
             config.to_file(config_path)
             self._config_cache[device_id] = config
-            LOG.info(f"Saved minimal config for new device: {config}")
+            LOG.info(
+                "%s: created initial device information",
+                _device_label(device_id),
+            )
 
         # Device Info for HA
         device_info: dict = {
@@ -1018,7 +1040,7 @@ class Client:
                 return
 
             LOG.info(
-                "%s: no response to Better GroBro config request %s; continuing",
+                "%s did not answer the Better GroBro request for %s; continuing with the next setting",
                 _device_label(device_id),
                 _config_register_label(device_id, register_no),
             )
