@@ -750,11 +750,15 @@ def start_battery_ingress_server(port: int = INGRESS_PORT) -> ThreadingHTTPServe
     import threading
 
     server = BoundedIngressServer(("0.0.0.0", port), BatteryIngressHandler)
-    thread = threading.Thread(
-        target=server.serve_forever,
-        name="battery-ingress",
-        daemon=True,
-    )
-    thread.start()
+    try:
+        thread = threading.Thread(
+            target=server.serve_forever,
+            name="battery-ingress",
+            daemon=True,
+        )
+        thread.start()
+    except Exception:
+        server.server_close()
+        raise
     LOG.info("Battery assignment page is ready")
     return server

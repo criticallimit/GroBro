@@ -403,3 +403,18 @@ def test_deeply_nested_persistence_is_recoverable(tmp_path, monkeypatch, kind):
                   "manual": batteries._load_manual_positions,
                   "detected": batteries._load_detected_serials}[kind]
         assert loader() == {}
+
+
+@pytest.mark.parametrize("failure", ["construct", "start"])
+@pytest.mark.parametrize("error", [RuntimeError, OSError])
+def test_ingress_thread_failure_closes_bound_server_socket(failure, error):
+    from grobro.ha import battery_ingress as ingress
+    server = ingress.BoundedIngressServer(("127.0.0.1", 0), ingress.BatteryIngressHandler)
+    target = "threading.Thread" if failure == "construct" else "threading.Thread.start"
+    try:
+        with patch.object(ingress, "BoundedIngressServer", return_value=server), patch(target, side_effect=error("threads unavailable")):
+            with pytest.raises(error):
+                ingress.start_battery_ingress_server(0)
+        assert server.socket.fileno() == -1
+    finally:
+        server.server_close()
