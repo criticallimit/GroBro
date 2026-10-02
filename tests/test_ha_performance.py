@@ -9,6 +9,7 @@ from grobro.ha.performance import (
     _should_publish_state,
     _should_publish_holding_state,
     _should_serialize_state,
+    install_ha_performance_hook,
 )
 from grobro.model.device_family import DEVICE_FAMILIES
 
@@ -286,3 +287,12 @@ def test_holding_state_cache_is_cleared_with_reconnect_cache():
     _clear_state_publish_cache(client)
 
     assert _should_publish_holding_state(client, "QMNTEST", "inverter_power", "ON") is True
+
+
+def test_performance_hook_is_compatibility_noop():
+    original_input = ha_client.Client.publish_input_register
+    original_holding = ha_client.Client.publish_holding_register_input
+
+    assert install_ha_performance_hook() is None
+    assert ha_client.Client.publish_input_register is original_input
+    assert ha_client.Client.publish_holding_register_input is original_holding
