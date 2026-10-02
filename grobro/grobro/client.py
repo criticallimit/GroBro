@@ -805,7 +805,8 @@ class Client:
                     self._forward_pending.pop(key, None)
                     self._forward_overflow_warned.discard(key)
                     return
-                topic, payload, qos, retain = queue[0]
+                pending = queue[0]
+                topic, payload, qos, retain = pending
 
             result = client.publish(
                 topic,
@@ -835,7 +836,9 @@ class Client:
 
             with self._forward_pending_lock:
                 queue = self._forward_pending.get(key)
-                if queue:
+                # Overflow may already have removed this in-flight entry.
+                # Never acknowledge its still-unsent successor.
+                if queue and queue[0] is pending:
                     queue.popleft()
 
     def __publish_to_growatt_server(

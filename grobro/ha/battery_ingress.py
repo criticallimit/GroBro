@@ -594,11 +594,19 @@ class BatteryIngressHandler(BaseHTTPRequestHandler):
         if content_length <= 0 or content_length > 65536:
             self._send_json({"error": "Ungültige Anfragegröße"}, HTTPStatus.BAD_REQUEST)
             return None
+        previous_timeout = self.connection.gettimeout()
+        self.connection.settimeout(30)
         try:
             payload = json.loads(self.rfile.read(content_length))
-        except (json.JSONDecodeError, UnicodeDecodeError):
+        except TimeoutError:
+            self.close_connection = True
+            self._send_json({"error": "Ungültige Anfrage"}, HTTPStatus.REQUEST_TIMEOUT)
+            return None
+        except (json.JSONDecodeError, UnicodeDecodeError, RecursionError):
             self._send_json({"error": "Ungültiges JSON"}, HTTPStatus.BAD_REQUEST)
             return None
+        finally:
+            self.connection.settimeout(previous_timeout)
         if not isinstance(payload, dict):
             self._send_json({"error": "Ungültige Anfrage"}, HTTPStatus.BAD_REQUEST)
             return None

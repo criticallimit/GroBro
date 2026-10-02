@@ -83,3 +83,27 @@ def restore_config_cache_by_filename(client) -> None:
         if config is not None:
             client._config_cache[mqtt_device_id] = config
             observe_device(mqtt_device_id)
+
+
+def load_persisted_config(client, path: str):
+    """Reuse parsed metadata while detecting external edits and atomic replaces."""
+    absolute = os.path.abspath(path)
+    try:
+        stat = os.stat(absolute)
+    except OSError:
+        # Missing/unreadable files must remain retryable.
+        getattr(client, "_persisted_config_snapshots", {}).pop(absolute, None)
+        return ha_client_module.model.DeviceConfig.from_file(path)
+    signature = (stat.st_mtime_ns, stat.st_ctime_ns, stat.st_size, stat.st_ino)
+    snapshots = getattr(client, "_persisted_config_snapshots", None)
+    if snapshots is None:
+        snapshots = client._persisted_config_snapshots = {}
+    cached = snapshots.get(absolute)
+    if cached is not None and cached[0] == signature:
+        return cached[1]
+    config = ha_client_module.model.DeviceConfig.from_file(path)
+    if config is not None:
+        snapshots[absolute] = (signature, config)
+    else:
+        snapshots.pop(absolute, None)
+    return config
