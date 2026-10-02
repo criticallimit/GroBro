@@ -226,7 +226,8 @@ def ha_client(mock_mqtt):
 class TestClientLifecycle:
     def test_init(self, ha_client):
         assert ha_client._client is not None
-        ha_client._client.connect.assert_called_once_with("localhost", 1883, 60)
+        ha_client._client.connect_async.assert_called_once_with("localhost", 1883, 60)
+        ha_client._client.connect.assert_not_called()
         # Subscriptions are intentionally installed by on_connect so they are
         # renewed after every broker/Home Assistant restart.
         ha_client._client.subscribe.assert_not_called()

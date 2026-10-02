@@ -60,3 +60,17 @@ def test_config_packet_builders_reject_long_device_ids():
 def test_config_write_rejects_non_ascii_values():
     with pytest.raises(UnicodeEncodeError):
         build_config_write_packet("0PVPTEST", 31, "ä")
+
+
+def test_config_write_largest_packet_has_consistent_length():
+    value = "x" * (0xFFFF - 40)
+    raw = _decode_wire_packet(build_config_write_packet("0PVPTEST", 31, value))
+    assert len(raw) - 6 == 0xFFFF
+    assert struct.unpack_from(">H", raw, 4)[0] == 0xFFFF
+    assert raw[46:] == value.encode("ascii")
+
+
+@pytest.mark.parametrize("length", [0xFFFF - 39, 0xFFFF - 4, 0xFFFF])
+def test_config_write_rejects_values_exceeding_full_packet_length(length):
+    with pytest.raises(ValueError, match="too large"):
+        build_config_write_packet("0PVPTEST", 31, "x" * length)

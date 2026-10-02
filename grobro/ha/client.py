@@ -21,8 +21,13 @@ from grobro.model.modbus_message import GrowattModbusFunction
 from grobro.model.modbus_function import (
     GrowattModbusFunctionSingle,
 )
+from grobro.ha.discovery_payload import build_discovery_payload
+from grobro.ha.register_helpers import (
+    _get_bat_number as _get_bat_number,
+    iter_command_registers as iter_command_registers,
+)
 from grobro.ha.localization import runtime_language
-from grobro.model.mqtt_config import publish_succeeded
+from grobro.model.mqtt_config import publish_succeeded, subscription_rejected
 from grobro.ha.timer_runtime import runtime_lock, guard_runtime
 
 HA_BASE_TOPIC = os.getenv("HA_BASE_TOPIC", "homeassistant")
@@ -146,66 +151,6 @@ def make_modbus_command(device_id: str, func: GrowattModbusFunction, register_no
     )
 
 
-def _get_bat_number(name: str) -> Optional[int]:
-    if name.startswith("battery"):
-        rest = name[7:]
-        digits = ""
-        for c in rest:
-            if c.isdigit():
-                digits += c
-            else:
-                break
-        if digits:
-            return int(digits)
-    elif name.startswith("bat"):
-        rest = name[3:]
-        if rest.startswith("_"):
-            rest = rest[1:]
-        digits = ""
-        for c in rest:
-            if c.isdigit():
-                digits += c
-            else:
-                break
-        if digits:
-            return int(digits)
-    elif name.startswith(("maxcvbat", "mincvbat")):
-        prefix = "maxcvbat" if name.startswith("maxcvbat") else "mincvbat"
-        rest = name[len(prefix):]
-        digits = ""
-        for c in rest:
-            if c.isdigit():
-                digits += c
-            else:
-                break
-        if digits:
-            return int(digits)
-    return None
-
-
-def iter_command_registers(known_registers: GroBroRegisters):
-    # Modbus holding registers
-    for name, reg in known_registers.holding_registers.items():
-        yield {
-            "name": name,
-            "ha": reg.homeassistant,
-            "topic_root": reg.homeassistant.type,
-            "cmd_id": name,
-            "state_id": name,
-            "is_config": False,
-        }
-
-    # Config registers
-    for name, reg in known_registers.config_registers.items():
-        yield {
-            "name": name,
-            "ha": reg.homeassistant,
-            "topic_root": "config",
-            "cmd_id": str(reg.growatt.register_no),
-            "state_id": str(reg.growatt.register_no),
-            "is_config": True,
-        }
-
 def _command_subscriptions() -> list[tuple[str, int]]:
     """Return command topics plus the Home Assistant birth/status topic."""
     subscriptions = [
@@ -259,7 +204,9 @@ class Client:
         # later reconnect use exactly the same subscription/bootstrap path.
         self._client.on_message = self.__on_message
         self._client.on_connect = self.__on_connect
-        self._client.connect(mqtt_config.host, mqtt_config.port, 60)
+        self._client.on_connect_fail = self.__on_connect_fail
+        self._client.on_subscribe = self.__on_subscribe
+        self._client.connect_async(mqtt_config.host, mqtt_config.port, 60)
 
         # Restore persisted device configs once, keyed by MQTT device id from
         # the filename. This preserves gateway/device identity across restarts.
@@ -524,10 +471,6 @@ class Client:
 
                 state_payload = dict(state_payload)
                 state_payload["fw_version"] = firmware_version
-                state = HomeAssistantInputRegister(
-                    device_id=device_id,
-                    payload=state_payload,
-                )
 
         stable_logical_max = 1
         if model.uses_noah_protocol(device_id):
@@ -645,6 +588,7 @@ class Client:
 
     @guard_runtime
     def publish_smart_meter(self, device_id: str, payload: str):
+        self.__refresh_device_activity(device_id)
         cache = getattr(self, "_smart_meter_state_cache", None)
         if cache is None:
             cache = self._smart_meter_state_cache = {}
@@ -684,7 +628,7 @@ class Client:
         self.__reset_config_read_state()
 
         if client is not None:
-            client.subscribe(_command_subscriptions())
+            self.__subscribe_commands(client)
 
         # Force the next live telemetry/config packet to rebuild discovery and
         # publish fresh state instead of being suppressed by pre-restart caches.
@@ -698,11 +642,43 @@ class Client:
         from grobro.ha.neo_power_runtime import schedule_known_neo_state_probe
         schedule_known_neo_state_probe(self, delay=0.5)
 
+    def __subscribe_commands(self, client):
+        was_pending = getattr(self, "_command_subscription_pending", False)
+        self._command_subscription_pending = True
+        try:
+            result = client.subscribe(_command_subscriptions())
+        except Exception:
+            if not was_pending:
+                LOG.exception("Could not subscribe to HA commands; will retry on device activity")
+            return
+        self._command_subscription_pending = not publish_succeeded(result)
+        if self._command_subscription_pending and not was_pending:
+            LOG.warning("MQTT rejected HA command subscription; will retry on device activity")
+
+    @guard_runtime
+    def __on_subscribe(self, client, userdata, mid, reason_codes, properties):
+        if subscription_rejected(reason_codes):
+            if not getattr(self, "_subscription_failure_logged", False):
+                LOG.error("Home Assistant MQTT broker rejected a subscription; check broker permissions")
+            self._subscription_failure_logged = True
+        else:
+            self._subscription_failure_logged = False
+
+    def __on_connect_fail(self, client, userdata):
+        if self._stopped or getattr(self, "_connection_failure_logged", False):
+            return
+        self._connection_failure_logged = True
+        LOG.error("Home Assistant MQTT connection failed; automatic reconnection remains active")
+
     def __on_connect(self, client, userdata, flags, reason_code, properties):
         LOG.debug("Connected to HA MQTT server with result code %s", reason_code)
         with runtime_lock(self):
-            if getattr(self, "_stopped", False) or getattr(reason_code, "is_failure", False):
+            if getattr(self, "_stopped", False):
                 return
+            if getattr(reason_code, "is_failure", False):
+                self.__on_connect_fail(client, userdata)
+                return
+            self._connection_failure_logged = False
             self.__publish_bridge_online()
             self.__recover_after_home_assistant_restart(client)
         LOG.info(
@@ -902,13 +878,16 @@ class Client:
                 pos.register_no,
             )
 
-            self.on_command(
-                make_modbus_command(
-                    device_id,
-                    GrowattModbusFunction.READ_SINGLE_REGISTER,
-                    pos.register_no,
+            try:
+                self.on_command(
+                    make_modbus_command(
+                        device_id,
+                        GrowattModbusFunction.READ_SINGLE_REGISTER,
+                        pos.register_no,
+                    )
                 )
-            )
+            except Exception:
+                LOG.exception("Could not request readback for %s setting %s", device_id, cmd_name)
 
             # Some NEO firmware does not reliably answer a standalone read of
             # holding register 0. Mirror the accepted user command as retained
@@ -947,6 +926,8 @@ class Client:
 
     def __refresh_device_activity(self, device_id: str):
         """Record live traffic even when its availability publish fails."""
+        if getattr(self, "_command_subscription_pending", False):
+            self.__subscribe_commands(self._client)
         try:
             self.__publish_availability(device_id, True)
         except Exception:
@@ -1089,198 +1070,13 @@ class Client:
 
         topic = f"{HA_BASE_TOPIC}/device/{device_id}/config"
 
-        # prepare discovery payload
-        payload: dict = {
-            "dev": self.__device_info_from_config(device_id),
-            "availability": [
-                {"topic": f"{HA_BASE_TOPIC}/grobro/{device_id}/availability"},
-                {"topic": self._bridge_topic()},
-            ],
-            "availability_mode": "all",
-            "o": {"name": "grobro", "url": "https://github.com/robertzaage/GroBro"},
-            "cmps": {},
-        }
-
-        # Commands (Modbus + Config)
-        for entry in iter_command_registers(known_registers):
-            ha = entry["ha"]
-            if not ha.publish:
-                continue
-
-            # slot filtering applies only to modbus
-            if not entry["is_config"] and entry["name"].startswith("slot"):
-                try:
-                    if int(entry["name"][4]) > MAX_SLOTS:
-                        continue
-                except ValueError:
-                    continue
-
-            unique_id = f"grobro_{device_id}_cmd_{entry['name']}"
-            platform = ha.type
-
-            ha_data = ha.model_dump(exclude_none=True)
-
-            # Home Assistant erwartet bei Select eine Liste, kein Dict
-            if platform == "select":
-                options = ha_data.get("options")
-                if isinstance(options, dict):
-                    ha_data["options"] = list(options.values())
-
-            component = {
-                "platform": platform,
-                "name": ha.name,
-                "unique_id": unique_id,
-                "state_topic": (
-                    f"{HA_BASE_TOPIC}/{entry['topic_root']}/grobro/"
-                    f"{device_id}/{entry['state_id']}/get"
-                ),
-                **ha_data,
-            }
-            if platform != "sensor":
-                component["command_topic"] = (
-                    f"{HA_BASE_TOPIC}/{entry['topic_root']}/grobro/"
-                    f"{device_id}/{entry['cmd_id']}/set"
-                )
-            payload["cmps"][unique_id] = component
-        # Config command: Restart Datalogger (Register 32 / Value 1)
-        restart_uid = f"grobro_{device_id}_restart_datalogger"
-        payload["cmps"][restart_uid] = {
-            "platform": "button",
-            "name": "Restart Datalogger",
-            "command_topic": f"{HA_BASE_TOPIC}/config/grobro/{device_id}/32/set",
-            "payload_press": "1",
-            "icon": "mdi:restart",
-            "unique_id": restart_uid
-        }
-
-        # Config command: Sync Time (register 31 / Value "%Y-%m-%d %H:%M:%S")
-        time_sync_uid = f"grobro_{device_id}_sync_time"
-        payload["cmps"][time_sync_uid] = {
-            "platform": "button",
-            "name": "Sync Time",
-            "icon": "mdi:clock-outline",
-            "command_topic": f"{HA_BASE_TOPIC}/config/grobro/{device_id}/31/set",
-            "unique_id": time_sync_uid
-        }
-
-        # Read-All Button
-        payload["cmps"][f"grobro_{device_id}_cmd_read_all"] = {
-            "command_topic": f"{HA_BASE_TOPIC}/button/grobro/{device_id}/read_all/read",
-            "platform": "button",
-            "unique_id": f"grobro_{device_id}_cmd_read_all",
-            "name": "Read All Values",
-        }
-
-        # States
-        for state_name, state in known_registers.input_registers.items():
-            if not state.homeassistant.publish:
-                if not (self._neo_pv_count.get(device_id) == 4 and state_name in ("Vpv3", "Ipv3", "Ppv3", "Vpv4", "Ipv4", "Ppv4", "Epv3_today", "Epv3_total")):
-                    continue
-            bat_num = _get_bat_number(state_name)
-            if bat_num is not None and bat_num > effective_max_bat:
-                continue
-            if "_ser_part_" in state_name and state_name.startswith("bat"):
-                continue
-            unique_id = f"grobro_{device_id}_{state_name}"
-            payload["cmps"][unique_id] = {
-                "platform": "sensor",
-                "name": state.homeassistant.name,
-                "state_topic": f"{HA_BASE_TOPIC}/grobro/{device_id}/state",
-                "value_template": f"{{{{ value_json['{state_name}'] }}}}",
-                "unique_id": unique_id,
-                "device_class": state.homeassistant.device_class,
-                "state_class": state.homeassistant.state_class,
-                "unit_of_measurement": state.homeassistant.unit_of_measurement,
-                "icon": state.homeassistant.icon,
-                **(
-                    {
-                        "suggested_display_precision":
-                        state.homeassistant.suggested_display_precision
-                    }
-                    if state.homeassistant.suggested_display_precision is not None
-                    else {}
-                ),
-            }
-
-        # Combined battery serial entities remain a NOAH-only UI feature.
-        # NEXA serial fragments are decoded internally for stable slot mapping.
-        has_bat_ser_parts = (
-            model.is_family(device_id, "noah")
-            and any(
-                name.startswith("bat") and "_ser_part_" in name
-                for name in known_registers.input_registers
-            )
+        payload = build_discovery_payload(
+            device_id, known_registers, self.__device_info_from_config(device_id),
+            base_topic=HA_BASE_TOPIC, bridge_topic=self._bridge_topic(),
+            effective_max_bat=effective_max_bat, pv_count=self._neo_pv_count.get(device_id),
+            max_slots=MAX_SLOTS, device_timeout=DEVICE_TIMEOUT,
+            availability_sensor=AVAILABILITY_SENSOR,
         )
-        if has_bat_ser_parts:
-            for bat_num in range(2, 5):
-                if bat_num > effective_max_bat:
-                    continue
-                combined_name = f"bat{bat_num}_serial"
-                uid = f"grobro_{device_id}_{combined_name}"
-                payload["cmps"][uid] = {
-                    "platform": "sensor",
-                    "name": f"Bat{bat_num} Serial",
-                    "state_topic": f"{HA_BASE_TOPIC}/grobro/{device_id}/state",
-                    "value_template": f"{{{{ value_json['{combined_name}'] }}}}",
-                    "unique_id": uid,
-                    "icon": "mdi:identifier",
-                }
-                
-        # Combined firmware version (NOAH = 3 parts, NEXA = 4 parts)
-        fw_version_parts = sorted(
-            name
-            for name in known_registers.input_registers
-            if name.startswith("fw_version_part_")
-        )
-
-        if fw_version_parts:
-            combined_name = "fw_version"
-            firmware_unique_id = f"grobro_{device_id}_{combined_name}"
-
-            value_template = ".".join(
-                f"{{{{ value_json['{part}'] }}}}"
-                for part in fw_version_parts
-            )
-
-            payload["cmps"][firmware_unique_id] = {
-                "platform": "sensor",
-                "name": "Firmware Version",
-                "state_topic": f"{HA_BASE_TOPIC}/grobro/{device_id}/state",
-                "value_template": value_template,
-                "unique_id": firmware_unique_id,
-                "icon": "mdi:information",
-            }
-
-        # Serial Number Entity
-        serial_unique_id = f"grobro_{device_id}_serial"
-        payload["cmps"][serial_unique_id] = {
-            "platform": "sensor",
-            "name": "Device SN",
-            "state_topic": f"{HA_BASE_TOPIC}/grobro/{device_id}/serial",
-            "unique_id": serial_unique_id,
-            "icon": "mdi:identifier",
-        }
-        
-        # Device Type Entity
-        type_unique_id = f"grobro_{device_id}_type"
-        payload["cmps"][type_unique_id] = {
-            "platform": "sensor",
-            "name": "Device Type",
-            "state_topic": f"{HA_BASE_TOPIC}/grobro/{device_id}/type",
-            "unique_id": type_unique_id,
-            "icon": "mdi:chip",
-        }
-
-        # Online Entity
-        if DEVICE_TIMEOUT > 0 and AVAILABILITY_SENSOR:
-            online_unique_id = f"grobro_{device_id}_online"
-            payload["cmps"][online_unique_id] = {
-                "platform": "binary_sensor",
-                "name": "Online",
-                "state_topic": f"{HA_BASE_TOPIC}/grobro/{device_id}/online",
-                "device_class": "connectivity",
-                "unique_id": online_unique_id,
-            }
 
         payload_str = json.dumps(payload, sort_keys=True, separators=(",", ":"))
 
@@ -1323,30 +1119,31 @@ class Client:
         if device_id in self._migration_done:
             return
 
+        migration_payload = json.dumps({"migrate_discovery": True})
         results = []
         old_entities = [("set_wirk", "number")]
         for e_name, e_type in old_entities:
             results.append(self._publish_discovery_message(
                 f"{HA_BASE_TOPIC}/{e_type}/grobro/{device_id}_{e_name}/config",
-                json.dumps({"migrate_discovery": True}),
+                migration_payload,
                 retain=True,
             ))
         for cmd_name, cmd in known_registers.holding_registers.items():
             cmd_type = cmd.homeassistant.type
             results.append(self._publish_discovery_message(
                 f"{HA_BASE_TOPIC}/{cmd_type}/grobro/{device_id}_{cmd_name}/config",
-                json.dumps({"migrate_discovery": True}),
+                migration_payload,
                 retain=True,
             ))
             results.append(self._publish_discovery_message(
                 f"{HA_BASE_TOPIC}/{cmd_type}/grobro/{device_id}_{cmd_name}_read/config",
-                json.dumps({"migrate_discovery": True}),
+                migration_payload,
                 retain=True,
             ))
         for state_name in known_registers.input_registers:
             results.append(self._publish_discovery_message(
                 f"{HA_BASE_TOPIC}/sensor/grobro/{device_id}_{state_name}/config",
-                json.dumps({"migrate_discovery": True}),
+                migration_payload,
                 retain=True,
             ))
 

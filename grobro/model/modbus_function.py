@@ -3,7 +3,11 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from grobro.model.modbus_message import GrowattModbusFunction, MODBUS_FUNCTION_VALUES
+from grobro.model.modbus_message import (
+    GrowattModbusFunction,
+    MODBUS_FUNCTION_VALUES,
+    encode_modbus_device_id,
+)
 
 _MODBUS_COMMAND = struct.Struct(">HHHBB30sHH")
 MODBUS_COMMAND_SIZE = _MODBUS_COMMAND.size
@@ -89,7 +93,7 @@ class GrowattModbusFunctionMultiple(BaseModel):
             36 + len(self.values),
             1,
             self.function,
-            self.device_id.encode("ascii").ljust(30, b"\x00"),
+            encode_modbus_device_id(self.device_id),
             self.start,
             self.end,
         )
@@ -142,7 +146,7 @@ class GrowattModbusFunctionSingle(BaseModel):
             36,
             1,
             self.function,
-            self.device_id.encode("ascii").ljust(30, b"\x00"),
+            encode_modbus_device_id(self.device_id),
             self.register_no,
             self.value,
         )

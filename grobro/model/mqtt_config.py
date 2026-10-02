@@ -6,6 +6,15 @@ from pydantic import BaseModel
 LOG = logging.getLogger(__name__)
 
 
+def subscription_rejected(reason_codes) -> bool:
+    """Recognize MQTT 3 failure codes and Paho MQTT 5 ReasonCode objects."""
+    return any(
+        getattr(reason, "is_failure", False) is True
+        or (isinstance(reason, int) and reason >= 128)
+        for reason in reason_codes
+    )
+
+
 def publish_succeeded(result) -> bool:
     """Whether Paho accepted a publish locally (not a delivery guarantee)."""
     status = getattr(result, "rc", None)

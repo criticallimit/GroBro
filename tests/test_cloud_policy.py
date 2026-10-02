@@ -21,6 +21,14 @@ def test_true_enables_all_devices():
     assert policy.allows_device("QMNTEST") is True
 
 
+@pytest.mark.parametrize("value", [",", ", ,", " , , "])
+def test_empty_device_allowlist_does_not_enable_all_devices(value):
+    policy = CloudForwardingPolicy.parse(value)
+    assert not policy.enabled
+    assert not policy.forwards_all_devices
+    assert not policy.allows_device("QMNTEST")
+
+
 def test_comma_separated_value_is_an_allowlist():
     policy = CloudForwardingPolicy.parse("0PVPTEST, QMNTEST ,, ")
     assert policy.enabled is True

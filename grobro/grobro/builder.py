@@ -37,6 +37,8 @@ def _config_device_field(device_id: str) -> bytes:
 def _finalize_config_packet(message_type: int, device_id: str, payload: bytes) -> bytes:
     """Build, scramble and CRC-wrap one Growatt configuration packet."""
     message_length = len(payload) + 18
+    if message_length > 0xFFFF:
+        raise ValueError("config packet is too large")
     raw = (
         _CONFIG_HEADER
         + struct.pack(">H", message_length)
@@ -60,7 +62,7 @@ def build_config_write_packet(device_id: str, register_no: int, value: str) -> b
     if not 0 <= int(register_no) <= 0xFFFF:
         raise ValueError("config register number must fit uint16")
     value_bytes = str(value).encode("ascii")
-    if len(value_bytes) > 0xFFFF - 4:
+    if len(value_bytes) > 0xFFFF - 40:
         raise ValueError("config value is too large")
 
     tlv = (

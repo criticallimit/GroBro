@@ -621,7 +621,7 @@ def runtime_language() -> str:
     if now - float(_LANGUAGE_CACHE["checked_at"]) < 60:
         return str(_LANGUAGE_CACHE["value"])
 
-    language = normalize_language(get_home_assistant_language("en"))
+    language = normalize_language(get_home_assistant_language(str(_LANGUAGE_CACHE["value"])))
     _LANGUAGE_CACHE["value"] = language
     _LANGUAGE_CACHE["checked_at"] = now
     return language

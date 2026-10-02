@@ -8,3 +8,8 @@
 !config.yaml
 !requirements.txt
 !run.sh
+
+# Local verification artifacts must not enter the runtime image.
+**/__pycache__
+**/*.pyc
+**/*.pyo

@@ -38,11 +38,19 @@ jobs:
 
       - name: Set image tags
         id: vars
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          PRERELEASE: ${{ github.event.release.prerelease }}
         run: |
-          if [[ "${{ github.event_name }}" == "release" ]]; then
-            echo "TAGS=ghcr.io/criticallimit/grobro:latest,ghcr.io/criticallimit/grobro:${{ github.event.release.tag_name }}" >> $GITHUB_ENV
+          if [[ "$EVENT_NAME" == "release" ]]; then
+            TAGS="ghcr.io/criticallimit/grobro:$RELEASE_TAG"
+            if [[ "$PRERELEASE" != "true" ]]; then
+              TAGS="ghcr.io/criticallimit/grobro:latest,$TAGS"
+            fi
+            echo "TAGS=$TAGS" >> "$GITHUB_ENV"
           else
-            echo "TAGS=ghcr.io/criticallimit/grobro:dev" >> $GITHUB_ENV
+            echo "TAGS=ghcr.io/criticallimit/grobro:dev" >> "$GITHUB_ENV"
           fi
 
       - name: Build and push to GHCR

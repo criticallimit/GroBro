@@ -87,7 +87,8 @@ class TestClientLifecycle:
             mc.return_value = instance
             c = Client(cfg, cfg)
             assert c._client is instance
-            instance.connect.assert_called_once_with("h", 1883, 60)
+            instance.connect_async.assert_called_once_with("h", 1883, 60)
+            instance.connect.assert_not_called()
 
     def test_init_with_auth_tls(self):
         cfg = MQTTConfig(host="h", port=8883, username="u", password="p", use_tls=True)

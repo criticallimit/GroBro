@@ -229,7 +229,7 @@ _INDEX_HTML = r"""<!doctype html>
 
 <script>
 const AUTO="__auto__", EMPTY="__empty__";
-let batteryState=null, configState=null, currentLang="de", logTimer=null, logFollowTail=true, logLastText=null;
+let batteryState=null, configState=null, configBaseline=null, currentLang="de", logTimer=null, logFollowTail=true, logLastText=null;
 const TEXTS={
   en:{
     "Konfiguration und Batterie-Zuordnung":"Configuration and battery assignment","Zurück zum Add-on":"Back to add-on",
@@ -476,16 +476,22 @@ document.getElementById("cfg-MAX_BAT").addEventListener("change",renderBatteries
 function collectConfig(){
   const out={};for(const key of CONFIG_KEYS){const el=document.getElementById("cfg-"+key);if(!el)continue;if(BOOL_KEYS.has(key))out[key]=el.checked;else if(INT_KEYS.has(key))out[key]=Number(el.value);else out[key]=el.value;}return out;
 }
+function collectConfigChanges(){
+  if(configBaseline===null)throw new Error("Konfiguration konnte nicht geladen werden");
+  const changes={};for(const [key,value] of Object.entries(collectConfig()))if(value!==configBaseline[key])changes[key]=value;
+  return changes;
+}
 async function loadConfig(){
   const r=await fetch(apiUrl("api/config"),{cache:"no-store"});const out=await r.json();if(!r.ok)throw new Error(out.error||"Konfiguration konnte nicht geladen werden");
   configState=out;
   applyLanguage(out.language || selectedHomeAssistantLanguage());
   fillConfig(out.options||{});
+  configBaseline=collectConfig();
   document.getElementById("summary-version").textContent=out.version||"–";
   document.getElementById("summary-state").textContent=localizedAddonState(out.state);
 }
 async function saveConfig(){
-  const r=await fetch(apiUrl("api/config"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({options:collectConfig()})});
+  const r=await fetch(apiUrl("api/config"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({options:collectConfigChanges()})});
   const out=await r.json();if(!r.ok){showMessage("config-message",out.error||(l({de:"Speichern fehlgeschlagen",fr:"Échec de l'enregistrement",es:"Error al guardar",nl:"Opslaan mislukt",en:"Save failed"})),"error");return;}
   showMessage("config-message",l({de:"Konfiguration gespeichert. Better GroBro wird neu gestartet…",fr:"Configuration enregistrée. Better GroBro redémarre…",es:"Configuración guardada. Better GroBro se reinicia…",nl:"Configuratie opgeslagen. Better GroBro wordt herstart…",en:"Configuration saved. Better GroBro is restarting…"}));setTimeout(goBackToAddon, 900);
 }

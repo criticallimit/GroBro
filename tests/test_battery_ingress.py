@@ -315,7 +315,7 @@ def test_config_save_always_restarts_addon():
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=3) as response:
             html = response.read().decode()
 
-        assert 'body:JSON.stringify({options:collectConfig()})' in html
+        assert 'body:JSON.stringify({options:collectConfigChanges()})' in html
         assert 'saveConfig(false)' not in html
         assert 'saveConfig(true)' not in html
         assert 'schedule_restart()' not in html

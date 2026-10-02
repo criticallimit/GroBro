@@ -19,6 +19,14 @@ MIN_BLOCK_SIZE = 6  # start + end + one 16-bit register
 TRAILER_SIZE = 2  # Growatt packets commonly carry a two-byte protocol trailer/CRC
 
 
+def encode_modbus_device_id(device_id: str) -> bytes:
+    """Encode the fixed serial field without silently changing its identity."""
+    encoded = device_id.encode("ascii")
+    if len(encoded) > 30:
+        raise ValueError("Growatt Modbus device id exceeds 30 ASCII bytes")
+    return encoded.ljust(30, b"\x00")
+
+
 class GrowattModbusBlock(BaseModel):
     """
     Represents a block of modbus registers.
@@ -146,7 +154,7 @@ class GrowattMetadata(BaseModel):
             raise ValueError("metadata timestamp is required when building a message")
 
         return _METADATA.pack(
-            self.device_sn.encode("ascii").ljust(30, b"\x00"),
+            encode_modbus_device_id(self.device_sn),
             self.timestamp.year - 2000,
             self.timestamp.month,
             self.timestamp.day,
@@ -344,10 +352,12 @@ class GrowattModbusMessage(BaseModel):
             self.msg_len,
             1,
             self.function,
-            self.device_id.encode("ascii").ljust(30, b"\x00"),
+            encode_modbus_device_id(self.device_id),
         )
         if self.metadata:
             result += self.metadata.build_grobro()
         for block in self.register_blocks:
             result += block.build_grobro()
+        if self.write_ack:
+            result += self.write_ack.build_grobro()
         return result

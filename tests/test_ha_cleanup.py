@@ -345,7 +345,7 @@ def test_client_init_immediately_populates_inventory_from_persisted_config(
         def tls_insecure_set(self, *args, **kwargs):
             pass
 
-        def connect(self, *args, **kwargs):
+        def connect_async(self, *args, **kwargs):
             pass
 
     monkeypatch.setattr(ha_client_module.mqtt, "Client", FakeMqttClient)

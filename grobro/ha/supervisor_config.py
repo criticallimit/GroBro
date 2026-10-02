@@ -13,6 +13,7 @@ import urllib.error
 import urllib.request
 
 _SUPERVISOR_BASE = "http://supervisor"
+_OPTIONS_LOCK = threading.Lock()
 _PROCESS_LOG_MARKER = f"BETTER_GROBRO_SESSION_{uuid.uuid4().hex}"
 _PROCESS_STARTED_AT = datetime.now().astimezone().isoformat(timespec="seconds")
 _ALLOWED_OPTIONS = {
@@ -259,6 +260,15 @@ def normalize_options(raw: dict) -> dict:
         text = "" if value is None else str(value)
         if key not in {"SOURCE_MQTT_PASS", "TARGET_MQTT_PASS"}:
             text = text.strip()
+        if key in {"SOURCE_MQTT_HOST", "TARGET_MQTT_HOST"} and not text:
+            raise SupervisorConfigError(f"{key}: MQTT-Host darf nicht leer sein")
+        if key == "HA_BASE_TOPIC":
+            if any(char in text for char in ("+", "#", "\x00")):
+                raise SupervisorConfigError("HA_BASE_TOPIC enthält ungültige MQTT-Zeichen")
+            try:
+                text.encode("utf-8")
+            except UnicodeEncodeError as exc:
+                raise SupervisorConfigError("HA_BASE_TOPIC ist kein gültiger UTF-8-Text") from exc
         if key == "LOG_LEVEL":
             text = text.upper()
             if text not in {"ERROR", "INFO", "DEBUG"}:
@@ -288,19 +298,25 @@ def get_home_assistant_language(default: str = "en") -> str:
     return language or default
 
 
+def _addon_info() -> dict:
+    info = _supervisor_request("GET", "/addons/self/info")
+    if not isinstance(info, dict) or not isinstance(info.get("options"), dict):
+        raise SupervisorConfigError("Ungültige Supervisor-Antwort")
+    return info
+
+
 def get_addon_options() -> dict:
     """Return current official Home Assistant add-on options with defaults."""
-    info = _supervisor_request("GET", "/addons/self/info") or {}
-    raw_options = info.get("options", {}) if isinstance(info, dict) else {}
+    info = _addon_info()
+    raw_options = info["options"]
     options = dict(_DEFAULTS)
-    if isinstance(raw_options, dict):
-        options.update(
-            {
-                key: value
-                for key, value in raw_options.items()
-                if key not in _RETIRED_OPTIONS
-            }
-        )
+    options.update(
+        {
+            key: value
+            for key, value in raw_options.items()
+            if key not in _RETIRED_OPTIONS
+        }
+    )
     try:
         valid_timeout = int(options.get("DEVICE_TIMEOUT", 120) or 0) > 0
     except (TypeError, ValueError, OverflowError):
@@ -309,8 +325,8 @@ def get_addon_options() -> dict:
         options["DEVICE_TIMEOUT"] = 120
     return {
         "options": options,
-        "version": info.get("version") if isinstance(info, dict) else None,
-        "state": info.get("state") if isinstance(info, dict) else None,
+        "version": info.get("version"),
+        "state": info.get("state"),
         "language": get_home_assistant_language(),
     }
 
@@ -318,25 +334,19 @@ def get_addon_options() -> dict:
 def save_addon_options(raw_changes: dict) -> dict:
     """Validate and save changes through the Supervisor options API."""
     changes = normalize_options(raw_changes)
-    info = _supervisor_request("GET", "/addons/self/info") or {}
-    if not isinstance(info, dict):
-        raise SupervisorConfigError("Ungültige Supervisor-Antwort")
-    current = info.get("options", {})
-    if not isinstance(current, dict):
-        current = {}
-
-    merged = {
-        key: value
-        for key, value in current.items()
-        if key not in _RETIRED_OPTIONS
-    }
-    merged.update(changes)
-
-    _supervisor_request(
-        "POST",
-        "/addons/self/options",
-        {"options": merged},
-    )
+    with _OPTIONS_LOCK:
+        current = _addon_info()["options"]
+        merged = {
+            key: value
+            for key, value in current.items()
+            if key not in _RETIRED_OPTIONS
+        }
+        merged.update(changes)
+        _supervisor_request(
+            "POST",
+            "/addons/self/options",
+            {"options": merged},
+        )
     return merged
 
 

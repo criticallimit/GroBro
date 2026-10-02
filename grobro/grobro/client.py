@@ -47,7 +47,7 @@ from grobro.model.growatt_registers import (
 )
 from grobro.model.modbus_function import GrowattModbusFunctionSingle
 from grobro.model.modbus_message import GrowattModbusFunction, GrowattModbusMessage
-from grobro.model.mqtt_config import MQTTConfig, publish_succeeded
+from grobro.model.mqtt_config import MQTTConfig, publish_succeeded, subscription_rejected
 
 
 _DEVICE_ID_RE = re.compile(r"[^A-Za-z0-9]")
@@ -173,6 +173,7 @@ def _current_cloud_policy() -> CloudForwardingPolicy:
 
 
 CLOUD_SHUTDOWN_TIMEOUT = 3.0
+MAX_PENDING_CONFIG_WRITES = 128
 
 @lru_cache(maxsize=16)
 def _cached_cloud_policy(cloud_value, config_filter):
@@ -226,9 +227,11 @@ class Client:
         if grobro_mqtt.use_tls:
             self._client.tls_set(cert_reqs=ssl.CERT_NONE)
             self._client.tls_insecure_set(True)
-        self._client.connect(grobro_mqtt.host, grobro_mqtt.port, 60)
+        self._client.connect_async(grobro_mqtt.host, grobro_mqtt.port, 60)
         self._client.on_message = self.__on_message
         self._client.on_connect = self.__on_connect
+        self._client.on_connect_fail = self.__on_connect_fail
+        self._client.on_subscribe = self.__on_subscribe
         self._forward_mqtt_config = forward_mqtt
         self._forward_clients: dict[str, mqtt.Client] = {}
         self._forward_ready: dict[str, threading.Event] = {}
@@ -251,6 +254,7 @@ class Client:
                     self._remember_gateway(gateway_id, config.serial_number if config else None, persist=False)
         self._smart_meter_state_cache: dict[str, str] = {}
         self._pending_config_writes: dict[str, deque[int]] = {}
+        self._config_ack_tracking_disabled: set[str] = set()
         self._pending_config_lock = threading.Lock()
 
     def start(self):
@@ -311,6 +315,7 @@ class Client:
                 self._forward_overflow_warned.clear()
             with self._pending_config_lock:
                 self._pending_config_writes.clear()
+                self._config_ack_tracking_disabled.clear()
             self._diagnostic_writer.stop()
 
     @diagnostic_scope
@@ -384,7 +389,18 @@ class Client:
         with self._pending_config_lock:
             if self._forward_stopped:
                 return (mqtt.MQTT_ERR_NO_CONN, None)
-            self._pending_config_writes.setdefault(device_id, deque()).append(reservation)
+            if device_id not in self._config_ack_tracking_disabled:
+                pending = self._pending_config_writes.setdefault(device_id, deque())
+                if len(pending) >= MAX_PENDING_CONFIG_WRITES:
+                    # Tracking is only for log labels. Dropping the oldest item
+                    # would wrongly match a delayed, ambiguous ACK to a newer
+                    # write. Keep sending commands, but stop guessing until the
+                    # process restarts; ACKs with explicit registers still log.
+                    self._pending_config_writes.pop(device_id, None)
+                    self._config_ack_tracking_disabled.add(device_id)
+                    LOG.warning("Config ACK tracking limit reached for %s; ambiguous ACKs will use their reported register", device_id)
+                else:
+                    pending.append(reservation)
         accepted = False
         try:
             result = _publish_checked(
@@ -410,7 +426,29 @@ class Client:
                         if not pending:
                             self._pending_config_writes.pop(device_id, None)
 
+    def __on_subscribe(self, client, userdata, mid, reason_codes, properties):
+        if self._forward_stopped:
+            return
+        if subscription_rejected(reason_codes):
+            if not getattr(self, "_subscription_failure_logged", False):
+                LOG.error("Growatt MQTT broker rejected a subscription; check broker permissions")
+            self._subscription_failure_logged = True
+        else:
+            self._subscription_failure_logged = False
+
+    def __on_connect_fail(self, client, userdata):
+        if self._forward_stopped or getattr(self, "_connection_failure_logged", False):
+            return
+        self._connection_failure_logged = True
+        LOG.error("Growatt MQTT connection failed; automatic reconnection remains active")
+
     def __on_connect(self, client, userdata, flags, reason_code, properties):
+        if self._forward_stopped:
+            return
+        if getattr(reason_code, "is_failure", False):
+            self.__on_connect_fail(client, userdata)
+            return
+        self._connection_failure_logged = False
         LOG.debug("Connected to GroBro MQTT server with result code %s", reason_code)
         self._smart_meter_state_cache.clear()
         client.subscribe("c/#")
@@ -594,7 +632,10 @@ class Client:
                             serial_number=cfg["device_id"],
                             **{metadata_field: str(value)},
                         )
-                        self.on_config(cfg["device_id"], metadata_config)
+                        try:
+                            self.on_config(cfg["device_id"], metadata_config)
+                        except Exception as exc:
+                            LOG.warning("Could not update device metadata for %s register %s (%s)", cfg["device_id"], register_no, type(exc).__name__)
 
                     # Preserve live readback topics, but retain only known,
                     # exposed values. Never expose the datalogger password.
@@ -613,10 +654,13 @@ class Client:
                     # The device answered regardless of local MQTT publication.
                     # Advance reads and process the remaining compound entries.
                     if self.on_config_read_response:
-                        self.on_config_read_response(
-                            cfg["device_id"],
-                            register_no,
-                        )
+                        try:
+                            self.on_config_read_response(
+                                cfg["device_id"],
+                                register_no,
+                            )
+                        except Exception as exc:
+                            LOG.warning("Could not advance config reads for %s register %s (%s)", cfg["device_id"], register_no, type(exc).__name__)
                 return
 
             # Config WRITE response (280)
@@ -1030,12 +1074,6 @@ class Client:
                     raise
 
             return self._forward_clients[key]
-
-# Ensure that the dump directory exists
-if DUMP_MESSAGES and not os.path.exists(DUMP_DIR):
-    os.makedirs(DUMP_DIR, exist_ok=True)
-    LOG.info("Dump directory created: %s", DUMP_DIR)
-
 
 def dump_message_binary(topic, payload):
     """Compatibility entrypoint for the centralized raw MQTT JSONL dump."""

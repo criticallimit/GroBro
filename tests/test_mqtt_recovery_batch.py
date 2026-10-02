@@ -40,6 +40,29 @@ def test_one_neo_probe_exception_does_not_skip_other_devices(error):
     assert client._neo_inverter_power_read_requested == {"QMNTEST1", "QMNTEST2"}
 
 
+@pytest.mark.parametrize("failure", [(4, None), (15, None), RuntimeError("offline"), OSError("closed")])
+def test_command_subscription_failure_keeps_recovery_and_retries_on_activity(clients, failure):
+    _, target = clients
+    target._client.subscribe.side_effect = [failure, failure, (0, 1)]
+    target._client.publish.return_value = (0, None)
+    target._last_state_payload["QMNTEST"] = {"Ppv": 0}
+    target._read_all_active.add("QMNTEST")
+    with patch("grobro.ha.neo_power_runtime.schedule_known_neo_state_probe") as probe, patch.object(
+        target, "_Client__reset_device_timer"
+    ):
+        target._Client__recover_after_home_assistant_restart(target._client)
+        assert target._command_subscription_pending
+        assert not target._last_state_payload
+        assert not target._read_all_active
+        probe.assert_called_once()
+        target._Client__refresh_device_activity("QMNTEST")
+        assert target._command_subscription_pending
+        target._Client__refresh_device_activity("QMNTEST")
+        assert not target._command_subscription_pending
+        target._Client__refresh_device_activity("QMNTEST")
+        assert target._client.subscribe.call_count == 3
+
+
 @pytest.mark.parametrize("failure", [(4, None), RuntimeError("network unavailable"), OSError("closed socket")],
                          ids=["return-code", "runtime-error", "socket-error"])
 def test_identical_telemetry_retries_failed_initial_neo_read(clients, monkeypatch, failure):

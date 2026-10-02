@@ -39,6 +39,7 @@ class CloudForwardingPolicy:
             allowlist = frozenset(
                 item.strip() for item in raw.split(",") if item.strip()
             )
+            enabled = bool(allowlist)
 
         block_config = (config_filter_value or "false").strip().lower() == "true"
         return cls(
