@@ -61,14 +61,21 @@ def _device_label(device_id: str) -> str:
     return f"{model.get_device_type_name(device_id)} {device_id}"
 
 
-def _config_register_label(device_id: str, register_no: int) -> str:
-    """Return a stable user-facing config register label."""
+def _config_register_name(device_id: str, register_no: int) -> str | None:
+    """Return the configured human-readable name for a config register."""
     known_registers = _known_registers_for_device(device_id)
     if known_registers:
         for name, reg in known_registers.config_registers.items():
             if reg.growatt.register_no == register_no:
-                display_name = getattr(reg.homeassistant, "name", None) or name
-                return f'"{display_name}" (register {register_no})'
+                return getattr(reg.homeassistant, "name", None) or name
+    return None
+
+
+def _config_register_label(device_id: str, register_no: int) -> str:
+    """Return a stable user-facing config register label."""
+    display_name = _config_register_name(device_id, register_no)
+    if display_name:
+        return f'"{display_name}" (register {register_no})'
     return f'"Unknown setting" (register {register_no})'
 
 
@@ -408,20 +415,24 @@ class Client:
                 ack_device_id = cfg["device_id"]
                 parsed_register = cfg["register_no"]
                 pending = self._pending_config_writes.get(ack_device_id)
-                if pending:
+                if _config_register_name(ack_device_id, parsed_register):
+                    register_no = parsed_register
+                    if pending and parsed_register in pending:
+                        pending.remove(parsed_register)
+                elif pending:
                     register_no = pending.popleft()
-                    if not pending:
-                        self._pending_config_writes.pop(ack_device_id, None)
-                    if parsed_register != register_no:
-                        LOG.debug(
-                            "%s config acknowledgement reported register %s; "
-                            "matched it to the pending Better GroBro write for register %s",
-                            _device_label(ack_device_id),
-                            parsed_register,
-                            register_no,
-                        )
+                    LOG.debug(
+                        "%s config acknowledgement reported unknown register %s; "
+                        "matched it to the pending Better GroBro write for register %s",
+                        _device_label(ack_device_id),
+                        parsed_register,
+                        register_no,
+                    )
                 else:
                     register_no = parsed_register
+
+                if pending is not None and not pending:
+                    self._pending_config_writes.pop(ack_device_id, None)
 
                 LOG.info(
                     "%s -> Better GroBro: setting accepted for %s",
