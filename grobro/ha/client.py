@@ -48,30 +48,36 @@ _LAST_BAT_SERIALS: dict[str, dict[int, str]] = {}
 # ------------------- Helpfunctions -------------------
 
 def _detect_bat_count(payload: dict) -> int:
+    """Return the reported/observed logical battery count without guessing four."""
     bat_cnt = payload.get("bat_cnt")
-    if isinstance(bat_cnt, int) and bat_cnt >= 1:
+    if isinstance(bat_cnt, int) and 1 <= bat_cnt <= 4:
         return bat_cnt
+
+    nexa_count = payload.get("batteryPackageQuantity")
+    if (
+        isinstance(nexa_count, (int, float))
+        and not isinstance(nexa_count, bool)
+        and float(nexa_count).is_integer()
+        and 1 <= int(nexa_count) <= 4
+    ):
+        return int(nexa_count)
+
     count = 1
-    any_found = False
     for bat_num in range(2, 5):
-        key = f"bat{bat_num}_ser_part_1"
-        val = payload.get(key)
-        if val is not None and str(val).strip():
-            count += 1
-            any_found = True
-    if not any_found:
-        return 4
+        value = payload.get(f"bat{bat_num}_ser_part_1")
+        if value is not None and str(value).strip("\x00 "):
+            count = bat_num
     return count
 
 
 def _resolve_max_bat(device_id: str, payload: dict | None = None) -> int:
     if isinstance(MAX_BAT, int):
-        return MAX_BAT
+        return max(1, min(4, MAX_BAT))
     if payload is not None:
-        c = _detect_bat_count(payload)
-        _MAX_BAT_CACHE[device_id] = c
-        return c
-    return _MAX_BAT_CACHE.get(device_id, 4)
+        count = _detect_bat_count(payload)
+        _MAX_BAT_CACHE[device_id] = count
+        return count
+    return _MAX_BAT_CACHE.get(device_id, 1)
 
 
 def get_known_registers(device_id: str) -> Optional[GroBroRegisters]:
@@ -700,6 +706,21 @@ class Client:
                     pos.register_no,
                 )
             )
+
+            # Some NEO firmware does not reliably answer a standalone read of
+            # holding register 0. Mirror the accepted user command as retained
+            # switch state; a later real readback still replaces it.
+            if (
+                cmd_type == "switch"
+                and cmd_name == "inverter_power"
+                and model.is_family(device_id, "neo")
+                and raw_value.upper() in {"ON", "OFF"}
+            ):
+                self._client.publish(
+                    f"{HA_BASE_TOPIC}/switch/grobro/{device_id}/inverter_power/get",
+                    raw_value.upper(),
+                    retain=True,
+                )
 
             return
 
