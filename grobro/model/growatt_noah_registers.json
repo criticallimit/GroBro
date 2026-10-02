@@ -74,6 +74,22 @@
         "icon": "mdi:clock-outline"
       }
     },
+    "restart_datalogger": {
+      "growatt": {
+        "register_no": 32,
+        "data": {
+          "data_type": "INT"
+        }
+      },
+      "homeassistant": {
+        "publish": false,
+        "name": "Restart datalogger",
+        "type": "number",
+        "min": 0,
+        "max": 1,
+        "step": 1
+      }
+    },
     "wifi_signal_strength": {
       "growatt": {
         "register_no": 76,
