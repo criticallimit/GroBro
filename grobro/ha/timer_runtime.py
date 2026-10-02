@@ -3,8 +3,26 @@
 from __future__ import annotations
 
 from threading import Timer
+from contextlib import nullcontext
+from functools import wraps
 
 from grobro.ha import client as ha_client_module
+
+
+def runtime_lock(client):
+    """Share the stop/schedule lock; support older lightweight API callers."""
+    return getattr(client, "_runtime_lock", None) or nullcontext()
+
+
+def guard_runtime(callback):
+    """Serialize runtime callbacks with shutdown, including timer callbacks."""
+    @wraps(callback)
+    def guarded(client, *args, **kwargs):
+        with runtime_lock(client):
+            if getattr(client, "_stopped", False):
+                return None
+            return callback(client, *args, **kwargs)
+    return guarded
 
 
 
@@ -17,7 +35,7 @@ def daemon_timer(*args, **kwargs) -> Timer:
 
 def cancel_runtime_timers(client) -> None:
     """Cancel device/config/time-sync timers and clear related runtime state."""
-    for timer_map_name in ("_device_timers", "_config_read_timers"):
+    for timer_map_name in ("_device_timers", "_config_read_timers", "_read_all_start_timers"):
         timer_map = getattr(client, timer_map_name, {})
         for timer in list(timer_map.values()):
             try:
@@ -27,6 +45,8 @@ def cancel_runtime_timers(client) -> None:
         timer_map.clear()
 
     getattr(client, "_device_last_seen", {}).clear()
+    for state in ("_config_read_queues", "_config_read_inflight", "_read_all_active"):
+        getattr(client, state, {}).clear()
 
     time_sync_timer = getattr(client, "_time_sync_timer", None)
     if time_sync_timer is not None:

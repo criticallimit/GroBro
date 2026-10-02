@@ -16,6 +16,7 @@ import threading
 from datetime import datetime, timezone
 
 from grobro.grobro.noah_protocol_debug import decode_interesting_noah_packet
+from grobro.model.device_family import uses_noah_protocol
 
 LOG = logging.getLogger(__name__)
 
@@ -49,7 +50,7 @@ def capture_noah_mqtt_traffic(
     forwarded_for: str | None = None,
 ) -> None:
     """Append one exact NOAH MQTT packet to the passive traffic log."""
-    if not REGISTER_DEBUG or not str(device_id).startswith("0PVP"):
+    if not REGISTER_DEBUG or not uses_noah_protocol(str(device_id)):
         return
 
     try:

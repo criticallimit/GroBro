@@ -13,7 +13,7 @@ The container starts through:
 
 1. `run.sh`
 2. `python -m grobro.ha_bridge`
-3. `grobro/ha_bridge.py` installs runtime layers
+3. `grobro/ha_bridge.py` creates the MQTT clients
 4. the Growatt-side and Home-Assistant-side MQTT clients are wired together
 5. the local Ingress HTTP server is started
 
@@ -38,7 +38,7 @@ Persistent runtime files are stored in `/data/GroBro`.
 
 - `grobro/ha/client.py` — MQTT discovery, commands and base state handling
 - `grobro/ha/performance.py` — state preparation and duplicate-publish suppression
-- `grobro/ha/cleanup.py` — installs Better GroBro runtime layers
+- `grobro/ha/cleanup.py` — per-client state initialization and reconnect cleanup
 - `grobro/ha/discovery_runtime.py` — discovery cleanup, migration and metadata
 - `grobro/ha/config_runtime.py` — persisted device configuration
 - `grobro/ha/timer_runtime.py` — availability/device timers and shutdown cleanup
@@ -57,11 +57,12 @@ Persistent runtime files are stored in `/data/GroBro`.
 JSON register maps for supported Growatt families. Register-map changes should remain
 data-driven where possible.
 
-## Runtime installation order
+## Runtime initialization
 
-`grobro/ha_bridge.py` installs the runtime layers before creating live clients. This is
-intentional: instance state, discovery behavior, timers, performance handling and device
-specific compatibility must be in place before MQTT callbacks begin processing traffic.
+The clients call focused runtime helpers directly. Each constructor initializes its
+instance state and restores persistent configuration before the network loop starts.
+The entry point wires both directions before starting the loops. Legacy `install_*`
+functions remain compatibility no-ops; they do not install runtime layers.
 
 Avoid adding ad-hoc monkey patches from the entry point. New behavior should live in the
 focused runtime module responsible for that concern.

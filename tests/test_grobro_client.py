@@ -11,7 +11,7 @@ import grobro.grobro.client as grobro_client
 from grobro.model.mqtt_config import MQTTConfig
 
 
-DATA_DIR = __file__[: __file__.rfind("/")] + "/model/data"
+DATA_DIR = Path(__file__).parent / "model" / "data"
 
 
 @pytest.fixture

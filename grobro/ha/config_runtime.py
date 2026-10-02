@@ -17,6 +17,7 @@ _STABLE_DEVICE_FIELDS = {
     "mac_address",
     "protocol_version",
 }
+_PERSISTED_RUNTIME_FIELDS = _STABLE_DEVICE_FIELDS | {"data_interval", "local_ip"}
 
 
 def persisted_config_data(config) -> dict:
@@ -43,6 +44,20 @@ def _merge_config(previous, incoming):
     merged = previous.model_dump(exclude_none=True)
     merged.update(incoming.model_dump(exclude_none=True))
     return ha_client_module.model.DeviceConfig(**merged)
+
+
+def persisted_runtime_data(config) -> dict:
+    """Persist stable identity plus values consumed after a process restart."""
+    if config is None:
+        return {}
+    return config.model_dump(include=_PERSISTED_RUNTIME_FIELDS, exclude_none=True)
+
+
+def discovery_config_data(config) -> dict:
+    data = persisted_config_data(config)
+    if config is not None:
+        data["local_ip"] = config.local_ip
+    return data
 
 
 def restore_device_inventory_from_config_cache(client) -> None:

@@ -13,6 +13,7 @@ import threading
 from collections import deque
 from functools import lru_cache
 from typing import Callable
+from pathlib import Path
 
 import paho.mqtt.client as mqtt
 from paho.mqtt.client import MQTTMessage
@@ -44,7 +45,7 @@ from grobro.model.growatt_registers import (
 )
 from grobro.model.modbus_function import GrowattModbusFunctionSingle
 from grobro.model.modbus_message import GrowattModbusFunction, GrowattModbusMessage
-from grobro.model.mqtt_config import MQTTConfig
+from grobro.model.mqtt_config import MQTTConfig, publish_succeeded
 
 
 _DEVICE_ID_RE = re.compile(r"[^A-Za-z0-9]")
@@ -78,7 +79,7 @@ def _config_register_name(device_id: str, register_no: int) -> str | None:
     if known_registers:
         for name, reg in known_registers.config_registers.items():
             if reg.growatt.register_no == register_no:
-                return getattr(reg.homeassistant, "name", None) or name
+                return getattr(getattr(reg, "homeassistant", None), "name", None) or name
     return None
 
 
@@ -185,6 +186,9 @@ class Client:
     on_config: Callable[[str, model.DeviceConfig], None]
     on_input_register: Callable[HomeAssistantInputRegister, None]
     on_holding_register_input: Callable[HomeAssistantHoldingRegisterInput, None]
+    on_config_read_response = None
+    on_config_register_value = None
+    on_smart_meter = None
 
     _client: mqtt.Client
     _forward_mqtt_config: model.MQTTConfig
@@ -217,8 +221,17 @@ class Client:
         self._forward_ready: dict[str, threading.Event] = {}
         self._forward_pending: dict[str, deque[tuple[str, bytes, int, bool]]] = {}
         self._forward_pending_lock = threading.Lock()
+        self._forward_flush_lock = threading.Lock()
         self._forward_overflow_warned: set[str] = set()
         self._ptq_for_raq: dict[str, str] = {}
+        # Dedicated links survive partial gateway config packets and restart.
+        # Also restore links from established config files for older data.
+        for pattern in ("config_*.json", "gateway_*.json"):
+            for path in Path(".").glob(pattern):
+                gateway_id = path.stem.split("_", 1)[1]
+                if model.is_gateway(gateway_id):
+                    config = model.DeviceConfig.from_file(str(path))
+                    self._remember_gateway(gateway_id, config.serial_number if config else None, persist=False)
         self._smart_meter_state_cache: dict[str, str] = {}
         self._pending_config_writes: dict[str, deque[int]] = {}
 
@@ -243,6 +256,12 @@ class Client:
         self._pending_config_writes.clear()
 
     def send_command(self, cmd: GrowattModbusFunctionSingle):
+        if model.is_gateway(cmd.device_id):
+            endpoint = self._ptq_for_raq.get(cmd.device_id)
+            if not endpoint:
+                LOG.warning("Inverter identity behind %s is not known yet", cmd.device_id)
+                return (mqtt.MQTT_ERR_NO_CONN, None)
+            cmd = cmd.model_copy(update={"device_id": endpoint})
         scrambled = scramble(cmd.build_grobro())
         final_payload = append_crc(scrambled)
 
@@ -255,6 +274,15 @@ class Client:
             final_payload,
             properties=MQTT_PROP_FORWARD_HA,
         )
+
+    def _remember_gateway(self, gateway_id: str, endpoint: str | None, *, persist=True):
+        if not model.is_gateway(gateway_id) or not endpoint or not str(endpoint).startswith("PTQ"):
+            return
+        if self._ptq_for_raq.get(gateway_id) == endpoint:
+            return
+        self._ptq_for_raq[gateway_id] = endpoint
+        if persist:
+            model.DeviceConfig(serial_number=endpoint).to_file(f"gateway_{gateway_id}.json")
 
     def send_config_read_message(self, device_id: str, register_no: int):
         final_payload = build_config_read_packet(device_id, register_no)
@@ -386,6 +414,7 @@ class Client:
                     or config.serial_number
                 ):
                     self.on_config(device_id, config)
+                    self._remember_gateway(device_id, config.serial_number)
                     LOG.info(
                         "%s -> Better GroBro: device settings received",
                         _device_label(device_id),
@@ -399,7 +428,7 @@ class Client:
                             .strip()
                         )
                         if ptq_serial.startswith("PTQ"):
-                            self._ptq_for_raq[device_id] = ptq_serial
+                            self._remember_gateway(device_id, ptq_serial)
                             ptq_config = model.DeviceConfig(serial_number=ptq_serial)
                             ptq_config.device_type = "55"
                             if getattr(config, "model_id", None):
@@ -431,7 +460,7 @@ class Client:
                         "Received compound config response for %s: %s",
                         cfg["device_id"],
                         ", ".join(
-                            f"reg={entry['register_no']} value={entry['value']!r}"
+                            f"reg={entry['register_no']}"
                             for entry in entries
                         ),
                     )
@@ -470,6 +499,8 @@ class Client:
                     metadata_field = {
                         "software_version": "sw_version",
                         "hardware_version": "hw_version",
+                        "data_interval": "data_interval",
+                        "local_ip": "local_ip",
                     }.get(config_name)
                     if metadata_field:
                         metadata_config = model.DeviceConfig(
@@ -478,11 +509,18 @@ class Client:
                         )
                         self.on_config(cfg["device_id"], metadata_config)
 
-                    topic = (
-                        f"{HA_BASE_TOPIC}/config/grobro/"
-                        f"{cfg['device_id']}/{register_no}/get"
-                    )
-                    _publish_checked(self._client, topic, value, retain=True)
+                    # Preserve live readback topics, but retain only known,
+                    # exposed values. Never expose the datalogger password.
+                    register = next((r for r in known_registers.config_registers.values()
+                                     if r.growatt.register_no == register_no), None) if known_registers else None
+                    retain = bool(register and getattr(getattr(register, "homeassistant", None), "publish", False))
+                    if register_no == 7:
+                        value, retain = "", True  # remove a legacy retained secret
+                    if callable(self.on_config_register_value):
+                        self.on_config_register_value(cfg["device_id"], register_no, value, retain=retain)
+                    else:
+                        topic = f"{HA_BASE_TOPIC}/config/grobro/{cfg['device_id']}/{register_no}/get"
+                        _publish_checked(self._client, topic, value, retain=retain)
 
                     if self.on_config_read_response:
                         self.on_config_read_response(
@@ -531,6 +569,9 @@ class Client:
                 smart_meter = parser.parse_noah_6f64(unscrambled)
                 smart_meter_device_id = smart_meter["device_id"]
                 smart_meter_data = smart_meter["data"]
+                if callable(self.on_smart_meter):
+                    self.on_smart_meter(smart_meter_device_id, smart_meter_data)
+                    return
                 LOG.debug(
                     "Smart Meter data for %s: %s",
                     smart_meter_device_id,
@@ -548,13 +589,14 @@ class Client:
                     f"{HA_BASE_TOPIC}/sensor/grobro/"
                     f"{smart_meter_device_id}/smart_meter/state"
                 )
-                _publish_checked(
+                result = _publish_checked(
                     self._client,
                     topic,
                     smart_meter_data,
                     retain=False,
                 )
-                self._smart_meter_state_cache[smart_meter_device_id] = smart_meter_data
+                if publish_succeeded(result):
+                    self._smart_meter_state_cache[smart_meter_device_id] = smart_meter_data
                 return
 
             # NOAH/NEXA-specific message types (FE19 config, 0103 holding regs, etc.)
@@ -744,6 +786,11 @@ class Client:
             queue.append((topic, bytes(payload), int(qos), bool(retain)))
 
     def __flush_growatt_forward_queue(self, client_id: str, client) -> None:
+        # CONNACK and source callbacks can drain the same queue concurrently.
+        with self._forward_flush_lock:
+            self.__drain_growatt_forward_queue(client_id, client)
+
+    def __drain_growatt_forward_queue(self, client_id: str, client) -> None:
         key = f"forward_client_{client_id}"
         while True:
             with self._forward_pending_lock:
@@ -796,25 +843,11 @@ class Client:
         client = self.__connect_to_growatt_server(client_id)
         key = f"forward_client_{client_id}"
         ready = self._forward_ready[key]
-
-        if not ready.is_set():
-            self.__queue_growatt_forward(client_id, topic, payload, qos, retain)
-            return
-
-        result = client.publish(topic, payload=payload, qos=qos, retain=retain)
-        status = getattr(result, "rc", None)
-        if status is None:
-            try:
-                status = result[0]
-            except (TypeError, IndexError, KeyError):
-                status = None
-
-        if status == mqtt.MQTT_ERR_NO_CONN:
-            ready.clear()
-            self.__queue_growatt_forward(client_id, topic, payload, qos, retain)
-            return
-        if status not in (None, mqtt.MQTT_ERR_SUCCESS):
-            LOG.warning("Could not send an MQTT message to %s (error code %s)", topic, status)
+        # Enqueue before checking readiness. Either CONNACK or this callback
+        # observes the new item and drains it, without a check/enqueue gap.
+        self.__queue_growatt_forward(client_id, topic, payload, qos, retain)
+        if ready.is_set():
+            self.__flush_growatt_forward_queue(client_id, client)
 
     # Setup Growatt MQTT broker for forwarding messages
     def __connect_to_growatt_server(self, client_id):
@@ -863,9 +896,9 @@ class Client:
                 self._forward_mqtt_config.port,
                 60,
             )
-            client.loop_start()
             self._forward_clients[key] = client
             self._forward_ready[key] = ready
+            client.loop_start()
 
         return self._forward_clients[key]
 

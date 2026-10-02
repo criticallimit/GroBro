@@ -52,6 +52,8 @@ def wire_clients(ha_client, grobro_client) -> None:
     grobro_client.on_holding_register_input = ha_client.publish_holding_register_input
     grobro_client.on_config = ha_client.set_config
     grobro_client.on_config_read_response = ha_client.handle_config_read_response
+    grobro_client.on_config_register_value = ha_client.publish_config_register_value
+    grobro_client.on_smart_meter = ha_client.publish_smart_meter
 
     ha_client.on_command = grobro_client.send_command
     ha_client.on_config_read = grobro_client.send_config_read_message
@@ -62,14 +64,16 @@ def wire_clients(ha_client, grobro_client) -> None:
 
 def run_clients(ha_client, grobro_client, signal_handler) -> None:
     """Start both clients, wait for shutdown, and always stop both cleanly."""
-    ha_client.start()
-    grobro_client.start()
-    LOG.info("Better GroBro started successfully")
     try:
+        ha_client.start()
+        grobro_client.start()
+        LOG.info("Better GroBro started successfully")
         signal_handler.wait()
     finally:
-        ha_client.stop()
-        grobro_client.stop()
+        try:
+            ha_client.stop()
+        finally:
+            grobro_client.stop()
 
 
 LOG_LEVEL, LOG = configure_logging()

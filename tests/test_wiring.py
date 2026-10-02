@@ -2,6 +2,12 @@ from grobro.ha_bridge import wire_clients
 
 
 class _HAClient:
+    def publish_config_register_value(self, *args, **kwargs):
+        return args
+
+    def publish_smart_meter(self, *args, **kwargs):
+        return args
+
     def publish_input_register(self, value):
         return value
 
