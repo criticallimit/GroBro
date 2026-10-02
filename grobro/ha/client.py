@@ -1182,6 +1182,16 @@ class Client:
                 "unique_id": firmware_unique_id,
                 "icon": "mdi:information",
             }
+
+        elif getattr(self._config_cache.get(device_id), "sw_version", None):
+            firmware_unique_id = f"grobro_{device_id}_fw_version"
+            payload["cmps"][firmware_unique_id] = {
+                "platform": "sensor",
+                "name": "Firmware Version",
+                "state_topic": f"{HA_BASE_TOPIC}/grobro/{device_id}/sw_version",
+                "unique_id": firmware_unique_id,
+                "icon": "mdi:information",
+            }
                 
         # Serial Number Entity
         serial_unique_id = f"grobro_{device_id}_serial"
@@ -1239,6 +1249,7 @@ class Client:
 
         self._publish_discovery_message(f"{HA_BASE_TOPIC}/grobro/{device_id}/serial", device_id, retain=True)
         self._publish_discovery_message(f"{HA_BASE_TOPIC}/grobro/{device_id}/type", get_device_type_name(device_id), retain=True)
+        self._publish_discovery_message(f"{HA_BASE_TOPIC}/grobro/{device_id}/sw_version", device_id, retain=True)
         self._discovery_signature[device_id] = signature
 
     def __migrate_entity_discovery(self, device_id: str, known_registers: GroBroRegisters):

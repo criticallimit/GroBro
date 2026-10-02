@@ -618,12 +618,59 @@ class TestClientOnMessage:
 
 class TestClientDeviceInfo:
     def test_device_info_from_cache(self, ha_client):
-        cfg = DeviceConfig(serial_number="QMN000ABC1D2E3FG", device_type="55", sw_version="v1.0")
+        cfg = DeviceConfig(
+            serial_number="QMN000ABC1D2E3FG",
+            device_type="55",
+            sw_version="3.8.2.8",
+            hw_version="V1.0",
+        )
         ha_client._config_cache["QMN000ABC1D2E3FG"] = cfg
         info = ha_client._Client__device_info_from_config("QMN000ABC1D2E3FG")
         assert info["identifiers"] == ["QMN000ABC1D2E3FG"]
         assert info["model"] == "NEO-series"
-        assert info["sw_version"] == "v1.0"
+        assert info["sw_version"] == "3.8.2.8"
+        assert info["hw_version"] == "V1.0"
+
+    def test_neo_firmware_version_sensor_uses_config_software_version(self, ha_client):
+        device_id = "QMN000ABC1D2E3FG"
+        ha_client._config_cache[device_id] = DeviceConfig(
+            serial_number=device_id,
+            device_type="55",
+            sw_version="3.8.2.8",
+            hw_version="V1.0",
+        )
+
+        ha_client._Client__publish_device_discovery(device_id)
+
+        discovery = None
+        for call in reversed(ha_client._client.publish.call_args_list):
+            if (
+                call.args
+                and call.args[0] == f"homeassistant/device/{device_id}/config"
+                and len(call.args) >= 2
+                and call.args[1]
+            ):
+                discovery = json.loads(call.args[1])
+                break
+
+        assert discovery is not None
+        assert discovery["dev"]["sw_version"] == "3.8.2.8"
+        assert discovery["dev"]["hw_version"] == "V1.0"
+
+        component = discovery["cmps"][f"grobro_{device_id}_fw_version"]
+        assert component["name"] == "Firmware Version"
+        assert component["state_topic"] == (
+            f"homeassistant/grobro/{device_id}/sw_version"
+        )
+
+        version_publishes = [
+            call
+            for call in ha_client._client.publish.call_args_list
+            if call.args
+            and call.args[0] == f"homeassistant/grobro/{device_id}/sw_version"
+        ]
+        assert version_publishes
+        assert version_publishes[-1].args[1] == "3.8.2.8"
 
     def test_device_info_fallback_file(self, ha_client):
         with patch("grobro.model.device_config.DeviceConfig.from_file") as from_file:

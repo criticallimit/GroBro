@@ -320,16 +320,37 @@ class TestClientOnMessage:
         msg = _msg("c/33/QMN000ABC1D2E3FG", b"wire")
         caplog.set_level("INFO", logger=grobro_client.LOG.name)
 
-        with patch("grobro.grobro.client.REGISTER_CAPTURE_ENABLED", True):
+        with patch("grobro.grobro.client.REGISTER_CAPTURE_ENABLED", False):
             with patch("grobro.grobro.client.parser.unscramble", return_value=data):
                 with patch.object(client, "send_config_read_message") as config_read:
                     client._client.on_message(None, None, msg)
 
-        assert (
-            "NEO QMN000ABC1D2E3FG: diagnostic config register 21='1.2.3'"
-            in caplog.text
-        )
         config_read.assert_called_once_with("QMN000ABC1D2E3FG", 22)
+        client.on_config.assert_called_once()
+        device_id, version_config = client.on_config.call_args.args
+        assert device_id == "QMN000ABC1D2E3FG"
+        assert version_config.sw_version == "1.2.3"
+        assert version_config.hw_version is None
+
+    def test_neo_hardware_version_config_response_updates_metadata(self, client):
+        data = bytes.fromhex(
+            "00 01 00 07 00 2b 01 19 "
+            "51 4d 4e 30 30 30 41 42 43 31 44 32 45 33 46 47 "
+            "00 00 00 00 00 00 00 00 00 00 00 00 00 00 "
+            "00 01 00 "
+            "00 16 00 04 56 31 2e 30 "
+            "00 00"
+        )
+        msg = _msg("c/33/QMN000ABC1D2E3FG", b"wire")
+
+        with patch("grobro.grobro.client.parser.unscramble", return_value=data):
+            client._client.on_message(None, None, msg)
+
+        client.on_config.assert_called_once()
+        device_id, version_config = client.on_config.call_args.args
+        assert device_id == "QMN000ABC1D2E3FG"
+        assert version_config.sw_version is None
+        assert version_config.hw_version == "V1.0"
 
     def test_config_write_ack_280(self, client):
         data = (Path(DATA_DIR) / "NeoConfigWriteAck_DataInterval.bin").read_bytes()
@@ -377,11 +398,11 @@ class TestClientOnMessage:
         client._client.on_message(None, None, msg)
         client.on_input_register.assert_called_once()
 
-    def test_neo_debug_version_probe_reads_only_config_21_once(self, client):
+    def test_neo_version_probe_reads_config_21_once_without_debug(self, client):
         data = (Path(DATA_DIR) / "NeoReadInputRegisters.bin").read_bytes()
         msg = _msg("c/33/QMN000ABC1D2E3FG", data)
 
-        with patch("grobro.grobro.client.REGISTER_CAPTURE_ENABLED", True):
+        with patch("grobro.grobro.client.REGISTER_CAPTURE_ENABLED", False):
             with patch.object(client, "send_config_read_message") as config_read:
                 with patch.object(client, "send_command") as modbus_read:
                     client._client.on_message(None, None, msg)
@@ -389,16 +410,6 @@ class TestClientOnMessage:
 
         config_read.assert_called_once_with("QMN000ABC1D2E3FG", 21)
         modbus_read.assert_not_called()
-
-    def test_neo_debug_version_probe_is_disabled_without_register_debug(self, client):
-        data = (Path(DATA_DIR) / "NeoReadInputRegisters.bin").read_bytes()
-        msg = _msg("c/33/QMN000ABC1D2E3FG", data)
-
-        with patch("grobro.grobro.client.REGISTER_CAPTURE_ENABLED", False):
-            with patch.object(client, "send_config_read_message") as config_read:
-                client._client.on_message(None, None, msg)
-
-        config_read.assert_not_called()
 
     def test_neo_version_config_registers_are_known_but_hidden(self):
         registers = grobro_client._known_registers_for_device("QMN000ABC1D2E3FG")

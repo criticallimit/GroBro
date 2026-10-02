@@ -244,23 +244,17 @@ class Client:
         self._pending_config_writes.clear()
 
     def __probe_neo_versions(self, device_id: str) -> None:
-        """Issue one conservative NEO config-version probe in register-debug mode."""
+        """Read NEO software/hardware metadata once per process."""
         if (
-            not REGISTER_CAPTURE_ENABLED
-            or not model.is_family(device_id, "neo")
+            not model.is_family(device_id, "neo")
             or device_id in self._neo_version_probe_requested
         ):
             return
 
         self._neo_version_probe_requested.add(device_id)
-        LOG.info(
-            "%s: diagnostic version probe reading config 21, then 22 after its response",
-            _device_label(device_id),
-        )
+        LOG.info("%s: reading software and hardware version", _device_label(device_id))
 
-        # Config parameter 21 is the common Growatt TLV software-version field.
-        # Request 22 only after 21 has answered so the NEO never receives
-        # concurrent diagnostic config reads.
+        # Read serially. Some NEO firmware is sensitive to concurrent config reads.
         self.send_config_read_message(device_id, 21)
 
     def send_command(self, cmd: GrowattModbusFunctionSingle):
@@ -487,16 +481,27 @@ class Client:
                                 break
 
                     if (
-                        REGISTER_CAPTURE_ENABLED
-                        and model.is_family(cfg["device_id"], "neo")
+                        model.is_family(cfg["device_id"], "neo")
                         and register_no in (21, 22)
                     ):
-                        LOG.info(
-                            "%s: diagnostic config register %s=%r",
-                            _device_label(cfg["device_id"]),
-                            register_no,
-                            value,
+                        version_config = model.DeviceConfig(
+                            serial_number=cfg["device_id"],
                         )
+                        if register_no == 21:
+                            version_config.sw_version = str(value)
+                        else:
+                            version_config.hw_version = str(value)
+
+                        self.on_config(cfg["device_id"], version_config)
+
+                        if REGISTER_CAPTURE_ENABLED:
+                            LOG.info(
+                                "%s: config register %s=%r",
+                                _device_label(cfg["device_id"]),
+                                register_no,
+                                value,
+                            )
+
                         if register_no == 21:
                             self.send_config_read_message(cfg["device_id"], 22)
 
@@ -645,8 +650,7 @@ class Client:
 
                 if modbus_message.function == GrowattModbusFunction.READ_INPUT_REGISTER:
                     if (
-                        REGISTER_CAPTURE_ENABLED
-                        and model.is_family(modbus_device_id, "neo")
+                        model.is_family(modbus_device_id, "neo")
                         and any(
                             block is not None
                             and block.start <= 3000 <= block.end
