@@ -308,6 +308,27 @@ class TestClientOnMessage:
         assert "Received compound config response" in caplog.text
         assert "NEO QMN000BZP4N991ML -> Better GroBro: config response" not in caplog.text
 
+    def test_neo_debug_version_config_response_logs_value(self, client, caplog):
+        data = bytes.fromhex(
+            "00 01 00 07 00 2b 01 19 "
+            "51 4d 4e 30 30 30 41 42 43 31 44 32 45 33 46 47 "
+            "00 00 00 00 00 00 00 00 00 00 00 00 00 00 "
+            "00 01 00 "
+            "00 15 00 05 31 2e 32 2e 33 "
+            "00 00"
+        )
+        msg = _msg("c/33/QMN000ABC1D2E3FG", b"wire")
+        caplog.set_level("INFO", logger=grobro_client.LOG.name)
+
+        with patch("grobro.grobro.client.REGISTER_CAPTURE_ENABLED", True):
+            with patch("grobro.grobro.client.parser.unscramble", return_value=data):
+                client._client.on_message(None, None, msg)
+
+        assert (
+            "NEO QMN000ABC1D2E3FG: diagnostic config register 21='1.2.3'"
+            in caplog.text
+        )
+
     def test_config_write_ack_280(self, client):
         data = (Path(DATA_DIR) / "NeoConfigWriteAck_DataInterval.bin").read_bytes()
         msg = _msg("c/33/QMN000ABC1D2E3FG", data)
@@ -375,6 +396,16 @@ class TestClientOnMessage:
         assert command.start == 119
         assert command.end == 120
         assert command.values == b""
+
+        parsed = grobro_client.GrowattModbusFunctionMultiple.parse_grobro(
+            command.build_grobro()
+        )
+        assert parsed is not None
+        assert parsed.device_id == "QMN000ABC1D2E3FG"
+        assert parsed.function == grobro_client.GrowattModbusFunction.READ_INPUT_REGISTER
+        assert parsed.start == 119
+        assert parsed.end == 120
+        assert parsed.values == b""
 
     def test_neo_debug_version_probe_is_disabled_without_register_debug(self, client):
         data = (Path(DATA_DIR) / "NeoReadInputRegisters.bin").read_bytes()

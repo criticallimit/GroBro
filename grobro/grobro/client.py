@@ -504,6 +504,18 @@ class Client:
                                         break
                                 break
 
+                    if (
+                        REGISTER_CAPTURE_ENABLED
+                        and model.is_family(cfg["device_id"], "neo")
+                        and register_no in (21, 22)
+                    ):
+                        LOG.info(
+                            "%s: diagnostic config register %s=%r",
+                            _device_label(cfg["device_id"]),
+                            register_no,
+                            value,
+                        )
+
                     topic = (
                         f"{HA_BASE_TOPIC}/config/grobro/"
                         f"{cfg['device_id']}/{register_no}/get"
