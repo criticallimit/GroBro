@@ -1,3 +1,4 @@
+import pytest
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -28,7 +29,10 @@ def test_capture_noah_traffic_writes_jsonl(tmp_path, monkeypatch):
     assert '"payload_len":11' in data
 
 
-def test_direct_device_and_cloud_paths_capture_noah_traffic(monkeypatch):
+@pytest.mark.parametrize("device_id", ["0PVPTEST", "0HVRTEST"])
+def test_direct_device_and_cloud_paths_capture_shared_protocol_traffic(
+    monkeypatch, device_id
+):
     captures = []
     monkeypatch.setattr(client_module, "NOAH_TRAFFIC_CAPTURE_ENABLED", True)
     monkeypatch.setattr(
@@ -46,14 +50,14 @@ def test_direct_device_and_cloud_paths_capture_noah_traffic(monkeypatch):
 
     instance = object.__new__(client_module.Client)
     device_msg = SimpleNamespace(
-        topic="c/33/0PVPTEST",
+        topic=f"c/33/{device_id}",
         payload=b"device",
         qos=1,
         retain=False,
         properties=None,
     )
     cloud_msg = SimpleNamespace(
-        topic="s/33/0PVPTEST",
+        topic=f"s/33/{device_id}",
         payload=b"cloud",
         qos=1,
         retain=False,
