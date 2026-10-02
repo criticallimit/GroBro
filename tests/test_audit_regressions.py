@@ -418,3 +418,21 @@ def test_ingress_thread_failure_closes_bound_server_socket(failure, error):
         assert server.socket.fileno() == -1
     finally:
         server.server_close()
+
+
+@pytest.mark.parametrize("side", ["ha", "source"])
+def test_rejected_primary_mqtt_loop_start_aborts_and_cleans_both_clients(clients, side):
+    import paho.mqtt.client as mqtt
+    from grobro.ha_bridge import run_clients
+    target, source = clients
+    failing = target if side == "ha" else source
+    failing._client.loop_start.return_value = mqtt.MQTT_ERR_INVAL
+    signals = MagicMock()
+    with patch("grobro.ha.neo_power_runtime.schedule_known_neo_state_probe"), patch("grobro.ha.time_sync_runtime.schedule_next_time_sync"):
+        with pytest.raises(RuntimeError, match="MQTT"):
+            run_clients(target, source, signals)
+    signals.wait.assert_not_called()
+    target._client.disconnect.assert_called_once()
+    source._client.disconnect.assert_called_once()
+    assert target._stopped
+    assert source._forward_stopped

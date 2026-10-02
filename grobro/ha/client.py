@@ -272,7 +272,9 @@ class Client:
 
     def start(self):
         self._stopped = False
-        self._client.loop_start()
+        result = self._client.loop_start()
+        if isinstance(result, int) and result != mqtt.MQTT_ERR_SUCCESS:
+            raise RuntimeError(f"Could not start MQTT network loop (error code {result})")
 
         # Stable background services are scheduled directly instead of wrapping
         # Client.start() from multiple runtime modules.

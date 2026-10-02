@@ -255,7 +255,9 @@ class Client:
 
     def start(self):
         LOG.debug("GroBro: Start")
-        self._client.loop_start()
+        result = self._client.loop_start()
+        if isinstance(result, int) and result != mqtt.MQTT_ERR_SUCCESS:
+            raise RuntimeError(f"Could not start MQTT network loop (error code {result})")
 
     def stop(self):
         LOG.debug("GroBro: Stop")
