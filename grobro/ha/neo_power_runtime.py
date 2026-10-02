@@ -107,34 +107,13 @@ def _publish_retained_switch_state(client, device_id: str, state: str) -> None:
 
 
 def install_neo_power_runtime() -> None:
-    """Keep the NEO Inverter Power switch state known across restarts.
+    """Install only the NEO switch-state mirror that cannot live in telemetry.
 
-    The upstream switch command path is preserved. Better GroBro only adds a
-    retained state mirror because some NEO firmware does not answer a standalone
-    holding-register-0 read. A real holding-register readback, when available, is
-    also retained and therefore replaces the fallback state.
+    Startup/recovery probing is now called directly by Client.start() and
+    Client.__recover_after_home_assistant_restart(), so this hook no longer
+    wraps those lifecycle methods.
     """
     client_cls = ha_client_module.Client
-
-    original_start = client_cls.start
-
-    def start_with_neo_probe(self):
-        result = original_start(self)
-        schedule_known_neo_state_probe(self)
-        return result
-
-    client_cls.start = start_with_neo_probe
-
-    original_recover = client_cls._Client__recover_after_home_assistant_restart
-
-    def recover_with_neo_probe(self, client):
-        result = original_recover(self, client)
-        clear_neo_inverter_power_read_cache(self)
-        schedule_known_neo_state_probe(self, delay=0.5)
-        return result
-
-    client_cls._Client__recover_after_home_assistant_restart = recover_with_neo_probe
-
     original_on_message = client_cls._Client__on_message
 
     def on_message_with_neo_power_state(self, client, userdata, msg):
@@ -159,5 +138,3 @@ def install_neo_power_runtime() -> None:
 
     client_cls._Client__on_message = on_message_with_neo_power_state
 
-    # Holding-register state is already retained by the consolidated telemetry
-    # pipeline, so no second publish_holding_register_input wrapper is needed.
