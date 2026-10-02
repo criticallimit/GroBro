@@ -398,7 +398,7 @@ class TestClientOnMessage:
         client._client.on_message(None, None, msg)
         client.on_input_register.assert_called_once()
 
-    def test_neo_version_probe_reads_config_21_once_without_debug(self, client):
+    def test_neo_version_read_runs_once_without_debug(self, client):
         data = (Path(DATA_DIR) / "NeoReadInputRegisters.bin").read_bytes()
         msg = _msg("c/33/QMN000ABC1D2E3FG", data)
 

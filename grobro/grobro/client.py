@@ -243,7 +243,7 @@ class Client:
             self._forward_overflow_warned.clear()
         self._pending_config_writes.clear()
 
-    def __probe_neo_versions(self, device_id: str) -> None:
+    def __read_neo_versions_once(self, device_id: str) -> None:
         """Read NEO software/hardware metadata once per process."""
         if (
             not model.is_family(device_id, "neo")
@@ -252,7 +252,6 @@ class Client:
             return
 
         self._neo_version_probe_requested.add(device_id)
-        LOG.info("%s: reading software and hardware version", _device_label(device_id))
 
         # Read serially. Some NEO firmware is sensitive to concurrent config reads.
         self.send_config_read_message(device_id, 21)
@@ -494,14 +493,6 @@ class Client:
 
                         self.on_config(cfg["device_id"], version_config)
 
-                        if REGISTER_CAPTURE_ENABLED:
-                            LOG.info(
-                                "%s: config register %s=%r",
-                                _device_label(cfg["device_id"]),
-                                register_no,
-                                value,
-                            )
-
                         if register_no == 21:
                             self.send_config_read_message(cfg["device_id"], 22)
 
@@ -657,7 +648,7 @@ class Client:
                             for block in modbus_message.register_blocks
                         )
                     ):
-                        self.__probe_neo_versions(modbus_device_id)
+                        self.__read_neo_versions_once(modbus_device_id)
 
                     state = HomeAssistantInputRegister(device_id=modbus_device_id)
                     for name, register in known_registers.input_registers.items():
