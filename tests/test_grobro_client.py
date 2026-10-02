@@ -137,7 +137,8 @@ class TestClientLifecycle:
             )
 
         assert connected is forward
-        forward.connect.assert_called_once_with("forward.com", 7006, 60)
+        forward.connect_async.assert_called_once_with("forward.com", 7006, 60)
+        forward.connect.assert_not_called()
         forward.subscribe.assert_called_once_with("+/QMN000ABC1D2E3FG")
         assert client._forward_ready[
             "forward_client_QMN000ABC1D2E3FG"
@@ -748,7 +749,7 @@ class TestClientForward:
 
             result = client._Client__connect_to_growatt_server("test-dev")
             assert result is fc
-            fc.connect.assert_called_once()
+            fc.connect_async.assert_called_once()
             fc.subscribe.assert_called_once_with("+/test-dev")
             fc.loop_start.assert_called_once()
 

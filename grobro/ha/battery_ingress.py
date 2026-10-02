@@ -6,6 +6,9 @@ import json
 import logging
 import os
 from http import HTTPStatus
+import threading
+import time
+
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
 
@@ -597,12 +600,25 @@ class BatteryIngressHandler(BaseHTTPRequestHandler):
         previous_timeout = self.connection.gettimeout()
         self.connection.settimeout(30)
         try:
-            payload = json.loads(self.rfile.read(content_length))
+            deadline = time.monotonic() + 30
+            remaining = content_length
+            chunks = []
+            while remaining:
+                budget = deadline - time.monotonic()
+                if budget <= 0:
+                    raise TimeoutError()
+                self.connection.settimeout(budget)
+                chunk = self.rfile.read1(remaining)
+                if not chunk:
+                    raise ValueError("Incomplete request body")
+                chunks.append(chunk)
+                remaining -= len(chunk)
+            payload = json.loads(b"".join(chunks))
         except TimeoutError:
             self.close_connection = True
             self._send_json({"error": "Ungültige Anfrage"}, HTTPStatus.REQUEST_TIMEOUT)
             return None
-        except (json.JSONDecodeError, UnicodeDecodeError, RecursionError):
+        except (ValueError, UnicodeDecodeError, RecursionError):
             self._send_json({"error": "Ungültiges JSON"}, HTTPStatus.BAD_REQUEST)
             return None
         finally:
@@ -646,6 +662,10 @@ class BatteryIngressHandler(BaseHTTPRequestHandler):
                     ):
                         raise ValueError
                 save_manual_assignments(device_id, assignments)
+            except OSError:
+                LOG.exception("Could not persist manual battery assignment")
+                self._send_json({"error": "Ungültige Batterie-Zuordnung"}, HTTPStatus.INTERNAL_SERVER_ERROR)
+                return
             except (KeyError, TypeError, ValueError):
                 self._send_json(
                     {"error": "Ungültige Batterie-Zuordnung"},
@@ -658,11 +678,43 @@ class BatteryIngressHandler(BaseHTTPRequestHandler):
         self.send_error(HTTPStatus.NOT_FOUND)
 
 
+
+class BoundedIngressServer(ThreadingHTTPServer):
+    """Bound request threads and incomplete headers without blocking accept."""
+    daemon_threads = True
+
+    def __init__(self, *args, max_requests: int = 8, **kwargs):
+        self._request_slots = threading.BoundedSemaphore(max_requests)
+        super().__init__(*args, **kwargs)
+
+    def process_request(self, request, client_address):
+        if not self._request_slots.acquire(blocking=False):
+            try:
+                request.settimeout(0.25)
+                request.sendall(b"HTTP/1.0 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+            except OSError:
+                pass
+            finally:
+                self.shutdown_request(request)
+            return
+        try:
+            request.settimeout(10)
+            super().process_request(request, client_address)
+        except Exception:
+            self._request_slots.release()
+            raise
+
+    def process_request_thread(self, request, client_address):
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self._request_slots.release()
+
 def start_battery_ingress_server(port: int = INGRESS_PORT) -> ThreadingHTTPServer:
     """Start the local Ingress HTTP service in a daemon thread."""
     import threading
 
-    server = ThreadingHTTPServer(("0.0.0.0", port), BatteryIngressHandler)
+    server = BoundedIngressServer(("0.0.0.0", port), BatteryIngressHandler)
     thread = threading.Thread(
         target=server.serve_forever,
         name="battery-ingress",

@@ -311,7 +311,7 @@ class Client:
 
     @guard_runtime
     def set_config(self, device_id: str, config: model.DeviceConfig):
-        from grobro.ha.config_runtime import _merge_config, persisted_runtime_data, discovery_config_data, load_persisted_config
+        from grobro.ha.config_runtime import _merge_config, persisted_runtime_data, discovery_config_data, load_persisted_config, persist_device_config
         from grobro.ha.device_inventory import observe_device
 
         observe_device(device_id)
@@ -342,8 +342,8 @@ class Client:
             or needs_sensitive_cleanup
             or disk_stable_data != current_stable_data
         ):
-            LOG.info("%s: saved updated device information", _device_label(device_id))
-            effective_config.to_file(config_path)
+            if persist_device_config(self, device_id, effective_config):
+                LOG.info("%s: saved updated device information", _device_label(device_id))
         else:
             LOG.debug("Device metadata unchanged for %s; skipping config save", device_id)
 
@@ -487,6 +487,8 @@ class Client:
 
         LOG.debug("HA: publish: %s", state)
         device_id = state.device_id
+        from grobro.ha.config_runtime import retry_pending_device_config
+        retry_pending_device_config(self, device_id)
         state_payload = state.payload
         observe_device(device_id)
 
@@ -1329,7 +1331,8 @@ class Client:
         # Fallback 2: save minimal config if it was neither in cache nor on disk
         if not config:
             config = model.DeviceConfig(serial_number=device_id)
-            config.to_file(config_path)
+            from grobro.ha.config_runtime import persist_device_config
+            persist_device_config(self, device_id, config)
             self._config_cache[device_id] = config
             LOG.info(
                 "%s: created initial device information",

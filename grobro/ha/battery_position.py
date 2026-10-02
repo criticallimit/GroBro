@@ -226,11 +226,17 @@ def _record_detected_serials(client, device_id: str, serials: dict[int, str]) ->
     if cache.get(device_id) == entries:
         return
     updated = {**cache, device_id: entries}
+    failures = getattr(client, "_battery_detected_failures", None)
+    if failures is None:
+        failures = client._battery_detected_failures = set()
     try:
         _save_json_atomic(updated, _DETECTED_FILE)
     except OSError:
-        LOG.exception("Could not persist detected batteries for %s; will retry", device_id)
+        if device_id not in failures:
+            LOG.exception("Could not persist detected batteries for %s; will retry", device_id)
+        failures.add(device_id)
         return
+    failures.discard(device_id)
     client._battery_detected_serials = updated
 
 
@@ -432,11 +438,13 @@ def _stabilize_battery_payload_locked(
             )
 
         if changed or getattr(client, "_battery_positions_dirty", False):
+            already_dirty = getattr(client, "_battery_positions_dirty", False)
             client._battery_positions_dirty = True
             try:
                 _save_all_positions(all_positions)
             except OSError:
-                LOG.exception("Could not persist battery positions; will retry")
+                if not already_dirty:
+                    LOG.exception("Could not persist battery positions; will retry")
             else:
                 client._battery_positions_dirty = False
 

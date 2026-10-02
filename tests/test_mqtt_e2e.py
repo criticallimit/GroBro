@@ -383,3 +383,50 @@ def test_bridge_last_will_on_abrupt_process_exit(tmp_path):
             child.wait(timeout=5)
         probe.disconnect()
         probe.loop_stop()
+
+
+@pytest.mark.skipif(not os.getenv("E2E_MQTT_HOST"), reason="requires real MQTT brokers")
+def test_real_cloud_async_forwarding_and_reconnect(tmp_path, monkeypatch):
+    """Cloud transport preserves queued bytes/order across a real lost socket."""
+    import socket
+    host = os.environ["E2E_MQTT_HOST"]
+    port = int(os.getenv("E2E_MQTT_PORT", "1883"))
+    forward_port = int(os.getenv("E2E_MQTT_TARGET_PORT", str(port)))
+    monkeypatch.chdir(tmp_path)
+    # Local test brokers are plaintext; production TLS setup remains exercised by unit tests.
+    monkeypatch.setattr(mqtt.Client, "tls_set", lambda *args, **kwargs: None)
+    monkeypatch.setattr(mqtt.Client, "tls_insecure_set", lambda *args, **kwargs: None)
+    device = "QMN" + uuid.uuid4().hex[:10].upper()
+    topic = f"c/33/{device}"
+    probe = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
+    subscribed = threading.Event()
+    received = []
+    probe.on_connect = lambda client, *args: client.subscribe(topic)
+    probe.on_subscribe = lambda *args: subscribed.set()
+    probe.on_message = lambda client, userdata, message: received.append(bytes(message.payload))
+    source = None
+    try:
+        probe.connect(host, forward_port, 60)
+        probe.loop_start()
+        assert subscribed.wait(5)
+        source = grobro.Client(MQTTConfig(host=host, port=port), MQTTConfig(host=host, port=forward_port))
+        source._Client__publish_to_growatt_server(device, topic, b"first", 0, False)
+        assert _wait_until(lambda: received == [b"first"])
+        forward = source._forward_clients[f"forward_client_{device}"]
+        disconnected = threading.Event()
+        original = forward.on_disconnect
+        def on_disconnect(*args):
+            original(*args)
+            disconnected.set()
+        forward.on_disconnect = on_disconnect
+        forward.socket().shutdown(socket.SHUT_RDWR)
+        assert disconnected.wait(5)
+        source._Client__publish_to_growatt_server(device, topic, b"second", 0, False)
+        source._Client__publish_to_growatt_server(device, topic, b"third", 0, False)
+        assert _wait_until(lambda: received == [b"first", b"second", b"third"])
+        assert not source._forward_pending
+    finally:
+        if source is not None:
+            source.stop()
+        probe.disconnect()
+        probe.loop_stop()

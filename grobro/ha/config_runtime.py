@@ -107,3 +107,26 @@ def load_persisted_config(client, path: str):
     else:
         snapshots.pop(absolute, None)
     return config
+
+
+def persist_device_config(client, device_id: str, config) -> bool:
+    """Keep live metadata usable while retrying transient persistence failures."""
+    dirty = getattr(client, "_dirty_device_configs", None)
+    if dirty is None:
+        dirty = client._dirty_device_configs = set()
+    try:
+        config.to_file(f"config_{device_id}.json")
+    except OSError:
+        if device_id not in dirty:
+            ha_client_module.LOG.exception("Could not persist device information for %s; will retry", device_id)
+        dirty.add(device_id)
+        return False
+    dirty.discard(device_id)
+    return True
+
+
+def retry_pending_device_config(client, device_id: str) -> None:
+    if device_id in getattr(client, "_dirty_device_configs", ()):
+        config = client._config_cache.get(device_id)
+        if config is not None:
+            persist_device_config(client, device_id, config)

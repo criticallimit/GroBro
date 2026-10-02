@@ -178,7 +178,7 @@ def test_ingress_incomplete_body_times_out_and_restores_socket_timeout():
     handler.connection = MagicMock()
     handler.connection.gettimeout.return_value = None
     handler.rfile = MagicMock()
-    handler.rfile.read.side_effect = TimeoutError()
+    handler.rfile.read1.side_effect = TimeoutError()
     with patch.object(handler, "_send_json") as response:
         assert handler._read_json_body() is None
     assert response.call_args.args[1] == 408
