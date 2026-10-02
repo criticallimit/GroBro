@@ -796,15 +796,60 @@ class TestClientAvailability:
         assert any("availability" in t for t in topics)
 
     def test_publish_availability_offline_no_sensor(self, ha_client):
-        ha_client._Client__publish_availability("QMN000ABC1D2E3FG", False)
-        topics = [c[0][0] for c in ha_client._client.publish.call_args_list]
-        assert all("online" not in t for t in topics)
+        device_id = "QMN000ABC1D2E3FG"
+        ha_client._Client__publish_availability(device_id, False)
+        calls = ha_client._client.publish.call_args_list
+        availability_calls = [
+            call
+            for call in calls
+            if call.args[0] == f"homeassistant/grobro/{device_id}/availability"
+        ]
+        assert availability_calls
+        assert availability_calls[-1].args[1] == "offline"
+        assert all("/online" not in call.args[0] for call in calls)
 
     @patch("grobro.ha.client.AVAILABILITY_SENSOR", True)
     def test_publish_availability_offline_with_sensor(self, ha_client):
-        ha_client._Client__publish_availability("QMN000ABC1D2E3FG", False)
-        topics = [c[0][0] for c in ha_client._client.publish.call_args_list]
-        assert any("online" in t for t in topics)
+        device_id = "QMN000ABC1D2E3FG"
+        ha_client._Client__publish_availability(device_id, False)
+        calls = ha_client._client.publish.call_args_list
+        availability_calls = [
+            call
+            for call in calls
+            if call.args[0] == f"homeassistant/grobro/{device_id}/availability"
+        ]
+        online_calls = [
+            call
+            for call in calls
+            if call.args[0] == f"homeassistant/grobro/{device_id}/online"
+        ]
+        assert availability_calls
+        assert availability_calls[-1].args[1] == "offline"
+        assert online_calls
+        assert online_calls[-1].args[1] == "OFF"
+
+    @patch("grobro.ha.client.AVAILABILITY_SENSOR", True)
+    def test_wifi_signal_sensor_becomes_unavailable_with_device(self, ha_client):
+        device_id = "QMN000ABC1D2E3FG"
+        ha_client._Client__publish_device_discovery(device_id)
+        discovery_call = next(
+            call
+            for call in reversed(ha_client._client.publish.call_args_list)
+            if call.args[0] == f"homeassistant/device/{device_id}/config"
+            and call.args[1]
+        )
+        payload = json.loads(discovery_call.args[1])
+        assert payload["avty_t"] == (
+            f"homeassistant/grobro/{device_id}/availability"
+        )
+
+        ha_client._client.publish.reset_mock()
+        ha_client._Client__publish_availability(device_id, False)
+        ha_client._client.publish.assert_any_call(
+            f"homeassistant/grobro/{device_id}/availability",
+            "offline",
+            retain=True,
+        )
 
     @patch("grobro.ha.client.AVAILABILITY_SENSOR", True)
     def test_publish_availability_online_with_sensor(self, ha_client):
