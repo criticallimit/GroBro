@@ -1,8 +1,8 @@
 """Passive register dump support for GroBro.
 
-This module hooks GroBro's existing parsers so received Modbus register blocks can
-be written to JSONL for reverse engineering. It never sends additional Modbus
-requests and never writes to a device.
+The protocol client calls this module directly after parsing received Modbus and
+NOAH 0x0103 data. Captures are written to JSONL for reverse engineering only;
+this module never sends additional requests or writes to a device.
 """
 
 from __future__ import annotations

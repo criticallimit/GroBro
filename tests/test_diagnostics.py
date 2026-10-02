@@ -1,5 +1,5 @@
-from grobro import ha_bridge as diagnostics
+import grobro.ha_bridge as bridge
 
 
-def test_install_optional_diagnostics_is_compatibility_noop():
-    assert diagnostics.install_optional_diagnostics() is None
+def test_bridge_has_no_diagnostic_hook_bootstrap():
+    assert not hasattr(bridge, "install_optional_diagnostics")

@@ -1,9 +1,9 @@
 """
 Home Assistant extension for Better GroBro.
 
-The executable entrypoint deliberately owns the small bootstrap concerns directly:
-logging, environment configuration, runtime installation, callback wiring and
-client lifecycle. Protocol, Home Assistant discovery, performance and persistence
+The executable entrypoint owns only the small bootstrap concerns directly:
+logging, environment configuration, callback wiring and client lifecycle.
+Protocol, Home Assistant discovery, diagnostics, performance and persistence
 logic remain in focused modules.
 """
 
@@ -44,16 +44,6 @@ def load_bridge_mqtt_configs():
         defaults=model.MQTTConfig(host="mqtt.growatt.com", port=7006),
     )
     return source, target, forward
-
-
-def install_runtime_layers() -> None:
-    """Backward-compatible no-op; protocol behavior is integrated directly."""
-    return None
-
-
-def install_optional_diagnostics() -> None:
-    """Backward-compatible no-op; diagnostics are integrated directly."""
-    return None
 
 
 def wire_clients(ha_client, grobro_client) -> None:
