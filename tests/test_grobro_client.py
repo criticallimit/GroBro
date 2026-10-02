@@ -311,6 +311,41 @@ class TestClientOnMessage:
         msg = _msg("c/33/QMN000ABC1D2E3FG", data)
         client._client.on_message(None, None, msg)
 
+    def test_config_write_ack_uses_pending_write_for_human_readable_label(
+        self, client, caplog
+    ):
+        device_id = "0PVP0000TEST0001"
+        caplog.set_level("INFO", logger=grobro_client.LOG.name)
+
+        client.send_config_message(device_id, 31, "2026-10-02 00:00:00")
+        assert list(client._pending_config_writes[device_id]) == [31]
+
+        ack = b"\x00\x01\x00\x07\x00\x00\x01\x18"
+        msg = _msg(f"c/33/{device_id}", b"wire")
+        with patch("grobro.grobro.client.parser.unscramble", return_value=ack):
+            with patch(
+                "grobro.grobro.client.parser.parse_config_ack",
+                return_value={
+                    "device_id": device_id,
+                    "register_no": 465,
+                },
+            ):
+                client._client.on_message(None, None, msg)
+
+        assert (
+            'NOAH 0PVP0000TEST0001 -> Better GroBro: setting accepted for '
+            '"System Time" (register 31)'
+            in caplog.text
+        )
+        assert "register 465" not in caplog.text
+        assert device_id not in client._pending_config_writes
+
+    def test_unknown_config_register_has_human_readable_fallback(self):
+        assert (
+            grobro_client._config_register_label("0PVP0000TEST0001", 465)
+            == '"Unknown setting" (register 465)'
+        )
+
     def test_modbus_input_register_neo(self, client):
         data = (Path(DATA_DIR) / "NeoReadInputRegisters.bin").read_bytes()
         msg = _msg("c/33/QMN000ABC1D2E3FG", data)
