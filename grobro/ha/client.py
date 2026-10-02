@@ -649,13 +649,17 @@ class Client:
 
     def __publish_availability(self, device_id: str, online: bool):
         LOG.debug("Set device %s availability: %s", device_id, online)
-        if (not online and not AVAILABILITY_SENSOR) or online:
-            self._client.publish(
-                f"{HA_BASE_TOPIC}/grobro/{device_id}/availability",
-                "online" if online else "offline",
-                retain=True,
-            )
-        if (AVAILABILITY_SENSOR):
+
+        # The shared availability topic controls every Home Assistant entity for
+        # this device, including config sensors such as Wi-Fi Signal Strength.
+        # It must always receive both online and offline states. The optional
+        # Online entity is an additional user-facing binary sensor only.
+        self._client.publish(
+            f"{HA_BASE_TOPIC}/grobro/{device_id}/availability",
+            "online" if online else "offline",
+            retain=True,
+        )
+        if AVAILABILITY_SENSOR:
             self._client.publish(
                 f"{HA_BASE_TOPIC}/grobro/{device_id}/online",
                 "ON" if online else "OFF",
