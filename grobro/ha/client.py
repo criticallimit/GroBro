@@ -478,89 +478,153 @@ class Client:
         return result
 
     def publish_input_register(self, state: HomeAssistantInputRegister):
+        """Publish one telemetry packet through the optimized HA hot path."""
+        from types import SimpleNamespace
+
+        from grobro.ha.battery_position import (
+            has_manual_assignments,
+            observe_battery_serials,
+            stabilize_battery_payload,
+        )
+        from grobro.ha.device_inventory import observe_device
+        from grobro.ha.firmware_runtime import (
+            _firmware_part_names_for_device,
+            _invalidate_discovery_for_firmware_change,
+            _supports_combined_firmware,
+            compose_combined_firmware,
+        )
+        from grobro.ha.neo_power_runtime import request_initial_neo_inverter_power
+        from grobro.ha.performance import (
+            _BAT_SERIAL_GROUPS,
+            _prepare_payload,
+            _register_rules,
+            _should_publish_state,
+            _should_serialize_state,
+        )
+
         LOG.debug("HA: publish: %s", state)
-        effective_max_bat = _resolve_max_bat(state.device_id, state.payload)
-        self.__detect_neo_pv_count(state.device_id, state.payload)
-        # discovery + availability
-        self.__publish_device_discovery(state.device_id, effective_max_bat)
-        self.__publish_availability(state.device_id, True)
+        device_id = state.device_id
+        state_payload = state.payload
+        observe_device(device_id)
+
+        if _supports_combined_firmware(device_id):
+            config = self._config_cache.get(device_id)
+            datalogger_version = getattr(config, "sw_version", None) if config else None
+            firmware_version = compose_combined_firmware(
+                state_payload,
+                datalogger_version,
+                _firmware_part_names_for_device(device_id),
+            )
+            if firmware_version:
+                firmware_cache = getattr(self, "_composed_firmware_cache", None)
+                if firmware_cache is None:
+                    firmware_cache = {}
+                    self._composed_firmware_cache = firmware_cache
+                if firmware_cache.get(device_id) != firmware_version:
+                    firmware_cache[device_id] = firmware_version
+                    _invalidate_discovery_for_firmware_change(self, device_id)
+
+                state_payload = dict(state_payload)
+                state_payload["fw_version"] = firmware_version
+                state = HomeAssistantInputRegister(
+                    device_id=device_id,
+                    payload=state_payload,
+                )
+
+        stable_logical_max = 1
+        if model.uses_noah_protocol(device_id):
+            observe_battery_serials(self, device_id, state_payload)
+            manual_assignment_active = has_manual_assignments(self, device_id)
+            if KEEP_BATTERY_POSITION or manual_assignment_active:
+                state_payload, stable_logical_max = stabilize_battery_payload(
+                    self,
+                    device_id,
+                    state_payload,
+                    use_stable_auto=KEEP_BATTERY_POSITION,
+                )
+
+        effective_max_bat = _resolve_max_bat(device_id, state_payload)
+        if stable_logical_max > effective_max_bat:
+            effective_max_bat = stable_logical_max
+
+        self.__detect_neo_pv_count(device_id, state_payload)
+        self.__publish_device_discovery(device_id, effective_max_bat)
+        self.__publish_availability(device_id, True)
         if DEVICE_TIMEOUT > 0:
-            self.__reset_device_timer(state.device_id)
+            self.__reset_device_timer(device_id)
 
-        # ENUM Mapping
-        payload = dict(state.payload)
-        known_registers = get_known_registers(state.device_id)
+        known_registers = get_known_registers(device_id)
+        rules = _register_rules(known_registers)
+        prepared_state = (
+            state
+            if state_payload is state.payload
+            else SimpleNamespace(device_id=device_id, payload=state_payload)
+        )
+        payload = _prepare_payload(
+            self,
+            prepared_state,
+            effective_max_bat,
+            known_registers,
+            rules,
+        )
 
-        # Replace invalid battery temperatures (-273) with None
-        if known_registers:
-            for key, value in list(payload.items()):
-                reg = known_registers.input_registers.get(key)
-                if not reg:
-                    continue
+        if rules[3]:
+            expose_combined_battery_serials = model.is_family(device_id, "noah")
+            for _bat_num, part_keys, combined_key in _BAT_SERIAL_GROUPS:
+                parts = []
+                for key in part_keys:
+                    value = payload.pop(key, None)
+                    if value is not None:
+                        parts.append(str(value))
+                if expose_combined_battery_serials:
+                    combined = "".join(parts).strip()
+                    if combined:
+                        payload[combined_key] = combined
+                    else:
+                        payload.pop(combined_key, None)
 
-                # Identify batX_temp sensors
-                name = key  # key == "bat1_temp", "bat2_temp", etc.
-                if name.startswith("bat") and name.endswith("_temp"):
-                    if isinstance(value, (int, float)) and value == -273.1:
-                        payload[key] = None
+        if not _should_serialize_state(self, device_id, payload):
+            LOG.debug(
+                "HA state unchanged for %s, skipping serialization and publish",
+                device_id,
+            )
+            return
 
-        for key in list(payload.keys()):
-            bat_num = _get_bat_number(key)
-            if bat_num is not None and bat_num > effective_max_bat:
-                del payload[key]
+        payload_json = json.dumps(payload, separators=(",", ":"))
+        if not _should_publish_state(self, device_id, payload_json):
+            LOG.debug("HA state unchanged for %s, skipping publish", device_id)
+            return
 
-        # ENUM Mapping (must come AFTER our replacement!)
-        if known_registers:
-            for key, value in list(payload.items()):
-                reg = known_registers.input_registers.get(key)
-                if reg:
-                    payload[key] = map_enum_value(reg, value)
-
-        # Combine battery serial parts into single values
-        for bat_num in range(2, 5):
-            parts = []
-            for i in range(1, 5):
-                key = f"bat{bat_num}_ser_part_{i}"
-                val = payload.pop(key, None)
-                if val is not None:
-                    parts.append(str(val))
-            combined = "".join(parts).strip()
-            if combined:
-                payload[f"bat{bat_num}_serial"] = combined
-            else:
-                payload.pop(f"bat{bat_num}_serial", None)
-
-        # Detect battery position changes when enabled
-        if KEEP_BATTERY_POSITION:
-            current_serials: dict[int, str] = {}
-            for bat_num in range(2, 5):
-                key = f"bat{bat_num}_serial"
-                if key in payload and payload[key]:
-                    current_serials[bat_num] = str(payload[key])
-            prev_serials = _LAST_BAT_SERIALS.get(state.device_id, {})
-            if prev_serials and current_serials:
-                for pos, serial in current_serials.items():
-                    for prev_pos, prev_serial in prev_serials.items():
-                        if serial == prev_serial and pos != prev_pos:
-                            LOG.warning(
-                                "%s: battery %s changed from Bat%d to Bat%d; keeping its stable assignment",
-                                _device_label(state.device_id), serial, prev_pos, pos,
-                            )
-            _LAST_BAT_SERIALS[state.device_id] = current_serials
-
-        # State publish
-        topic = f"{HA_BASE_TOPIC}/grobro/{state.device_id}/state"
-        self._client.publish(topic, json.dumps(payload, separators=(",", ":")), retain=False)
-
+        topic = f"{HA_BASE_TOPIC}/grobro/{device_id}/state"
+        self._client.publish(topic, payload_json, retain=False)
+        request_initial_neo_inverter_power(self, device_id)
 
     def publish_holding_register_input(self, ha_input: HomeAssistantHoldingRegisterInput):
+        """Publish changed holding-register states and refresh availability."""
+        from grobro.ha.performance import _should_publish_holding_state
+
         try:
             LOG.debug("HA: publish: %s", ha_input)
+            device_id = ha_input.device_id
+            self.__publish_availability(device_id, True)
+            if DEVICE_TIMEOUT > 0:
+                self.__reset_device_timer(device_id)
+
             for value in ha_input.payload:
-                topic = f"{HA_BASE_TOPIC}/{value.register_def.type}/grobro/{ha_input.device_id}/{value.name}/get"
-                self._client.publish(topic, value.value, retain=False)
-        except Exception as e:
-            LOG.error("Could not update Home Assistant with the latest device values (%s)", e)
+                if not _should_publish_holding_state(
+                    self,
+                    device_id,
+                    value.name,
+                    value.value,
+                ):
+                    continue
+                topic = (
+                    f"{HA_BASE_TOPIC}/{value.register_def.type}/grobro/"
+                    f"{device_id}/{value.name}/get"
+                )
+                self._client.publish(topic, value.value, retain=True)
+        except Exception as exc:
+            LOG.error("HA: publish msg: %s", exc)
 
     # ------------------- MQTT Callback -------------------
 
