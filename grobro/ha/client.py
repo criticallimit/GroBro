@@ -524,10 +524,6 @@ class Client:
 
                 state_payload = dict(state_payload)
                 state_payload["fw_version"] = firmware_version
-                state = HomeAssistantInputRegister(
-                    device_id=device_id,
-                    payload=state_payload,
-                )
 
         stable_logical_max = 1
         if model.uses_noah_protocol(device_id):
@@ -902,13 +898,16 @@ class Client:
                 pos.register_no,
             )
 
-            self.on_command(
-                make_modbus_command(
-                    device_id,
-                    GrowattModbusFunction.READ_SINGLE_REGISTER,
-                    pos.register_no,
+            try:
+                self.on_command(
+                    make_modbus_command(
+                        device_id,
+                        GrowattModbusFunction.READ_SINGLE_REGISTER,
+                        pos.register_no,
+                    )
                 )
-            )
+            except Exception:
+                LOG.exception("Could not request readback for %s setting %s", device_id, cmd_name)
 
             # Some NEO firmware does not reliably answer a standalone read of
             # holding register 0. Mirror the accepted user command as retained
@@ -1323,30 +1322,31 @@ class Client:
         if device_id in self._migration_done:
             return
 
+        migration_payload = json.dumps({"migrate_discovery": True})
         results = []
         old_entities = [("set_wirk", "number")]
         for e_name, e_type in old_entities:
             results.append(self._publish_discovery_message(
                 f"{HA_BASE_TOPIC}/{e_type}/grobro/{device_id}_{e_name}/config",
-                json.dumps({"migrate_discovery": True}),
+                migration_payload,
                 retain=True,
             ))
         for cmd_name, cmd in known_registers.holding_registers.items():
             cmd_type = cmd.homeassistant.type
             results.append(self._publish_discovery_message(
                 f"{HA_BASE_TOPIC}/{cmd_type}/grobro/{device_id}_{cmd_name}/config",
-                json.dumps({"migrate_discovery": True}),
+                migration_payload,
                 retain=True,
             ))
             results.append(self._publish_discovery_message(
                 f"{HA_BASE_TOPIC}/{cmd_type}/grobro/{device_id}_{cmd_name}_read/config",
-                json.dumps({"migrate_discovery": True}),
+                migration_payload,
                 retain=True,
             ))
         for state_name in known_registers.input_registers:
             results.append(self._publish_discovery_message(
                 f"{HA_BASE_TOPIC}/sensor/grobro/{device_id}_{state_name}/config",
-                json.dumps({"migrate_discovery": True}),
+                migration_payload,
                 retain=True,
             ))
 

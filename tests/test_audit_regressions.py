@@ -43,6 +43,22 @@ def message(topic, payload):
     return SimpleNamespace(topic=topic, payload=payload)
 
 
+@pytest.mark.parametrize("failure", [RuntimeError("readback failed"), OSError("offline")])
+@pytest.mark.parametrize("write_result,expected", [((0, None), True), ((4, None), False)])
+def test_neo_accepted_switch_fallback_survives_readback_failure(clients, failure, write_result, expected):
+    target, _ = clients
+    target.on_command.side_effect = [write_result, failure]
+    with patch("grobro.ha.neo_power_runtime._publish_retained_switch_state") as publish:
+        target._Client__on_message(target._client, None, message(
+            f"homeassistant/switch/grobro/{DEVICE}/inverter_power/set", b"ON"
+        ))
+        assert target.on_command.call_count == 2
+        if expected:
+            publish.assert_called_once_with(target, DEVICE, "ON")
+        else:
+            publish.assert_not_called()
+
+
 def test_manual_remap_keeps_cell_voltages_and_ignores_empty_destination(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     save_manual_assignments("0PVPTEST", {"3": "SN00200000000001"})
