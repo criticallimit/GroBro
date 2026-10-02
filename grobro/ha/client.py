@@ -272,7 +272,7 @@ class Client:
         config_path = f"config_{device_id}.json"
         existing_config = model.DeviceConfig.from_file(config_path)
         if existing_config is None or existing_config != config:
-            LOG.info(f"Saving updated config for {device_id}")
+            LOG.info("%s: saving updated device information", _device_label(device_id))
             config.to_file(config_path)
         else:
             LOG.debug(f"No config change for {device_id}")
@@ -360,8 +360,8 @@ class Client:
                     for prev_pos, prev_serial in prev_serials.items():
                         if serial == prev_serial and pos != prev_pos:
                             LOG.warning(
-                                "Battery %s moved from Bat%d to Bat%d for device %s — inverter re-enumeration detected",
-                                serial, prev_pos, pos, state.device_id,
+                                "%s: battery %s changed from Bat%d to Bat%d; keeping its stable assignment",
+                                _device_label(state.device_id), serial, prev_pos, pos,
                             )
             _LAST_BAT_SERIALS[state.device_id] = current_serials
 
@@ -377,7 +377,7 @@ class Client:
                 topic = f"{HA_BASE_TOPIC}/{value.register_def.type}/grobro/{ha_input.device_id}/{value.name}/get"
                 self._client.publish(topic, value.value, retain=False)
         except Exception as e:
-            LOG.error(f"HA: publish msg: {e}")
+            LOG.error("Could not update Home Assistant with the latest device values (%s)", e)
 
     # ------------------- MQTT Callback -------------------
 
@@ -446,7 +446,7 @@ class Client:
 
         known_registers = get_known_registers(device_id)
         if not known_registers:
-            LOG.info("Unknown device type: %s", device_id)
+            LOG.info("Ignoring command for unrecognized Growatt device %s", device_id)
             return
 
         # Buttons
@@ -511,9 +511,9 @@ class Client:
                 reg = known_registers.holding_registers.get(cmd_name)
                 if not reg:
                     LOG.error(
-                        "Unknown read command %s for device %s",
+                        "Home Assistant requested an unsupported read action \"%s\" for %s",
                         cmd_name,
-                        device_id,
+                        _device_label(device_id),
                     )
                     return
 
@@ -536,9 +536,9 @@ class Client:
             reg = known_registers.holding_registers.get(cmd_name)
             if not reg:
                 LOG.error(
-                    "Unknown holding register %s for device %s",
+                    "Home Assistant requested an unsupported setting \"%s\" for %s",
                     cmd_name,
-                    device_id,
+                    _device_label(device_id),
                 )
                 return
 
@@ -564,7 +564,7 @@ class Client:
 
                     if raw_value not in reverse_options:
                         LOG.error(
-                            "Unknown select value %s for %s",
+                            "Home Assistant sent unsupported value \"%s\" for setting \"%s\"",
                             raw_value,
                             cmd_name,
                         )
