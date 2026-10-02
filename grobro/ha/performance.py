@@ -8,7 +8,6 @@ suppresses byte-identical repeated state payloads per device.
 
 from __future__ import annotations
 
-import json
 import math
 
 from grobro.ha import client as ha_client_module
@@ -179,6 +178,7 @@ def _should_publish_holding_state(client, device_id: str, name: str, value) -> b
         return False
     cache[key] = value
     return True
+
 
 def install_ha_performance_hook() -> None:
     """Backward-compatible no-op; telemetry optimization runs directly in Client."""

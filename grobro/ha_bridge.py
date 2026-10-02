@@ -51,7 +51,7 @@ def load_bridge_mqtt_configs():
 
 
 def install_runtime_layers() -> None:
-    """Install permanent compatibility and performance layers in stable order."""
+    """Install the remaining protocol compatibility hooks in stable order."""
     install_raw_dump_hook()
     install_noah_heater_hook()
 

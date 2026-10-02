@@ -44,7 +44,6 @@ KEEP_BATTERY_POSITION = os.getenv("KEEP_BATTERY_POSITION", "False").lower() == "
 LOG = logging.getLogger(__name__)
 
 _MAX_BAT_CACHE: dict[str, int] = {}
-_LAST_BAT_SERIALS: dict[str, dict[int, str]] = {}
 _MAC_NORMALIZE_PREFIXES = ("0PVP", "0HVR")
 
 # ------------------- Helpfunctions -------------------
