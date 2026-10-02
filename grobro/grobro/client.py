@@ -89,7 +89,7 @@ def _publish_checked(client, topic: str, payload=None, **kwargs):
         except (TypeError, IndexError, KeyError):
             status = None
     if status not in (None, 0):
-        LOG.warning("MQTT publish failed for topic %s: rc=%s", topic, status)
+        LOG.warning("Could not send an MQTT message to %s (error code %s)", topic, status)
     return result
 
 
@@ -294,7 +294,7 @@ class Client:
                         msg.retain,
                     )
                 except Exception as exc:
-                    LOG.error("Forwarding to Growatt Cloud failed: %s", exc)
+                    LOG.error("Could not forward device data to Growatt Cloud (%s)", exc)
 
             unscrambled = parser.unscramble(msg.payload)
             if len(unscrambled) < 8:
@@ -559,9 +559,9 @@ class Client:
             if LOG.isEnabledFor(logging.DEBUG):
                 LOG.debug("Unknown msg_type %s: %s", msg_type, unscrambled.hex())
         except (struct.error, TypeError, ValueError, KeyError) as exc:
-            LOG.error("Processing malformed message from %s: %s", msg.topic, exc)
+            LOG.error("Received an unreadable device message on %s (%s)", msg.topic, exc)
         except Exception as exc:
-            LOG.exception("Unexpected error processing message from %s: %s", msg.topic, exc)
+            LOG.exception("Unexpected error while processing device data from %s (%s)", msg.topic, exc)
 
     def __on_message_forward_client(self, client, userdata, msg: MQTTMessage):
         LOG.debug("Received Growatt forward message: %s: %s", msg.topic, msg.payload)
@@ -618,9 +618,9 @@ class Client:
                 properties=MQTT_PROP_FORWARD_GROWATT,
             )
         except (struct.error, TypeError, ValueError) as exc:
-            LOG.error("Forwarding malformed Growatt message: %s", exc)
+            LOG.error("Received an unreadable message from Growatt Cloud (%s)", exc)
         except Exception as exc:
-            LOG.exception("Unexpected Growatt forwarding error: %s", exc)
+            LOG.exception("Unexpected error while handling Growatt Cloud data (%s)", exc)
 
     def __queue_growatt_forward(
         self,
@@ -674,7 +674,7 @@ class Client:
                 return
             if status not in (None, mqtt.MQTT_ERR_SUCCESS):
                 LOG.warning(
-                    "MQTT publish failed for topic %s: rc=%s",
+                    "Could not send an MQTT message to %s (error code %s)",
                     topic,
                     status,
                 )
@@ -714,7 +714,7 @@ class Client:
             self.__queue_growatt_forward(client_id, topic, payload, qos, retain)
             return
         if status not in (None, mqtt.MQTT_ERR_SUCCESS):
-            LOG.warning("MQTT publish failed for topic %s: rc=%s", topic, status)
+            LOG.warning("Could not send an MQTT message to %s (error code %s)", topic, status)
 
     # Setup Growatt MQTT broker for forwarding messages
     def __connect_to_growatt_server(self, client_id):
