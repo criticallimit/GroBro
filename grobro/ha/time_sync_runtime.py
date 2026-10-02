@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta
 
-from grobro.ha import client as ha_client_module
 from grobro.ha.timer_runtime import daemon_timer
 from grobro.model.device_family import get_device_type_name, supports_time_sync
 
@@ -67,15 +66,3 @@ def schedule_next_time_sync(client) -> None:
     timer = daemon_timer(seconds_until_next_time_sync(), run_and_reschedule)
     client._time_sync_timer = timer
     timer.start()
-
-
-def install_time_sync_runtime() -> None:
-    client_cls = ha_client_module.Client
-    original_start = client_cls.start
-
-    def start_clean(self):
-        result = original_start(self)
-        schedule_next_time_sync(self)
-        return result
-
-    client_cls.start = start_clean
