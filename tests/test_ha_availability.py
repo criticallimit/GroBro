@@ -1,35 +1,36 @@
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from grobro.ha import cleanup as availability
+from grobro.ha import client as ha_client_module
+from grobro.ha.cleanup import clear_reconnect_caches
 
 
 def _client():
-    return SimpleNamespace(
-        _client=MagicMock(),
-        _last_availability={},
-        _discovery_signature={"dev": (1, None)},
-        _discovery_payload_cache={"dev": "cached"},
-        _last_state_payload={"dev": "payload"},
-        _last_holding_state={("dev", "switch"): "ON"},
-        _discovery_cache=["dev"],
-    )
+    client = object.__new__(ha_client_module.Client)
+    client._client = MagicMock()
+    client._last_availability = {}
+    client._discovery_signature = {"dev": (1, None)}
+    client._discovery_payload_cache = {"dev": "cached"}
+    client._last_state_payload = {"dev": "payload"}
+    client._last_holding_state = {("dev", "switch"): "ON"}
+    client._discovery_cache = ["dev"]
+    return client
 
 
 def test_publish_availability_skips_identical_state(monkeypatch):
     client = _client()
-    monkeypatch.setattr(availability.ha_client_module, "AVAILABILITY_SENSOR", False)
+    monkeypatch.setattr(ha_client_module, "AVAILABILITY_SENSOR", False)
 
-    assert availability.publish_availability(client, "dev", True) is True
-    assert availability.publish_availability(client, "dev", True) is False
+    assert client._Client__publish_availability("dev", True) is True
+    assert client._Client__publish_availability("dev", True) is False
     assert client._client.publish.call_count == 1
 
 
 def test_publish_availability_updates_optional_online_sensor(monkeypatch):
     client = _client()
-    monkeypatch.setattr(availability.ha_client_module, "AVAILABILITY_SENSOR", True)
+    monkeypatch.setattr(ha_client_module, "AVAILABILITY_SENSOR", True)
 
-    assert availability.publish_availability(client, "dev", False) is True
+    assert client._Client__publish_availability("dev", False) is True
     calls = client._client.publish.call_args_list
     assert len(calls) == 2
     assert calls[0].args[1] == "offline"
@@ -41,7 +42,7 @@ def test_publish_availability_updates_optional_online_sensor(monkeypatch):
 def test_reconnect_caches_are_invalidated():
     client = _client()
 
-    availability.clear_reconnect_caches(client)
+    clear_reconnect_caches(client)
 
     assert client._last_availability == {}
     assert client._discovery_signature == {}
