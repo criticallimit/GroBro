@@ -78,11 +78,16 @@ def schedule_known_neo_state_probe(client, delay: float = 1.0) -> None:
         except Exception:
             pass
 
-    def run(attempt: int = 0):
-        with runtime_lock(client):
-            if getattr(client, "_stopped", False):
-                return
-            run_probe(attempt)
+    def schedule_probe(interval, attempt):
+        def run():
+            with runtime_lock(client):
+                if getattr(client, "_stopped", False) or client._neo_startup_probe_timer is not timer:
+                    return
+                run_probe(attempt)
+
+        timer = daemon_timer(interval, run)
+        client._neo_startup_probe_timer = timer
+        timer.start()
 
     def run_probe(attempt):
         client._neo_startup_probe_timer = None
@@ -97,13 +102,9 @@ def schedule_known_neo_state_probe(client, delay: float = 1.0) -> None:
         if known_neos.issubset(requested) or attempt >= 3:
             return
 
-        timer = daemon_timer(2.0 * (attempt + 1), run, args=(attempt + 1,))
-        client._neo_startup_probe_timer = timer
-        timer.start()
+        schedule_probe(2.0 * (attempt + 1), attempt + 1)
 
-    timer = daemon_timer(delay, run)
-    client._neo_startup_probe_timer = timer
-    timer.start()
+    schedule_probe(delay, 0)
 
 
 def _publish_retained_switch_state(client, device_id: str, state: str) -> None:

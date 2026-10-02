@@ -283,3 +283,156 @@ def test_bridge_stops_both_clients_after_lifecycle_failure(failure):
         run_clients(target, source, signal)
     target.stop.assert_called_once()
     source.stop.assert_called_once()
+
+
+@pytest.mark.parametrize("stage", ["kickoff", "response"])
+@pytest.mark.parametrize("failure", ["construct", "start"])
+@pytest.mark.parametrize("error", [RuntimeError, OSError])
+def test_read_all_timer_failure_cleans_sequence_and_allows_retry(clients, stage, failure, error):
+    target, _ = clients
+    request = message(f"homeassistant/button/grobro/{DEVICE}/read_all/press", b"")
+    broken = MagicMock()
+    with patch("grobro.ha.client.Timer", return_value=broken) as timers:
+        if failure == "construct":
+            timers.side_effect = error("threads unavailable")
+        else:
+            broken.start.side_effect = error("threads unavailable")
+        if stage == "kickoff":
+            target._Client__on_message(target._client, None, request)
+        else:
+            target._read_all_active.add(DEVICE)
+            target._config_read_queues[DEVICE] = deque([4, 5])
+            with pytest.raises(error):
+                target._Client__kickoff_next_config_read(DEVICE)
+    assert DEVICE not in target._config_read_queues
+    assert DEVICE not in target._config_read_inflight
+    assert DEVICE not in target._config_read_timers
+    assert DEVICE not in target._read_all_start_timers
+    assert DEVICE not in target._read_all_active
+    target.on_config_read.assert_not_called()
+    with patch("grobro.ha.client.Timer"):
+        target._Client__on_message(target._client, None, request)
+        queued = list(target._config_read_queues[DEVICE])
+        expected = [r.growatt.register_no for r in model.get_known_registers(DEVICE).config_registers.values()]
+        assert queued == expected
+        target._Client__kickoff_next_config_read(DEVICE)
+    target.on_config_read.assert_called_once_with(DEVICE, expected[0])
+
+
+@pytest.mark.parametrize("stage", ["kickoff", "response"])
+def test_cancelled_config_timer_cannot_affect_restarted_read_all(clients, stage):
+    target, _ = clients
+    request = message(f"homeassistant/button/grobro/{DEVICE}/read_all/press", b"")
+    with patch("grobro.ha.client.Timer.start"):
+        if stage == "kickoff":
+            target._Client__on_message(target._client, None, request)
+            previous = target._read_all_start_timers[DEVICE]
+        else:
+            target._read_all_active.add(DEVICE)
+            target._config_read_queues[DEVICE] = deque([4, 5])
+            target._Client__kickoff_next_config_read(DEVICE)
+            previous = target._config_read_timers[DEVICE]
+        target._Client__reset_config_read_state()
+        if stage == "kickoff":
+            target._Client__on_message(target._client, None, request)
+            current = target._read_all_start_timers[DEVICE]
+        else:
+            target._read_all_active.add(DEVICE)
+            target._config_read_queues[DEVICE] = deque([4, 5])
+            target._Client__kickoff_next_config_read(DEVICE)
+            current = target._config_read_timers[DEVICE]
+        queued = list(target._config_read_queues[DEVICE])
+        sent = target.on_config_read.call_count
+        # Replay a callback that entered before cancellation and waited for
+        # the runtime lock until after HA recovery installed a new sequence.
+        previous.function(*previous.args, **previous.kwargs)
+        assert target.on_config_read.call_count == sent
+        assert list(target._config_read_queues[DEVICE]) == queued
+        timers = target._read_all_start_timers if stage == "kickoff" else target._config_read_timers
+        assert timers[DEVICE] is current
+        current.function(*current.args, **current.kwargs)
+        assert target.on_config_read.call_count == sent + 1
+
+
+@pytest.mark.parametrize("service", ["neo", "clock"])
+def test_replaced_runtime_timer_cannot_execute_or_replace_current_timer(clients, service):
+    from grobro.ha.neo_power_runtime import schedule_known_neo_state_probe
+    from grobro.ha.time_sync_runtime import schedule_next_time_sync
+    target, _ = clients
+    if service == "neo":
+        schedule = schedule_known_neo_state_probe
+        attribute = "_neo_startup_probe_timer"
+        callback = "grobro.ha.neo_power_runtime.request_known_neo_states"
+    else:
+        schedule = schedule_next_time_sync
+        attribute = "_time_sync_timer"
+        callback = "grobro.ha.time_sync_runtime.sync_supported_clocks"
+    with patch("threading.Timer.start"), patch(callback) as work:
+        schedule(target)
+        previous = getattr(target, attribute)
+        schedule(target)
+        current = getattr(target, attribute)
+        previous.function(*previous.args, **previous.kwargs)
+        work.assert_not_called()
+        assert getattr(target, attribute) is current
+        current.function(*current.args, **current.kwargs)
+        work.assert_called_once_with(target)
+
+
+@pytest.mark.parametrize("kind", ["device", "automatic", "manual", "detected", "observe"])
+def test_deeply_nested_persistence_is_recoverable(tmp_path, monkeypatch, kind):
+    from grobro.ha import battery_position as batteries
+    monkeypatch.chdir(tmp_path)
+    names = {"device": "config_TEST.json", "automatic": "battery_positions.json",
+             "manual": "battery_manual_positions.json", "detected": "battery_detected.json",
+             "observe": "battery_detected.json"}
+    path = tmp_path / names[kind]
+    path.write_text("[" * 20000 + "0" + "]" * 20000, encoding="utf-8")
+    if kind == "device":
+        assert model.DeviceConfig.from_file(str(path)) is None
+        model.DeviceConfig(serial_number="TEST").to_file(str(path))
+        assert model.DeviceConfig.from_file(str(path)).serial_number == "TEST"
+    elif kind == "observe":
+        client = SimpleNamespace()
+        batteries.observe_battery_serials(client, "0PVPTEST", {"bat2_ser_part_1": "SN00200000000001"})
+        assert json.loads(path.read_text())["0PVPTEST"] == [
+            {"physical_slot": 2, "serial": "SN00200000000001"},
+        ]
+    else:
+        loader = {"automatic": batteries._load_all_positions,
+                  "manual": batteries._load_manual_positions,
+                  "detected": batteries._load_detected_serials}[kind]
+        assert loader() == {}
+
+
+@pytest.mark.parametrize("failure", ["construct", "start"])
+@pytest.mark.parametrize("error", [RuntimeError, OSError])
+def test_ingress_thread_failure_closes_bound_server_socket(failure, error):
+    from grobro.ha import battery_ingress as ingress
+    server = ingress.BoundedIngressServer(("127.0.0.1", 0), ingress.BatteryIngressHandler)
+    target = "threading.Thread" if failure == "construct" else "threading.Thread.start"
+    try:
+        with patch.object(ingress, "BoundedIngressServer", return_value=server), patch(target, side_effect=error("threads unavailable")):
+            with pytest.raises(error):
+                ingress.start_battery_ingress_server(0)
+        assert server.socket.fileno() == -1
+    finally:
+        server.server_close()
+
+
+@pytest.mark.parametrize("side", ["ha", "source"])
+def test_rejected_primary_mqtt_loop_start_aborts_and_cleans_both_clients(clients, side):
+    import paho.mqtt.client as mqtt
+    from grobro.ha_bridge import run_clients
+    target, source = clients
+    failing = target if side == "ha" else source
+    failing._client.loop_start.return_value = mqtt.MQTT_ERR_INVAL
+    signals = MagicMock()
+    with patch("grobro.ha.neo_power_runtime.schedule_known_neo_state_probe"), patch("grobro.ha.time_sync_runtime.schedule_next_time_sync"):
+        with pytest.raises(RuntimeError, match="MQTT"):
+            run_clients(target, source, signals)
+    signals.wait.assert_not_called()
+    target._client.disconnect.assert_called_once()
+    source._client.disconnect.assert_called_once()
+    assert target._stopped
+    assert source._forward_stopped

@@ -100,6 +100,6 @@ class DeviceConfig(BaseModel):
             # older GroBro version. Log only the source path at DEBUG level.
             LOG.debug("Loaded device config from %s", file_path)
             return DeviceConfig(**data)
-        except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
+        except (OSError, json.JSONDecodeError, TypeError, ValueError, RecursionError) as exc:
             LOG.error("Failed to load config %s: %s", file_path, exc)
             return None

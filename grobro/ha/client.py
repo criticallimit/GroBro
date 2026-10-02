@@ -272,7 +272,9 @@ class Client:
 
     def start(self):
         self._stopped = False
-        self._client.loop_start()
+        result = self._client.loop_start()
+        if isinstance(result, int) and result != mqtt.MQTT_ERR_SUCCESS:
+            raise RuntimeError(f"Could not start MQTT network loop (error code {result})")
 
         # Stable background services are scheduled directly instead of wrapping
         # Client.start() from multiple runtime modules.
@@ -772,20 +774,16 @@ class Client:
                                 q.append(cfg.growatt.register_no)
 
                         # give the datalogger time to answer modbus reads
-                        timer = Timer(
-                            3.0,
-                            self.__kickoff_next_config_read,
-                            args=(device_id,),
+                        self.__start_config_read_timer(
+                            3.0, self.__kickoff_next_config_read,
+                            self._read_all_start_timers, device_id,
                         )
-                        timer.daemon = True
-                        self._read_all_start_timers[device_id] = timer
-                        timer.start()
                     else:
                         with self._config_read_lock:
                             self._read_all_active.discard(device_id)
                 except Exception:
                     with self._config_read_lock:
-                        self._read_all_active.discard(device_id)
+                        self.__cancel_config_read_sequence(device_id)
                     raise
 
                 return
@@ -941,6 +939,16 @@ class Client:
         now = time.monotonic()
         lock = self._device_timer_lock
 
+        def arm_timeout(delay: float, d_id: str):
+            def run(current_device: str):
+                with runtime_lock(self):
+                    if self._device_timers.get(current_device) is timer:
+                        check_timeout(current_device)
+
+            timer = daemon_timer(delay, run, args=(d_id,))
+            self._device_timers[d_id] = timer
+            timer.start()
+
         def check_timeout(d_id: str):
             with runtime_lock(self):
                 with lock:
@@ -954,9 +962,7 @@ class Client:
                     timeout = effective_device_timeout(self, d_id)
                     remaining = timeout - (time.monotonic() - last_seen)
                     if remaining > 0:
-                        timer = daemon_timer(remaining, check_timeout, args=(d_id,))
-                        self._device_timers[d_id] = timer
-                        timer.start()
+                        arm_timeout(remaining, d_id)
                         return
 
                     self._device_timers.pop(d_id, None)
@@ -974,13 +980,7 @@ class Client:
             if timer is not None and timer.is_alive():
                 return
 
-            timer = daemon_timer(
-                effective_device_timeout(self, device_id),
-                check_timeout,
-                args=(device_id,),
-            )
-            self._device_timers[device_id] = timer
-            timer.start()
+            arm_timeout(effective_device_timeout(self, device_id), device_id)
 
     def __publish_availability(self, device_id: str, online: bool):
         availability = self._last_availability
@@ -1373,6 +1373,28 @@ class Client:
 
         return device_info
 
+    def __start_config_read_timer(self, delay, callback, timers, device_id, *args):
+        """Run only if this timer still belongs to the current read sequence."""
+        def run():
+            with runtime_lock(self):
+                if timers.get(device_id) is timer:
+                    callback(device_id, *args)
+
+        timer = Timer(delay, run)
+        timer.daemon = True
+        timers[device_id] = timer
+        timer.start()
+
+    def __cancel_config_read_sequence(self, device_id: str):
+        """Release failed reads; caller must hold _config_read_lock."""
+        self._config_read_inflight.pop(device_id, None)
+        self._config_read_queues.pop(device_id, None)
+        for timers in (self._config_read_timers, getattr(self, "_read_all_start_timers", {})):
+            timer = timers.pop(device_id, None)
+            if timer is not None:
+                timer.cancel()
+        getattr(self, "_read_all_active", set()).discard(device_id)
+
     @guard_runtime
     def __kickoff_next_config_read(self, device_id: str):
         with self._config_read_lock:
@@ -1393,22 +1415,21 @@ class Client:
 
             # Arm before sending: a fast/synchronous response may already start
             # the next read and must not have its timer overwritten afterward.
-            timer = Timer(60, self.__config_read_timeout, args=(device_id, register_no))
-            timer.daemon = True
-            self._config_read_timers[device_id] = timer
-            timer.start()
+            try:
+                self.__start_config_read_timer(
+                    60, self.__config_read_timeout,
+                    self._config_read_timers, device_id, register_no,
+                )
+            except Exception:
+                self.__cancel_config_read_sequence(device_id)
+                raise
 
         if self.on_config_read:
             try:
                 self.on_config_read(device_id, register_no)
             except Exception:
                 with self._config_read_lock:
-                    self._config_read_inflight.pop(device_id, None)
-                    self._config_read_queues.pop(device_id, None)
-                    timer = self._config_read_timers.pop(device_id, None)
-                    if timer is not None:
-                        timer.cancel()
-                    getattr(self, "_read_all_active", set()).discard(device_id)
+                    self.__cancel_config_read_sequence(device_id)
                 raise
 
     @guard_runtime
