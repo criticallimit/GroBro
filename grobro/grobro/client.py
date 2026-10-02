@@ -221,7 +221,6 @@ class Client:
         self._ptq_for_raq: dict[str, str] = {}
         self._smart_meter_state_cache: dict[str, str] = {}
         self._pending_config_writes: dict[str, deque[int]] = {}
-        self._neo_version_probe_requested: set[str] = set()
 
     def start(self):
         LOG.debug("GroBro: Start")
@@ -242,19 +241,6 @@ class Client:
             self._forward_pending.clear()
             self._forward_overflow_warned.clear()
         self._pending_config_writes.clear()
-
-    def __read_neo_versions_once(self, device_id: str) -> None:
-        """Read NEO software/hardware metadata once per process."""
-        if (
-            not model.is_family(device_id, "neo")
-            or device_id in self._neo_version_probe_requested
-        ):
-            return
-
-        self._neo_version_probe_requested.add(device_id)
-
-        # Read serially. Some NEO firmware is sensitive to concurrent config reads.
-        self.send_config_read_message(device_id, 21)
 
     def send_command(self, cmd: GrowattModbusFunctionSingle):
         scrambled = scramble(cmd.build_grobro())
@@ -493,9 +479,6 @@ class Client:
 
                         self.on_config(cfg["device_id"], version_config)
 
-                        if register_no == 21:
-                            self.send_config_read_message(cfg["device_id"], 22)
-
                     topic = (
                         f"{HA_BASE_TOPIC}/config/grobro/"
                         f"{cfg['device_id']}/{register_no}/get"
@@ -640,16 +623,6 @@ class Client:
                     return
 
                 if modbus_message.function == GrowattModbusFunction.READ_INPUT_REGISTER:
-                    if (
-                        model.is_family(modbus_device_id, "neo")
-                        and any(
-                            block is not None
-                            and block.start <= 3000 <= block.end
-                            for block in modbus_message.register_blocks
-                        )
-                    ):
-                        self.__read_neo_versions_once(modbus_device_id)
-
                     state = HomeAssistantInputRegister(device_id=modbus_device_id)
                     for name, register in known_registers.input_registers.items():
                         data_raw = modbus_message.get_data(register.growatt.position)

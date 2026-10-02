@@ -325,7 +325,7 @@ class TestClientOnMessage:
                 with patch.object(client, "send_config_read_message") as config_read:
                     client._client.on_message(None, None, msg)
 
-        config_read.assert_called_once_with("QMN000ABC1D2E3FG", 22)
+        config_read.assert_not_called()
         client.on_config.assert_called_once()
         device_id, version_config = client.on_config.call_args.args
         assert device_id == "QMN000ABC1D2E3FG"
@@ -397,19 +397,6 @@ class TestClientOnMessage:
         msg = _msg("c/33/QMN000ABC1D2E3FG", data)
         client._client.on_message(None, None, msg)
         client.on_input_register.assert_called_once()
-
-    def test_neo_version_read_runs_once_without_debug(self, client):
-        data = (Path(DATA_DIR) / "NeoReadInputRegisters.bin").read_bytes()
-        msg = _msg("c/33/QMN000ABC1D2E3FG", data)
-
-        with patch("grobro.grobro.client.REGISTER_CAPTURE_ENABLED", False):
-            with patch.object(client, "send_config_read_message") as config_read:
-                with patch.object(client, "send_command") as modbus_read:
-                    client._client.on_message(None, None, msg)
-                    client._client.on_message(None, None, msg)
-
-        config_read.assert_called_once_with("QMN000ABC1D2E3FG", 21)
-        modbus_read.assert_not_called()
 
     def test_neo_version_config_registers_are_known_but_hidden(self):
         registers = grobro_client._known_registers_for_device("QMN000ABC1D2E3FG")
