@@ -42,10 +42,7 @@ from grobro.model.growatt_registers import (
     HomeAssistantHoldingRegisterValue,
     HomeAssistantInputRegister,
 )
-from grobro.model.modbus_function import (
-    GrowattModbusFunctionMultiple,
-    GrowattModbusFunctionSingle,
-)
+from grobro.model.modbus_function import GrowattModbusFunctionSingle
 from grobro.model.modbus_message import GrowattModbusFunction, GrowattModbusMessage
 from grobro.model.mqtt_config import MQTTConfig
 
@@ -247,7 +244,7 @@ class Client:
         self._pending_config_writes.clear()
 
     def __probe_neo_versions(self, device_id: str) -> None:
-        """Issue one passive NEO version probe while register debug is enabled."""
+        """Issue one conservative NEO config-version probe in register-debug mode."""
         if (
             not REGISTER_CAPTURE_ENABLED
             or not model.is_family(device_id, "neo")
@@ -257,31 +254,16 @@ class Client:
 
         self._neo_version_probe_requested.add(device_id)
         LOG.info(
-            "%s: diagnostic version probe reading config 21/22 and input registers 119-120",
+            "%s: diagnostic version probe reading config 21, then 22 after its response",
             _device_label(device_id),
         )
 
-        # Config parameters 21/22 are the common Growatt TLV software/hardware
-        # version fields. These are read-only requests.
+        # Config parameter 21 is the common Growatt TLV software-version field.
+        # Request 22 only after 21 has answered so the NEO never receives
+        # concurrent diagnostic config reads.
         self.send_config_read_message(device_id, 21)
-        self.send_config_read_message(device_id, 22)
 
-        # NOAH exposes firmware bytes in input registers 119/120. Ask the NEO for
-        # the same read-only block without assigning any semantics to the result.
-        self.send_command(
-            GrowattModbusFunctionMultiple(
-                device_id=device_id,
-                function=GrowattModbusFunction.READ_INPUT_REGISTER,
-                start=119,
-                end=120,
-                values=b"",
-            )
-        )
-
-    def send_command(
-        self,
-        cmd: GrowattModbusFunctionSingle | GrowattModbusFunctionMultiple,
-    ):
+    def send_command(self, cmd: GrowattModbusFunctionSingle):
         scrambled = scramble(cmd.build_grobro())
         final_payload = append_crc(scrambled)
 
@@ -515,6 +497,8 @@ class Client:
                             register_no,
                             value,
                         )
+                        if register_no == 21:
+                            self.send_config_read_message(cfg["device_id"], 22)
 
                     topic = (
                         f"{HA_BASE_TOPIC}/config/grobro/"
@@ -663,45 +647,13 @@ class Client:
                     if (
                         REGISTER_CAPTURE_ENABLED
                         and model.is_family(modbus_device_id, "neo")
-                    ):
-                        # Trigger the one-shot probe only from normal NEO telemetry,
-                        # never from the diagnostic 119-120 response itself.
-                        if any(
+                        and any(
                             block is not None
                             and block.start <= 3000 <= block.end
                             for block in modbus_message.register_blocks
-                        ):
-                            self.__probe_neo_versions(modbus_device_id)
-
-                        probe_values: dict[int, int] = {}
-                        for block in modbus_message.register_blocks:
-                            if block is None:
-                                continue
-                            for register_no in (119, 120):
-                                if block.start <= register_no <= block.end:
-                                    offset = (register_no - block.start) * 2
-                                    if offset + 2 <= len(block.values):
-                                        probe_values[register_no] = struct.unpack_from(
-                                            ">H",
-                                            block.values,
-                                            offset,
-                                        )[0]
-
-                        if 119 in probe_values and 120 in probe_values:
-                            raw_119 = probe_values[119]
-                            raw_120 = probe_values[120]
-                            LOG.info(
-                                "%s: diagnostic input registers 119=%s (0x%04X), "
-                                "120=%s (0x%04X); NOAH-style bytes would be %s/%s/%s",
-                                _device_label(modbus_device_id),
-                                raw_119,
-                                raw_119,
-                                raw_120,
-                                raw_120,
-                                raw_119 & 0xFF,
-                                (raw_120 >> 8) & 0xFF,
-                                raw_120 & 0xFF,
-                            )
+                        )
+                    ):
+                        self.__probe_neo_versions(modbus_device_id)
 
                     state = HomeAssistantInputRegister(device_id=modbus_device_id)
                     for name, register in known_registers.input_registers.items():
