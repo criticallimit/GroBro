@@ -14,7 +14,6 @@ import struct
 import threading
 from datetime import datetime, timezone
 
-from grobro.grobro import parser as growatt_parser
 from grobro.grobro.noah_0103 import find_embedded_register_block
 from grobro.model.modbus_message import GrowattModbusMessage
 
@@ -49,9 +48,6 @@ _LAST_VALUES: dict[tuple[str, int, int], int] = {}
 # Comparing the whole bytes object in C is much cheaper than walking every
 # register in Python just to discover that none changed.
 _LAST_BLOCK_VALUES: dict[tuple[str, int, int, int], bytes] = {}
-_INSTALLED = False
-_ORIGINAL_PARSE = None
-_ORIGINAL_NOAH_0103 = None
 
 
 def _signed_16(value: int) -> int:
@@ -258,52 +254,35 @@ def _write_noah_0103(result: dict) -> None:
 
     _append_records(records)
 
+def capture_modbus_message(message: GrowattModbusMessage | None) -> None:
+    """Write one parsed Modbus message when passive register debug is enabled."""
+    if not REGISTER_DEBUG or message is None:
+        return
+    try:
+        _write_modbus_message(message)
+    except Exception as exc:
+        LOG.warning("Register debug dump failed: %s", exc)
+
+
+def capture_noah_0103(data: bytes, result: dict | None) -> None:
+    """Write one parsed NOAH 0x0103 message when passive debug is enabled."""
+    if not REGISTER_DEBUG or not isinstance(result, dict):
+        return
+    try:
+        debug_result = dict(result)
+        block = find_embedded_register_block(data)
+        if block is not None:
+            debug_result["embedded_register_block"] = {
+                "offset": block.offset,
+                "start": block.start,
+                "end": block.end,
+                "values": list(block.values),
+            }
+        _write_noah_0103(debug_result)
+    except Exception as exc:
+        LOG.warning("NOAH 0x0103 debug dump failed: %s", exc)
+
 
 def install_register_debug_hook() -> None:
-    """Install passive parser hooks once when REGISTER_DEBUG is enabled."""
-    global _INSTALLED, _ORIGINAL_PARSE, _ORIGINAL_NOAH_0103
-
-    if _INSTALLED or not REGISTER_DEBUG:
-        return
-
-    _ORIGINAL_PARSE = GrowattModbusMessage.parse_grobro
-
-    def parse_and_dump(buffer):
-        message = _ORIGINAL_PARSE(buffer)
-        if message is not None:
-            try:
-                _write_modbus_message(message)
-            except Exception as exc:
-                LOG.warning("Register debug dump failed: %s", exc)
-        return message
-
-    GrowattModbusMessage.parse_grobro = staticmethod(parse_and_dump)
-
-    _ORIGINAL_NOAH_0103 = growatt_parser.NOAH_DECODERS.get(0x0103)
-    if _ORIGINAL_NOAH_0103 is not None:
-
-        def parse_noah_0103_and_dump(data):
-            result = _ORIGINAL_NOAH_0103(data)
-            try:
-                block = find_embedded_register_block(data)
-                if block is not None:
-                    result["embedded_register_block"] = {
-                        "offset": block.offset,
-                        "start": block.start,
-                        "end": block.end,
-                        "values": list(block.values),
-                    }
-                _write_noah_0103(result)
-            except Exception as exc:
-                LOG.warning("NOAH 0x0103 debug dump failed: %s", exc)
-            return result
-
-        growatt_parser.NOAH_DECODERS[0x0103] = parse_noah_0103_and_dump
-
-    _INSTALLED = True
-    LOG.warning(
-        "Passive register debug enabled: dir=%s max_register=%s changes_only=%s",
-        REGISTER_DEBUG_DIR,
-        REGISTER_DEBUG_MAX_REGISTER,
-        REGISTER_DEBUG_CHANGES_ONLY,
-    )
+    """Backward-compatible no-op; register diagnostics run directly in Client."""
+    return None

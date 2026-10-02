@@ -28,6 +28,15 @@ from grobro.grobro.builder import (
 from grobro.grobro.cloud_policy import CloudForwardingPolicy
 from grobro.grobro.noah_heater import heater_state_from_unscrambled
 from grobro.grobro.raw_dump import dump_message_jsonl
+from grobro.grobro.register_debug import (
+    REGISTER_DEBUG as REGISTER_CAPTURE_ENABLED,
+    capture_modbus_message,
+    capture_noah_0103,
+)
+from grobro.grobro.noah_traffic_debug import (
+    REGISTER_DEBUG as NOAH_TRAFFIC_CAPTURE_ENABLED,
+    capture_noah_mqtt_traffic,
+)
 from grobro.model.growatt_registers import (
     HomeAssistantHoldingRegisterInput,
     HomeAssistantHoldingRegisterValue,
@@ -83,6 +92,35 @@ def _config_register_label(device_id: str, register_no: int) -> str:
 
 def _publish_checked(client, topic: str, payload=None, **kwargs):
     """Publish and warn when Paho rejects the request locally."""
+    if (
+        NOAH_TRAFFIC_CAPTURE_ENABLED
+        and payload is not None
+        and "/33/" in str(topic)
+    ):
+        device_id = _extract_device_id(topic)
+        if device_id.startswith("0PVP"):
+            properties = kwargs.get("properties")
+            if properties is MQTT_PROP_FORWARD_GROWATT:
+                direction = "grobro_to_device_from_cloud"
+            elif properties is MQTT_PROP_FORWARD_HA:
+                direction = "grobro_to_device_from_ha"
+            else:
+                direction = "grobro_to_cloud_or_device"
+            try:
+                decoded = parser.unscramble(payload)
+            except Exception:
+                decoded = None
+            capture_noah_mqtt_traffic(
+                device_id=device_id,
+                direction=direction,
+                topic=topic,
+                payload=payload,
+                decoded=decoded,
+                qos=kwargs.get("qos"),
+                retain=kwargs.get("retain"),
+                forwarded_for=None,
+            )
+
     result = client.publish(topic, payload, **kwargs)
     status = getattr(result, "rc", None)
     if status is None:
@@ -271,6 +309,23 @@ class Client:
         # check for forwarded messages and ignore them
         forwarded_for = get_property(msg, "forwarded-for")
         if forwarded_for in {"ha", "growatt"}:
+            if NOAH_TRAFFIC_CAPTURE_ENABLED:
+                debug_device_id = _extract_device_id(msg.topic)
+                if debug_device_id.startswith("0PVP"):
+                    try:
+                        decoded = parser.unscramble(msg.payload)
+                    except Exception:
+                        decoded = None
+                    capture_noah_mqtt_traffic(
+                        device_id=debug_device_id,
+                        direction="device_to_grobro",
+                        topic=msg.topic,
+                        payload=msg.payload,
+                        decoded=decoded,
+                        qos=getattr(msg, "qos", None),
+                        retain=getattr(msg, "retain", None),
+                        forwarded_for=forwarded_for,
+                    )
             LOG.debug("Message forwarded from %s. Skipping...", forwarded_for)
             return
 
@@ -299,6 +354,17 @@ class Client:
                     LOG.error("Could not forward device data to Growatt Cloud (%s)", exc)
 
             unscrambled = parser.unscramble(msg.payload)
+            if NOAH_TRAFFIC_CAPTURE_ENABLED and device_id.startswith("0PVP"):
+                capture_noah_mqtt_traffic(
+                    device_id=device_id,
+                    direction="device_to_grobro",
+                    topic=msg.topic,
+                    payload=msg.payload,
+                    decoded=unscrambled,
+                    qos=getattr(msg, "qos", None),
+                    retain=getattr(msg, "retain", None),
+                    forwarded_for=forwarded_for,
+                )
             if len(unscrambled) < 8:
                 LOG.debug("Ignoring truncated Growatt message for %s", device_id)
                 return
@@ -497,11 +563,15 @@ class Client:
             # generic Modbus block starting directly after the common header.
             # The dedicated decoder/debug hook already handles it.
             if noah_msg and noah_msg.get("message_type") == 0x0103:
+                if REGISTER_CAPTURE_ENABLED:
+                    capture_noah_0103(unscrambled, noah_msg)
                 LOG.debug("Handled NOAH/NEO 0x0103 message for %s", device_id)
                 return
 
             # Generic modbus message
             modbus_message = GrowattModbusMessage.parse_grobro(unscrambled)
+            if REGISTER_CAPTURE_ENABLED:
+                capture_modbus_message(modbus_message)
             LOG.debug("Received modbus message: %s", modbus_message)
 
             if modbus_message:
@@ -578,6 +648,17 @@ class Client:
                 return
 
             unscrambled = parser.unscramble(msg.payload)
+            if NOAH_TRAFFIC_CAPTURE_ENABLED and device_id.startswith("0PVP"):
+                capture_noah_mqtt_traffic(
+                    device_id=device_id,
+                    direction="cloud_to_grobro",
+                    topic=msg.topic,
+                    payload=msg.payload,
+                    decoded=unscrambled,
+                    qos=getattr(msg, "qos", None),
+                    retain=getattr(msg, "retain", None),
+                    forwarded_for=get_property(msg, "forwarded-for"),
+                )
             if len(unscrambled) < 8:
                 LOG.debug("Ignoring truncated Growatt cloud message for %s", device_id)
                 return

@@ -170,3 +170,10 @@ def test_noah_0103_full_device_id_is_unchanged():
         register_debug._canonical_0103_device_id("QMN000BZP4N991ML")
         == "QMN000BZP4N991ML"
     )
+
+
+def test_register_debug_direct_helpers_respect_feature_gate(monkeypatch):
+    monkeypatch.setattr(register_debug, "REGISTER_DEBUG", False)
+    register_debug.capture_modbus_message(None)
+    register_debug.capture_noah_0103(b"", None)
+    assert register_debug.install_register_debug_hook() is None

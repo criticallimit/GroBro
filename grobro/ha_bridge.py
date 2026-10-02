@@ -11,8 +11,6 @@ import logging
 import os
 
 from grobro import grobro, ha, model
-from grobro.grobro.noah_traffic_debug import install_noah_traffic_debug_hook
-from grobro.grobro.register_debug import install_register_debug_hook
 from grobro.grobro.signals import SignalHandler
 from grobro.ha.battery_ingress import start_battery_ingress_server
 from grobro.ha.supervisor_config import mark_process_log_start
@@ -54,9 +52,8 @@ def install_runtime_layers() -> None:
 
 
 def install_optional_diagnostics() -> None:
-    """Install passive diagnostics using their existing feature gates."""
-    install_register_debug_hook()
-    install_noah_traffic_debug_hook()
+    """Backward-compatible no-op; diagnostics are integrated directly."""
+    return None
 
 
 def wire_clients(ha_client, grobro_client) -> None:
@@ -91,7 +88,6 @@ GROBRO_MQTT_CONFIG, HA_MQTT_CONFIG, FORWARD_MQTT_CONFIG = load_bridge_mqtt_confi
 
 if __name__ == "__main__":
     mark_process_log_start()
-    install_optional_diagnostics()
 
     ha_client = ha.Client(HA_MQTT_CONFIG)
     grobro_client = grobro.Client(GROBRO_MQTT_CONFIG, FORWARD_MQTT_CONFIG)
