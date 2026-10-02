@@ -74,6 +74,30 @@ def test_direct_device_and_cloud_paths_capture_noah_traffic(monkeypatch):
     ]
 
 
+def test_direct_publish_path_captures_nexa_shared_protocol(monkeypatch):
+    captures = []
+    monkeypatch.setattr(client_module, "NOAH_TRAFFIC_CAPTURE_ENABLED", True)
+    monkeypatch.setattr(
+        client_module,
+        "capture_noah_mqtt_traffic",
+        lambda **kwargs: captures.append(kwargs),
+    )
+    monkeypatch.setattr(client_module.parser, "unscramble", lambda payload: b"decoded")
+
+    mqtt_client = MagicMock()
+    mqtt_client.publish.return_value = (0, None)
+
+    client_module._publish_checked(
+        mqtt_client,
+        "s/33/0HVRTEST",
+        b"payload",
+        properties=client_module.MQTT_PROP_FORWARD_HA,
+    )
+
+    assert len(captures) == 1
+    assert captures[0]["device_id"] == "0HVRTEST"
+
+
 def test_direct_publish_path_captures_ha_direction(monkeypatch):
     captures = []
     monkeypatch.setattr(client_module, "NOAH_TRAFFIC_CAPTURE_ENABLED", True)

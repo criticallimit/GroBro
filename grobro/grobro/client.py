@@ -98,7 +98,7 @@ def _publish_checked(client, topic: str, payload=None, **kwargs):
         and "/33/" in str(topic)
     ):
         device_id = _extract_device_id(topic)
-        if device_id.startswith("0PVP"):
+        if model.uses_noah_protocol(device_id):
             properties = kwargs.get("properties")
             if properties is MQTT_PROP_FORWARD_GROWATT:
                 direction = "grobro_to_device_from_cloud"
@@ -311,7 +311,7 @@ class Client:
         if forwarded_for in {"ha", "growatt"}:
             if NOAH_TRAFFIC_CAPTURE_ENABLED:
                 debug_device_id = _extract_device_id(msg.topic)
-                if debug_device_id.startswith("0PVP"):
+                if model.uses_noah_protocol(debug_device_id):
                     try:
                         decoded = parser.unscramble(msg.payload)
                     except Exception:
@@ -354,7 +354,7 @@ class Client:
                     LOG.error("Could not forward device data to Growatt Cloud (%s)", exc)
 
             unscrambled = parser.unscramble(msg.payload)
-            if NOAH_TRAFFIC_CAPTURE_ENABLED and device_id.startswith("0PVP"):
+            if NOAH_TRAFFIC_CAPTURE_ENABLED and model.uses_noah_protocol(device_id):
                 capture_noah_mqtt_traffic(
                     device_id=device_id,
                     direction="device_to_grobro",
@@ -450,9 +450,11 @@ class Client:
                     register_no = entry["register_no"]
                     value = entry["value"]
 
+                    config_name = None
                     if known_registers:
-                        for reg in known_registers.config_registers.values():
+                        for name, reg in known_registers.config_registers.items():
                             if reg.growatt.register_no == register_no:
+                                config_name = name
                                 if reg.growatt.data.data_type == "INT":
                                     try:
                                         value = int(value)
@@ -465,19 +467,16 @@ class Client:
                                         break
                                 break
 
-                    if (
-                        model.is_family(cfg["device_id"], "neo")
-                        and register_no in (21, 22)
-                    ):
-                        version_config = model.DeviceConfig(
+                    metadata_field = {
+                        "software_version": "sw_version",
+                        "hardware_version": "hw_version",
+                    }.get(config_name)
+                    if metadata_field:
+                        metadata_config = model.DeviceConfig(
                             serial_number=cfg["device_id"],
+                            **{metadata_field: str(value)},
                         )
-                        if register_no == 21:
-                            version_config.sw_version = str(value)
-                        else:
-                            version_config.hw_version = str(value)
-
-                        self.on_config(cfg["device_id"], version_config)
+                        self.on_config(cfg["device_id"], metadata_config)
 
                     topic = (
                         f"{HA_BASE_TOPIC}/config/grobro/"
@@ -663,7 +662,7 @@ class Client:
                 return
 
             unscrambled = parser.unscramble(msg.payload)
-            if NOAH_TRAFFIC_CAPTURE_ENABLED and device_id.startswith("0PVP"):
+            if NOAH_TRAFFIC_CAPTURE_ENABLED and model.uses_noah_protocol(device_id):
                 capture_noah_mqtt_traffic(
                     device_id=device_id,
                     direction="cloud_to_grobro",

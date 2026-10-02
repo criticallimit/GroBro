@@ -308,7 +308,7 @@ class TestClientOnMessage:
         assert "Received compound config response" in caplog.text
         assert "NEO QMN000BZP4N991ML -> Better GroBro: config response" not in caplog.text
 
-    def test_neo_debug_version_config_response_logs_value(self, client, caplog):
+    def test_config_software_version_response_updates_metadata(self, client, caplog):
         data = bytes.fromhex(
             "00 01 00 07 00 2b 01 19 "
             "51 4d 4e 30 30 30 41 42 43 31 44 32 45 33 46 47 "
@@ -332,7 +332,7 @@ class TestClientOnMessage:
         assert version_config.sw_version == "1.2.3"
         assert version_config.hw_version is None
 
-    def test_neo_hardware_version_config_response_updates_metadata(self, client):
+    def test_config_hardware_version_response_updates_metadata(self, client):
         data = bytes.fromhex(
             "00 01 00 07 00 2b 01 19 "
             "51 4d 4e 30 30 30 41 42 43 31 44 32 45 33 46 47 "
@@ -351,6 +351,40 @@ class TestClientOnMessage:
         assert device_id == "QMN000ABC1D2E3FG"
         assert version_config.sw_version is None
         assert version_config.hw_version == "V1.0"
+
+    def test_version_metadata_mapping_uses_config_name_not_device_family(
+        self, client
+    ):
+        from types import SimpleNamespace
+
+        register = SimpleNamespace(
+            growatt=SimpleNamespace(
+                register_no=21,
+                data=SimpleNamespace(data_type="STRING"),
+            )
+        )
+        known = SimpleNamespace(config_registers={"software_version": register})
+        data = bytes.fromhex(
+            "00 01 00 07 00 2e 01 19 "
+            "48 41 51 30 30 30 41 42 43 31 44 32 45 33 46 47 "
+            "00 00 00 00 00 00 00 00 00 00 00 00 00 00 "
+            "00 01 00 "
+            "00 15 00 07 33 2e 38 2e 32 2e 38 "
+            "00 00"
+        )
+        msg = _msg("c/33/HAQ000ABC1D2E3FG", b"wire")
+
+        with patch(
+            "grobro.grobro.client._known_registers_for_device",
+            return_value=known,
+        ):
+            with patch("grobro.grobro.client.parser.unscramble", return_value=data):
+                client._client.on_message(None, None, msg)
+
+        client.on_config.assert_called_once()
+        device_id, metadata = client.on_config.call_args.args
+        assert device_id == "HAQ000ABC1D2E3FG"
+        assert metadata.sw_version == "3.8.2.8"
 
     def test_config_write_ack_280(self, client):
         data = (Path(DATA_DIR) / "NeoConfigWriteAck_DataInterval.bin").read_bytes()

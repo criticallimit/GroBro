@@ -44,12 +44,11 @@ KEEP_BATTERY_POSITION = os.getenv("KEEP_BATTERY_POSITION", "False").lower() == "
 LOG = logging.getLogger(__name__)
 
 _MAX_BAT_CACHE: dict[str, int] = {}
-_MAC_NORMALIZE_PREFIXES = ("0PVP", "0HVR")
 
 # ------------------- Helpfunctions -------------------
 
 def _normalize_mac_address(value: object) -> str | None:
-    """Normalize NOAH/NEXA MAC addresses to Home Assistant's canonical form."""
+    """Normalize a valid MAC address to Home Assistant's canonical form."""
     if value is None:
         return None
 
@@ -1325,16 +1324,9 @@ class Client:
         if getattr(config, "hw_version", None):
             device_info["hw_version"] = config.hw_version
         if getattr(config, "mac_address", None):
-            raw_mac = config.mac_address
-            if device_id.startswith(_MAC_NORMALIZE_PREFIXES):
-                mac = _normalize_mac_address(raw_mac)
-                if mac:
-                    device_info["connections"] = [["mac", mac]]
-            else:
-                # Preserve the existing strict NEO/other-family behavior.
-                import re
-                if re.match(r"^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$", raw_mac):
-                    device_info["connections"] = [["mac", raw_mac]]
+            mac = _normalize_mac_address(config.mac_address)
+            if mac:
+                device_info["connections"] = [["mac", mac]]
 
         return device_info
 

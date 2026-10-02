@@ -714,18 +714,40 @@ class TestClientDeviceInfo:
         info = ha_client._Client__device_info_from_config(device_id)
         assert info["connections"] == [["mac", "aa:bb:cc:dd:ee:ff"]]
 
+    @pytest.mark.parametrize(
+        "device_id",
+        ["0PVP0000TEST0001", "0HVR0000TEST001", "QMN000ABC1D2E3FG"],
+    )
+    def test_device_info_rejects_invalid_mac_for_all_families(
+        self, ha_client, device_id
+    ):
+        cfg = DeviceConfig(serial_number=device_id, mac_address="aa:bb:cc:dd:ee:xx")
+        ha_client._config_cache[device_id] = cfg
+        info = ha_client._Client__device_info_from_config(device_id)
+        assert "connections" not in info
+
     def test_device_info_with_masked_mac(self, ha_client):
         cfg = DeviceConfig(serial_number="0PVP0000TEST0001", mac_address="aa:bb:cc:dd:ee:xx")
         ha_client._config_cache["0PVP0000TEST0001"] = cfg
         info = ha_client._Client__device_info_from_config("0PVP0000TEST0001")
         assert "connections" not in info
 
-    def test_device_info_does_not_expand_neo_mac_formats(self, ha_client):
-        device_id = "QMN000ABC1D2E3FG"
+    @pytest.mark.parametrize(
+        "device_id",
+        [
+            "QMN000ABC1D2E3FG",
+            "PTQ000ABC1D2E3FG",
+            "HAQ000ABC1D2E3FG",
+            "ZGQ000ABC1D2E3FG",
+        ],
+    )
+    def test_device_info_normalizes_mac_for_all_device_families(
+        self, ha_client, device_id
+    ):
         cfg = DeviceConfig(serial_number=device_id, mac_address="AA-BB-CC-DD-EE-FF")
         ha_client._config_cache[device_id] = cfg
         info = ha_client._Client__device_info_from_config(device_id)
-        assert "connections" not in info
+        assert info["connections"] == [["mac", "aa:bb:cc:dd:ee:ff"]]
 
     def test_device_info_with_hw_version(self, ha_client):
         cfg = DeviceConfig(serial_number="0PVP0000TEST0001", hw_version="2.0")
