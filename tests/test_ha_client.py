@@ -28,7 +28,6 @@ from grobro.model.mqtt_config import MQTTConfig
 from grobro.model.device_config import DeviceConfig
 from grobro.model.growatt_registers import HomeAssistantInputRegister
 from grobro.grobro.parser import unscramble
-from grobro.ha.cleanup import install_ha_cleanup_hook
 
 
 DATA_DIR = __file__[: __file__.rfind("/")] + "/model/data"
@@ -212,9 +211,7 @@ def mock_mqtt():
 
 @pytest.fixture
 def ha_client(mock_mqtt):
-    # Better GroBro's HA runtime behavior is now implemented directly by Client.
-    # The cleanup hook remains a compatibility no-op for older callers.
-    install_ha_cleanup_hook()
+    # Better GroBro's HA runtime behavior is implemented directly by Client.
     with patch("grobro.ha.client.os.listdir", return_value=[]):
         cfg = MQTTConfig(host="localhost", port=1883)
         c = Client(cfg)
