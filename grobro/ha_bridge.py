@@ -17,7 +17,6 @@ from grobro.grobro.raw_dump import install_raw_dump_hook
 from grobro.grobro.register_debug import install_register_debug_hook
 from grobro.grobro.signals import SignalHandler
 from grobro.ha.battery_ingress import start_battery_ingress_server
-from grobro.ha.cleanup import install_ha_cleanup_hook
 from grobro.ha.performance import install_ha_performance_hook
 from grobro.ha.supervisor_config import mark_process_log_start
 
@@ -56,7 +55,6 @@ def install_runtime_layers() -> None:
     """Install permanent compatibility and performance layers in stable order."""
     install_raw_dump_hook()
     install_noah_heater_hook()
-    install_ha_cleanup_hook()
     install_ha_performance_hook()
 
 

@@ -1,8 +1,7 @@
-"""Compatibility helpers and the remaining Home Assistant discovery runtime hook."""
+"""Backward-compatible Home Assistant helper aliases for Better GroBro."""
 
 from __future__ import annotations
 
-import logging
 from threading import Lock
 
 from grobro.ha import client as ha_client_module
@@ -10,12 +9,9 @@ from grobro.ha.discovery_runtime import (
     clean_discovery_payload,
     configured_local_ip,
     configured_serial,
-    install_discovery_runtime,
 )
 from grobro.ha.time_sync_runtime import seconds_until_next_time_sync, sync_supported_clocks
 
-LOG = logging.getLogger(__name__)
-_INSTALLED = False
 
 
 def initialize_instance_state(client) -> None:
@@ -69,12 +65,5 @@ _resolve_max_bat = ha_client_module._resolve_max_bat
 
 
 def install_ha_cleanup_hook() -> None:
-    """Install the one remaining HA runtime adapter exactly once."""
-    global _INSTALLED
-    if _INSTALLED:
-        return
-
-    install_discovery_runtime()
-
-    _INSTALLED = True
-    LOG.debug("Installed Better GroBro Home Assistant discovery runtime")
+    """Backward-compatible no-op; HA cleanup now runs directly in Client."""
+    return None

@@ -383,14 +383,99 @@ class Client:
     # ------------------- Publishing -------------------
 
     def _publish_discovery_message(self, topic, payload=None, *args, **kwargs):
-        """Publish one discovery-related MQTT message.
+        """Publish discovery with Better GroBro cleanup applied directly."""
+        from grobro.ha.discovery_runtime import (
+            build_discovery_repair_payload,
+            clean_discovery_payload,
+            clear_legacy_component_discovery,
+            configured_serial,
+        )
+        from grobro.ha.firmware_runtime import _rewrite_firmware_discovery
 
-        Better GroBro installs a permanent wrapper around this method for
-        discovery cleanup/localization. Keeping discovery publishing behind this
-        method avoids temporarily replacing the shared MQTT client's publish
-        callback while other threads may be publishing normal state.
-        """
-        return self._client.publish(topic, payload, *args, **kwargs)
+        base = HA_BASE_TOPIC
+        prefix = f"{base}/device/"
+        suffix = "/config"
+        is_device_config = topic.startswith(prefix) and topic.endswith(suffix)
+        device_id = topic[len(prefix) : -len(suffix)] if is_device_config else None
+
+        if device_id is None:
+            parts = topic.split("/")
+            if len(parts) >= 4 and parts[0] == base and parts[1] == "grobro":
+                device_id = parts[2]
+
+        if not device_id:
+            return self._client.publish(topic, payload, *args, **kwargs)
+
+        repair_done = getattr(self, "_better_312_discovery_repair_done", None)
+        if repair_done is None:
+            repair_done = set()
+            self._better_312_discovery_repair_done = repair_done
+
+        legacy_cleanup_done = getattr(self, "_legacy_discovery_cleanup_done", None)
+        if legacy_cleanup_done is None:
+            legacy_cleanup_done = set()
+            self._legacy_discovery_cleanup_done = legacy_cleanup_done
+
+        if is_device_config and payload:
+            try:
+                data = json.loads(payload)
+                clean_data = clean_discovery_payload(self, device_id, data)
+
+                firmware_version = getattr(
+                    self,
+                    "_composed_firmware_cache",
+                    {},
+                ).get(device_id)
+                clean_payload = _rewrite_firmware_discovery(
+                    device_id,
+                    json.dumps(clean_data, separators=(",", ":")),
+                    firmware_version,
+                )
+                clean_data = json.loads(clean_payload)
+
+                if device_id not in repair_done:
+                    repair_payload = json.dumps(
+                        build_discovery_repair_payload(device_id, clean_data),
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    )
+                    self._client.publish(
+                        topic,
+                        repair_payload,
+                        *args,
+                        **kwargs,
+                    )
+                    repair_done.add(device_id)
+
+                payload = json.dumps(
+                    clean_data,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                )
+            except (TypeError, ValueError):
+                pass
+
+        if topic == f"{base}/grobro/{device_id}/serial":
+            payload = configured_serial(self, device_id)
+
+        if topic == f"{base}/grobro/{device_id}/sw_version":
+            config = getattr(self, "_config_cache", {}).get(device_id)
+            sw_version = getattr(config, "sw_version", None) if config else None
+            if not sw_version:
+                return None
+            payload = sw_version
+
+        result = self._client.publish(topic, payload, *args, **kwargs)
+
+        if is_device_config and payload and device_id not in legacy_cleanup_done:
+            clear_legacy_component_discovery(
+                self._client.publish,
+                device_id,
+            )
+            legacy_cleanup_done.add(device_id)
+            self._client.publish(topic, payload, *args, **kwargs)
+
+        return result
 
     def publish_input_register(self, state: HomeAssistantInputRegister):
         LOG.debug("HA: publish: %s", state)
