@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import copy
 import ipaddress
-import json
 
 import grobro.model as model
 from grobro.ha import client as ha_client_module
