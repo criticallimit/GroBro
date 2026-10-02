@@ -74,7 +74,7 @@ def install_ha_cleanup_hook() -> None:
     if _INSTALLED:
         return
 
-    install_discovery_runtime(ha_client_module._resolve_max_bat)
+    install_discovery_runtime()
 
     _INSTALLED = True
     LOG.debug("Installed Better GroBro Home Assistant discovery runtime")

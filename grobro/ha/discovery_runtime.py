@@ -127,34 +127,9 @@ def clear_legacy_component_discovery(original_publish, device_id: str) -> None:
         original_publish(topic, "", retain=True)
 
 
-def migration_set(client) -> set:
-    migrations = getattr(client, "_migration_done", None)
-    if migrations is None:
-        migrations = set()
-        client._migration_done = migrations
-    return migrations
-
-
-def discovery_signature(
-    client, device_id: str, effective_max_bat: int
-) -> tuple[int, int | None, str]:
-    pv_count = getattr(client, "_neo_pv_count", {}).get(device_id)
-    return effective_max_bat, pv_count, runtime_language()
-
-
-def install_discovery_runtime(resolve_max_bat) -> None:
+def install_discovery_runtime() -> None:
+    """Install only the remaining discovery payload cleanup adapter."""
     client_cls = ha_client_module.Client
-    original_migrate = client_cls._Client__migrate_entity_discovery
-
-    def migrate_once(self, device_id, known_registers):
-        migrations = migration_set(self)
-        if device_id in migrations:
-            return
-        original_migrate(self, device_id, known_registers)
-        migrations.add(device_id)
-
-    client_cls._Client__migrate_entity_discovery = migrate_once
-    original_publish_discovery = client_cls._Client__publish_device_discovery
     original_discovery_publish = client_cls._publish_discovery_message
 
     def publish_discovery_message_clean(self, topic, payload=None, *args, **kwargs):
@@ -253,21 +228,3 @@ def install_discovery_runtime(resolve_max_bat) -> None:
         return result
 
     client_cls._publish_discovery_message = publish_discovery_message_clean
-
-    def publish_discovery_clean(self, device_id: str, effective_max_bat=None):
-        if effective_max_bat is None:
-            effective_max_bat = resolve_max_bat(device_id)
-
-        signature = discovery_signature(self, device_id, effective_max_bat)
-        signatures = getattr(self, "_discovery_signature", None)
-        if signatures is None:
-            signatures = {}
-            self._discovery_signature = signatures
-        if device_id in self._discovery_cache and signatures.get(device_id) == signature:
-            return None
-
-        result = original_publish_discovery(self, device_id, effective_max_bat)
-        signatures[device_id] = signature
-        return result
-
-    client_cls._Client__publish_device_discovery = publish_discovery_clean

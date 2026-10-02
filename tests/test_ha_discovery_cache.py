@@ -50,12 +50,42 @@ def test_repeated_discovery_is_skipped_until_signature_changes(monkeypatch):
     publish_discovery = client._Client__publish_device_discovery
     publish_discovery(device_id, 1)
     first_publish_count = len(published)
+    first_signature = client._discovery_signature[device_id]
     assert first_publish_count > 0
     assert "publish" not in client._client.__dict__
 
     publish_discovery(device_id, 1)
     assert len(published) == first_publish_count
+    assert client._discovery_signature[device_id] == first_signature
 
     client._neo_pv_count[device_id] = 4
     publish_discovery(device_id, 1)
     assert len(published) > first_publish_count
+    assert client._discovery_signature[device_id] != first_signature
+
+
+def test_entity_migration_runs_once_per_device():
+    published = []
+
+    class FakeMqtt:
+        def publish(self, topic, payload=None, *args, **kwargs):
+            published.append((topic, payload, args, kwargs))
+            return SimpleNamespace()
+
+    device_id = "0PVPTEST"
+    client = object.__new__(ha_client_module.Client)
+    client._client = FakeMqtt()
+    client._migration_done = set()
+
+    registers = SimpleNamespace(
+        holding_registers={},
+        input_registers={},
+    )
+
+    client._Client__migrate_entity_discovery(device_id, registers)
+    first_publish_count = len(published)
+    assert first_publish_count == 1
+    assert device_id in client._migration_done
+
+    client._Client__migrate_entity_discovery(device_id, registers)
+    assert len(published) == first_publish_count

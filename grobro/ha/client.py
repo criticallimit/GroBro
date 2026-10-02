@@ -22,6 +22,7 @@ from grobro.model.modbus_message import GrowattModbusFunction
 from grobro.model.modbus_function import (
     GrowattModbusFunctionSingle,
 )
+from grobro.ha.localization import runtime_language
 
 HA_BASE_TOPIC = os.getenv("HA_BASE_TOPIC", "homeassistant")
 AVAILABILITY_SENSOR = os.getenv("AVAILABILITY_SENSOR", "False").lower() == "true"
@@ -861,6 +862,17 @@ class Client:
         if effective_max_bat is None:
             effective_max_bat = _resolve_max_bat(device_id)
 
+        signature = (
+            effective_max_bat,
+            self._neo_pv_count.get(device_id),
+            runtime_language(),
+        )
+        if (
+            device_id in self._discovery_cache
+            and self._discovery_signature.get(device_id) == signature
+        ):
+            return
+
         self.__migrate_entity_discovery(device_id, known_registers)
 
         topic = f"{HA_BASE_TOPIC}/device/{device_id}/config"
@@ -1064,6 +1076,7 @@ class Client:
             self._publish_discovery_message(f"{HA_BASE_TOPIC}/grobro/{device_id}/serial", device_id, retain=True)
             self._publish_discovery_message(f"{HA_BASE_TOPIC}/grobro/{device_id}/type", get_device_type_name(device_id), retain=True)
             self._publish_discovery_message(f"{HA_BASE_TOPIC}/grobro/{device_id}/sw_version", device_id, retain=True)
+            self._discovery_signature[device_id] = signature
             return
 
         LOG.info(
@@ -1078,8 +1091,12 @@ class Client:
 
         self._publish_discovery_message(f"{HA_BASE_TOPIC}/grobro/{device_id}/serial", device_id, retain=True)
         self._publish_discovery_message(f"{HA_BASE_TOPIC}/grobro/{device_id}/type", get_device_type_name(device_id), retain=True)
+        self._discovery_signature[device_id] = signature
 
     def __migrate_entity_discovery(self, device_id: str, known_registers: GroBroRegisters):
+        if device_id in self._migration_done:
+            return
+
         old_entities = [("set_wirk", "number")]
         for e_name, e_type in old_entities:
             self._publish_discovery_message(
@@ -1105,6 +1122,8 @@ class Client:
                 json.dumps({"migrate_discovery": True}),
                 retain=True,
             )
+
+        self._migration_done.add(device_id)
 
     def __device_info_from_config(self, device_id: str):
         # Find matching config
