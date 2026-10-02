@@ -4,6 +4,7 @@ import os
 import ssl
 import json
 import logging
+import time
 from threading import Timer
 from typing import Callable, Optional
 from collections import deque
@@ -213,6 +214,28 @@ class Client:
     _config_read_lock = Lock()
 
     def __init__(self, mqtt_config: model.MQTTConfig):
+        # Runtime state belongs to the client instance. Keeping it here avoids
+        # class-level mutable caches and a separate initialization wrapper.
+        self._config_cache = {}
+        self._discovery_cache = []
+        self._discovery_signature = {}
+        self._discovery_payload_cache = {}
+        self._last_state_payload = {}
+        self._last_holding_state = {}
+        self._device_timers = {}
+        self._device_last_seen = {}
+        self._device_timer_lock = Lock()
+        self._last_availability = {}
+        self._config_read_queues = {}
+        self._config_read_inflight = {}
+        self._config_read_timers = {}
+        self._read_all_active = set()
+        self._config_read_lock = Lock()
+        self._migration_done = set()
+        self._neo_inverter_power_read_requested = set()
+        self._time_sync_timer = None
+        self._neo_startup_probe_timer = None
+
         # Setup target MQTT client for publishing
         LOG.info(
             "Connecting Better GroBro to Home Assistant MQTT at %s:%s",
@@ -254,7 +277,11 @@ class Client:
             if config:
                 self._config_cache[mqtt_device_id] = config
 
-        self._discovery_payload_cache: dict[str, str] = {}
+        # Mirror restored devices into the Ingress inventory without a wrapper.
+        from grobro.ha.device_inventory import observe_device
+        for device_id in self._config_cache:
+            observe_device(device_id)
+
         self._neo_pv_count: dict[str, int] = {}
 
     # ------------------- Lifecycle -------------------
@@ -262,24 +289,71 @@ class Client:
     def start(self):
         self._client.loop_start()
 
+        # Stable background services are scheduled directly instead of wrapping
+        # Client.start() from multiple runtime modules.
+        from grobro.ha.neo_power_runtime import schedule_known_neo_state_probe
+        from grobro.ha.time_sync_runtime import schedule_next_time_sync
+
+        schedule_known_neo_state_probe(self)
+        schedule_next_time_sync(self)
+
     def stop(self):
+        from grobro.ha.timer_runtime import cancel_runtime_timers
+
+        cancel_runtime_timers(self)
         self._client.loop_stop()
         self._client.disconnect()
 
     # ------------------- Config Handling -------------------
 
     def set_config(self, device_id: str, config: model.DeviceConfig):
+        from grobro.ha.config_runtime import _merge_config, persisted_config_data
+        from grobro.ha.device_inventory import observe_device
+
+        observe_device(device_id)
+        if hasattr(self, "_client") and hasattr(self, "_device_last_seen"):
+            self.__publish_availability(device_id, True)
+            if DEVICE_TIMEOUT > 0:
+                self.__reset_device_timer(device_id)
+
         config_path = f"config_{device_id}.json"
         existing_config = model.DeviceConfig.from_file(config_path)
-        if existing_config is None or existing_config != config:
-            LOG.info("%s: saving updated device information", _device_label(device_id))
-            config.to_file(config_path)
+        previous_config = self._config_cache.get(device_id) or existing_config
+        effective_config = _merge_config(previous_config, config)
+
+        previous_stable_data = persisted_config_data(previous_config)
+        current_stable_data = persisted_config_data(effective_config)
+        disk_stable_data = persisted_config_data(existing_config)
+        discovery_changed = previous_stable_data != current_stable_data
+
+        needs_sensitive_cleanup = bool(
+            existing_config
+            and (
+                getattr(existing_config, "password", None) is not None
+                or getattr(existing_config, "raw", None) is not None
+            )
+        )
+
+        if (
+            existing_config is None
+            or needs_sensitive_cleanup
+            or disk_stable_data != current_stable_data
+        ):
+            LOG.info("%s: saved updated device information", _device_label(device_id))
+            effective_config.to_file(config_path)
         else:
-            LOG.debug(f"No config change for {device_id}")
-        self._config_cache[device_id] = config
+            LOG.debug("Device metadata unchanged for %s; skipping config save", device_id)
+
+        self._config_cache[device_id] = effective_config
+
+        if not discovery_changed and device_id in self._discovery_cache:
+            LOG.debug("No discovery-relevant config change for %s", device_id)
+            return
 
         if device_id in self._discovery_cache:
             self._discovery_cache.remove(device_id)
+        getattr(self, "_discovery_signature", {}).pop(device_id, None)
+        getattr(self, "_migration_done", set()).discard(device_id)
         self.__publish_device_discovery(device_id)
 
     # ------------------- Publishing -------------------
@@ -415,9 +489,26 @@ class Client:
         getattr(self, "_state_publish_cache", {}).clear()
         getattr(self, "_last_holding_state", {}).clear()
         getattr(self, "_last_availability", {}).clear()
+        getattr(self, "_neo_inverter_power_read_requested", set()).clear()
+
+        # Retained availability from an earlier HA/process session must not keep
+        # stale values looking current. Fresh device traffic sets them online.
+        for device_id in self._config_cache:
+            self.__publish_availability(device_id, False)
+
+        from grobro.ha.neo_power_runtime import schedule_known_neo_state_probe
+        schedule_known_neo_state_probe(self, delay=0.5)
 
     def __on_connect(self, client, userdata, flags, reason_code, properties):
         LOG.debug("Connected to HA MQTT server with result code %s", reason_code)
+        getattr(self, "_last_availability", {}).clear()
+        getattr(self, "_discovery_signature", {}).clear()
+        getattr(self, "_discovery_payload_cache", {}).clear()
+        getattr(self, "_last_state_payload", {}).clear()
+        getattr(self, "_state_publish_cache", {}).clear()
+        getattr(self, "_last_holding_state", {}).clear()
+        getattr(self, "_neo_inverter_power_read_requested", set()).clear()
+        self._discovery_cache.clear()
         self.__recover_after_home_assistant_restart(client)
         LOG.info(
             "Connected to Home Assistant; controls and device states are ready"
@@ -633,27 +724,55 @@ class Client:
     # ------------------- Internals -------------------
 
     def __reset_device_timer(self, device_id: str):
-        def set_device_unavailable(d_id: str):
+        from grobro.ha.timer_runtime import daemon_timer, effective_device_timeout
+
+        now = time.monotonic()
+        lock = self._device_timer_lock
+
+        def check_timeout(d_id: str):
+            with lock:
+                last_seen = self._device_last_seen.get(d_id)
+                if last_seen is None:
+                    self._device_timers.pop(d_id, None)
+                    return
+
+                timeout = effective_device_timeout(self, d_id)
+                remaining = timeout - (time.monotonic() - last_seen)
+                if remaining > 0:
+                    timer = daemon_timer(remaining, check_timeout, args=(d_id,))
+                    self._device_timers[d_id] = timer
+                    timer.start()
+                    return
+
+                self._device_timers.pop(d_id, None)
+                self._device_last_seen.pop(d_id, None)
+
             LOG.warning(
                 "%s has stopped sending data; Home Assistant values are now unavailable",
                 _device_label(d_id),
             )
             self.__publish_availability(d_id, False)
 
-        if device_id in self._device_timers:
-            self._device_timers[device_id].cancel()
+        with lock:
+            self._device_last_seen[device_id] = now
+            timer = self._device_timers.get(device_id)
+            if timer is not None and timer.is_alive():
+                return
 
-        timer = Timer(DEVICE_TIMEOUT, set_device_unavailable, args=[device_id])
-        self._device_timers[device_id] = timer
-        timer.start()
+            timer = daemon_timer(
+                effective_device_timeout(self, device_id),
+                check_timeout,
+                args=(device_id,),
+            )
+            self._device_timers[device_id] = timer
+            timer.start()
 
     def __publish_availability(self, device_id: str, online: bool):
-        LOG.debug("Set device %s availability: %s", device_id, online)
+        availability = self._last_availability
+        if availability.get(device_id) is online:
+            return False
 
-        # The shared availability topic controls every Home Assistant entity for
-        # this device, including config sensors such as Wi-Fi Signal Strength.
-        # It must always receive both online and offline states. The optional
-        # Online entity is an additional user-facing binary sensor only.
+        LOG.debug("Set device %s availability: %s", device_id, online)
         self._client.publish(
             f"{HA_BASE_TOPIC}/grobro/{device_id}/availability",
             "online" if online else "offline",
@@ -665,6 +784,9 @@ class Client:
                 "ON" if online else "OFF",
                 retain=True,
             )
+
+        availability[device_id] = online
+        return True
 
     def __detect_neo_pv_count(self, device_id: str, payload: dict) -> None:
         if not model.uses_dynamic_pv_count(device_id):
