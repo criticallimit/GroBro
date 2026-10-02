@@ -1,6 +1,7 @@
-import pytest
 from types import SimpleNamespace
 from unittest.mock import MagicMock
+
+import pytest
 
 from grobro.grobro import client as client_module
 from grobro.grobro import noah_traffic_debug as traffic
