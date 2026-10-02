@@ -337,10 +337,12 @@ def test_ingress_assignment_disk_failure_returns_controlled_error():
 
 
 
-def test_diagnostic_thread_start_failure_is_retryable(tmp_path):
+@pytest.mark.parametrize("target", ["threading.Thread", "threading.Thread.start"])
+@pytest.mark.parametrize("error", [RuntimeError, OSError])
+def test_diagnostic_thread_start_failure_is_retryable(tmp_path, target, error):
     writer = dio.DiagnosticWriter()
     path = str(tmp_path / "capture.jsonl")
-    with patch("threading.Thread.start", side_effect=RuntimeError("threads unavailable")):
+    with patch(target, side_effect=error("threads unavailable")):
         assert not writer.submit(path, "discarded\n")
     assert writer._bytes == 0
     assert not writer._queue
