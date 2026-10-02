@@ -280,8 +280,18 @@ class Client:
         try:
             # A DNS/TLS call in a Paho cloud thread must not hold shutdown forever.
             for client in forwards:
-                worker = threading.Thread(target=stop_client, args=(client,), name="grobro-cloud-stop", daemon=True)
-                worker.start()
+                try:
+                    worker = threading.Thread(target=stop_client, args=(client,), name="grobro-cloud-stop", daemon=True)
+                    worker.start()
+                except (RuntimeError, OSError):
+                    # disconnect() also terminates Paho's network loop. Do not
+                    # synchronously join a potentially stalled DNS/TLS thread.
+                    LOG.exception("Could not start cloud shutdown worker; disconnecting without join")
+                    try:
+                        client.disconnect()
+                    except Exception:
+                        LOG.exception("Could not disconnect a cloud client during shutdown")
+                    continue
                 workers.append(worker)
             stop_client(self._client)
             deadline = time.monotonic() + CLOUD_SHUTDOWN_TIMEOUT
