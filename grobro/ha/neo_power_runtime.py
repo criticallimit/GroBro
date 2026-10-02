@@ -104,37 +104,3 @@ def _publish_retained_switch_state(client, device_id: str, state: str) -> None:
         state,
         retain=True,
     )
-
-
-def install_neo_power_runtime() -> None:
-    """Install only the NEO switch-state mirror that cannot live in telemetry.
-
-    Startup/recovery probing is now called directly by Client.start() and
-    Client.__recover_after_home_assistant_restart(), so this hook no longer
-    wraps those lifecycle methods.
-    """
-    client_cls = ha_client_module.Client
-    original_on_message = client_cls._Client__on_message
-
-    def on_message_with_neo_power_state(self, client, userdata, msg):
-        topic = str(msg.topic)
-        parts = topic.removeprefix(f"{ha_client_module.HA_BASE_TOPIC}/").split("/")
-        is_neo_power_set = (
-            len(parts) == 5
-            and parts[0] == "switch"
-            and parts[1] == "grobro"
-            and parts[3] == "inverter_power"
-            and parts[4] == "set"
-            and model.is_family(parts[2], "neo")
-        )
-
-        result = original_on_message(self, client, userdata, msg)
-
-        if is_neo_power_set:
-            raw = msg.payload.decode(errors="ignore").strip().upper()
-            if raw in {"ON", "OFF"}:
-                _publish_retained_switch_state(self, parts[2], raw)
-        return result
-
-    client_cls._Client__on_message = on_message_with_neo_power_state
-
