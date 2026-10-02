@@ -631,7 +631,7 @@ class TestClientDeviceInfo:
         assert info["sw_version"] == "3.8.2.8"
         assert info["hw_version"] == "V1.0"
 
-    def test_neo_firmware_version_sensor_uses_config_software_version(self, ha_client):
+    def test_neo_versions_stay_in_device_info_without_firmware_sensor(self, ha_client):
         device_id = "QMN000ABC1D2E3FG"
         ha_client._config_cache[device_id] = DeviceConfig(
             serial_number=device_id,
@@ -656,21 +656,7 @@ class TestClientDeviceInfo:
         assert discovery is not None
         assert discovery["dev"]["sw_version"] == "3.8.2.8"
         assert discovery["dev"]["hw_version"] == "V1.0"
-
-        component = discovery["cmps"][f"grobro_{device_id}_fw_version"]
-        assert component["name"] == "Firmware Version"
-        assert component["state_topic"] == (
-            f"homeassistant/grobro/{device_id}/sw_version"
-        )
-
-        version_publishes = [
-            call
-            for call in ha_client._client.publish.call_args_list
-            if call.args
-            and call.args[0] == f"homeassistant/grobro/{device_id}/sw_version"
-        ]
-        assert version_publishes
-        assert version_publishes[-1].args[1] == "3.8.2.8"
+        assert f"grobro_{device_id}_fw_version" not in discovery["cmps"]
 
     def test_neo_partial_version_configs_merge_without_losing_software_version(
         self, ha_client, tmp_path, monkeypatch
