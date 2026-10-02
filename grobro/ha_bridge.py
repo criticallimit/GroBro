@@ -12,7 +12,6 @@ import os
 
 from grobro import grobro, ha, model
 from grobro.grobro.noah_traffic_debug import install_noah_traffic_debug_hook
-from grobro.grobro.raw_dump import install_raw_dump_hook
 from grobro.grobro.register_debug import install_register_debug_hook
 from grobro.grobro.signals import SignalHandler
 from grobro.ha.battery_ingress import start_battery_ingress_server
@@ -50,8 +49,8 @@ def load_bridge_mqtt_configs():
 
 
 def install_runtime_layers() -> None:
-    """Install the remaining protocol compatibility hook."""
-    install_raw_dump_hook()
+    """Backward-compatible no-op; protocol behavior is integrated directly."""
+    return None
 
 
 def install_optional_diagnostics() -> None:
@@ -91,10 +90,7 @@ GROBRO_MQTT_CONFIG, HA_MQTT_CONFIG, FORWARD_MQTT_CONFIG = load_bridge_mqtt_confi
 
 
 if __name__ == "__main__":
-    # Runtime patching is deliberately deferred until the executable starts.
-    # Importing ha_bridge for tests/tools must not mutate Client classes globally.
     mark_process_log_start()
-    install_runtime_layers()
     install_optional_diagnostics()
 
     ha_client = ha.Client(HA_MQTT_CONFIG)

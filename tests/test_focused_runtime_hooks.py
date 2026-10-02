@@ -1,19 +1,8 @@
 from grobro.grobro import noah_heater, raw_dump
 
 
-def test_raw_dump_hook_is_idempotent(monkeypatch):
-    original = raw_dump.grobro_client_module.dump_message_binary
-    monkeypatch.setattr(raw_dump, "_INSTALLED", False)
-    try:
-        raw_dump.install_raw_dump_hook()
-        first = raw_dump.grobro_client_module.dump_message_binary
-        raw_dump.install_raw_dump_hook()
-        second = raw_dump.grobro_client_module.dump_message_binary
-
-        assert first is raw_dump.dump_message_binary_compat
-        assert second is first
-    finally:
-        raw_dump.grobro_client_module.dump_message_binary = original
+def test_raw_dump_hook_is_compatibility_noop():
+    assert raw_dump.install_raw_dump_hook() is None
 
 
 def _plain_noah_status(heater_value: int, msg_type: int = 0x0104) -> bytes:

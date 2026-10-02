@@ -1,4 +1,5 @@
 import os
+import json
 import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -56,16 +57,18 @@ class TestModule:
         result = get_property(msg, "forwarded-for")
         assert result is None
 
-    def test_dump_message_binary(self):
+    def test_dump_message_binary_uses_central_jsonl(self):
         with tempfile.TemporaryDirectory() as tmp:
             with patch("grobro.grobro.client.DUMP_DIR", tmp):
                 dump_message_binary("s/33/test", b"hello")
-                files = os.listdir(tmp + "/s/33/test")
-                assert len(files) == 1
-                assert (Path(tmp) / "s/33/test" / files[0]).read_bytes() == b"hello"
+
+                dump_file = Path(tmp) / "messages.jsonl"
+                record = json.loads(dump_file.read_text(encoding="utf-8").strip())
+                assert record["topic"] == "s/33/test"
+                assert record["payload_length"] == 5
 
     def test_dump_message_binary_error(self):
-        with patch("grobro.grobro.client.os.makedirs", side_effect=OSError("denied")):
+        with patch("grobro.grobro.raw_dump.os.makedirs", side_effect=OSError("denied")):
             dump_message_binary("s/33/test", b"data")
 
     def test_dump_message_binary_write_error(self):

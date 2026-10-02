@@ -27,6 +27,7 @@ from grobro.grobro.builder import (
 )
 from grobro.grobro.cloud_policy import CloudForwardingPolicy
 from grobro.grobro.noah_heater import heater_state_from_unscrambled
+from grobro.grobro.raw_dump import dump_message_jsonl
 from grobro.model.growatt_registers import (
     HomeAssistantHoldingRegisterInput,
     HomeAssistantHoldingRegisterValue,
@@ -781,27 +782,8 @@ if DUMP_MESSAGES and not os.path.exists(DUMP_DIR):
 
 
 def dump_message_binary(topic, payload):
-    """Legacy dump hook; replaced by cleanup hook in the HA bridge."""
-    try:
-        topic_parts = [part for part in str(topic).strip("/").split("/") if part]
-        if not topic_parts:
-            topic_parts = ["_"]
-        safe_parts = [
-            re.sub(r"[^A-Za-z0-9._-]+", "_", part).strip(".") or "_"
-            for part in topic_parts
-        ]
-        root = os.path.abspath(DUMP_DIR)
-        dir_path = os.path.abspath(os.path.join(root, *safe_parts))
-        if os.path.commonpath([root, dir_path]) != root:
-            raise ValueError("dump path escaped DUMP_DIR")
-        os.makedirs(dir_path, exist_ok=True)
-        file_path = os.path.join(
-            dir_path, f"{int(__import__('time').time() * 1000)}.bin"
-        )
-        with open(file_path, "wb") as handle:
-            handle.write(bytes(payload))
-    except (OSError, TypeError, ValueError) as exc:
-        LOG.error("Failed to dump message for topic %s: %s", topic, exc)
+    """Compatibility entrypoint for the centralized raw MQTT JSONL dump."""
+    dump_message_jsonl(DUMP_DIR, topic, payload)
 
 
 def get_property(msg, prop) -> str | None:
