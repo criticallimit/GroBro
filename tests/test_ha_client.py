@@ -906,7 +906,7 @@ class TestClientDeviceTimer:
     def test_set_device_offline(self, ha_client):
         ha_client._Client__publish_availability = MagicMock()
         with patch("grobro.ha.client.DEVICE_TIMEOUT", 10), patch(
-            "grobro.ha.timer_runtime.time.monotonic",
+            "grobro.ha.client.time.monotonic",
             side_effect=[100.0, 111.0],
         ):
             ha_client._Client__reset_device_timer("QMN000ABC1D2E3FG")
