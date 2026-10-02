@@ -565,10 +565,12 @@ class Client:
                     value = entry["value"]
 
                     config_name = None
+                    register = None
                     if known_registers:
                         for name, reg in known_registers.config_registers.items():
                             if reg.growatt.register_no == register_no:
                                 config_name = name
+                                register = reg
                                 if reg.growatt.data.data_type == "INT":
                                     try:
                                         value = int(value)
@@ -596,17 +598,20 @@ class Client:
 
                     # Preserve live readback topics, but retain only known,
                     # exposed values. Never expose the datalogger password.
-                    register = next((r for r in known_registers.config_registers.values()
-                                     if r.growatt.register_no == register_no), None) if known_registers else None
                     retain = bool(register and getattr(getattr(register, "homeassistant", None), "publish", False))
                     if register_no == 7:
                         value, retain = "", True  # remove a legacy retained secret
-                    if callable(self.on_config_register_value):
-                        self.on_config_register_value(cfg["device_id"], register_no, value, retain=retain)
-                    else:
-                        topic = f"{HA_BASE_TOPIC}/config/grobro/{cfg['device_id']}/{register_no}/get"
-                        _publish_checked(self._client, topic, value, retain=retain)
+                    try:
+                        if callable(self.on_config_register_value):
+                            self.on_config_register_value(cfg["device_id"], register_no, value, retain=retain)
+                        else:
+                            topic = f"{HA_BASE_TOPIC}/config/grobro/{cfg['device_id']}/{register_no}/get"
+                            _publish_checked(self._client, topic, value, retain=retain)
+                    except Exception as exc:
+                        LOG.warning("Could not publish config readback for %s register %s (%s)", cfg["device_id"], register_no, type(exc).__name__)
 
+                    # The device answered regardless of local MQTT publication.
+                    # Advance reads and process the remaining compound entries.
                     if self.on_config_read_response:
                         self.on_config_read_response(
                             cfg["device_id"],
@@ -898,12 +903,16 @@ class Client:
                 pending = queue[0]
                 topic, payload, qos, retain = pending
 
-            result = client.publish(
-                topic,
-                payload=payload,
-                qos=qos,
-                retain=retain,
-            )
+            try:
+                result = client.publish(
+                    topic,
+                    payload=payload,
+                    qos=qos,
+                    retain=retain,
+                )
+            except Exception:
+                LOG.exception("Could not flush an MQTT message to %s; keeping queued messages for retry", topic)
+                return
             status = getattr(result, "rc", None)
             if status is None:
                 try:

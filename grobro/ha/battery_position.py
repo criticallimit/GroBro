@@ -74,13 +74,20 @@ def _remap_key(name: str, logical_slot: int) -> str:
     return name
 
 
-def _load_all_positions(path: str = _POSITION_FILE) -> dict[str, dict[str, int]]:
+def _load_all_positions(
+    path: str = _POSITION_FILE, *, raise_io_errors: bool = False,
+) -> dict[str, dict[str, int]]:
     try:
         with open(path, "r", encoding="utf-8") as handle:
             raw = json.load(handle)
     except FileNotFoundError:
         return {}
-    except (OSError, json.JSONDecodeError, TypeError, ValueError, RecursionError) as exc:
+    except OSError as exc:
+        if raise_io_errors:
+            raise
+        LOG.warning("Failed to load battery position map %s: %s", path, exc)
+        return {}
+    except (json.JSONDecodeError, TypeError, ValueError, RecursionError) as exc:
         LOG.warning("Failed to load battery position map %s: %s", path, exc)
         return {}
 
@@ -95,7 +102,7 @@ def _load_all_positions(path: str = _POSITION_FILE) -> dict[str, dict[str, int]]
         for serial, slot in mapping.items():
             try:
                 slot_number = int(slot)
-            except (TypeError, ValueError):
+            except (TypeError, ValueError, OverflowError):
                 continue
             serial_text = _clean_serial_part(serial)
             if (
@@ -119,13 +126,20 @@ def _save_all_positions(
 
 def _load_manual_positions(
     path: str = _MANUAL_POSITION_FILE,
+    *,
+    raise_io_errors: bool = False,
 ) -> dict[str, dict[int, str]]:
     try:
         with open(path, "r", encoding="utf-8") as handle:
             raw = json.load(handle)
     except FileNotFoundError:
         return {}
-    except (OSError, json.JSONDecodeError, TypeError, ValueError, RecursionError) as exc:
+    except OSError as exc:
+        if raise_io_errors:
+            raise
+        LOG.warning("Failed to load manual battery position map %s: %s", path, exc)
+        return {}
+    except (json.JSONDecodeError, TypeError, ValueError, RecursionError) as exc:
         LOG.warning("Failed to load manual battery position map %s: %s", path, exc)
         return {}
 
@@ -190,18 +204,24 @@ def _save_json_atomic(payload: object, path: str) -> None:
 
 def _manual_positions(client) -> dict[str, dict[int, str]]:
     try:
-        mtime = os.stat(_MANUAL_POSITION_FILE).st_mtime_ns
-    except FileNotFoundError:
-        mtime = None
+        stat = os.stat(_MANUAL_POSITION_FILE)
+        signature = (stat.st_mtime_ns, stat.st_ctime_ns, stat.st_size, stat.st_ino)
     except OSError:
-        mtime = None
+        signature = None
 
-    cached_mtime = getattr(client, "_battery_manual_position_mtime", object())
+    cached_signature = getattr(client, "_battery_manual_position_signature", object())
     positions = getattr(client, "_battery_manual_position_maps", None)
-    if positions is None or cached_mtime != mtime:
-        positions = _load_manual_positions()
-        client._battery_manual_position_maps = positions
-        client._battery_manual_position_mtime = mtime
+    if positions is None or cached_signature != signature:
+        try:
+            loaded = _load_manual_positions(raise_io_errors=True)
+        except OSError as exc:
+            if not getattr(client, "_battery_manual_read_failed", False):
+                LOG.warning("Could not read manual battery assignments; keeping cached choices and retrying (%s)", exc)
+            client._battery_manual_read_failed = True
+            return positions if positions is not None else {}
+        client._battery_manual_position_maps = positions = loaded
+        client._battery_manual_position_signature = signature
+    client._battery_manual_read_failed = False
     return positions
 
 
@@ -219,8 +239,16 @@ def _record_detected_serials(client, device_id: str, serials: dict[int, str]) ->
             with open(_DETECTED_FILE, "r", encoding="utf-8") as handle:
                 raw = json.load(handle)
             cache = raw if isinstance(raw, dict) else {}
-        except (FileNotFoundError, OSError, json.JSONDecodeError, TypeError, ValueError, RecursionError):
+        except FileNotFoundError:
             cache = {}
+        except OSError as exc:
+            if not getattr(client, "_battery_detected_read_failed", False):
+                LOG.warning("Could not read detected battery history; persistence deferred (%s)", exc)
+            client._battery_detected_read_failed = True
+            return
+        except (json.JSONDecodeError, TypeError, ValueError, RecursionError):
+            cache = {}
+        client._battery_detected_read_failed = False
         client._battery_detected_serials = cache
 
     if cache.get(device_id) == entries:
@@ -261,7 +289,7 @@ def _load_detected_serials(path: str = _DETECTED_FILE) -> dict[str, list[dict]]:
             serial = _clean_serial_part(entry.get("serial"))
             try:
                 physical_slot = int(entry.get("physical_slot"))
-            except (TypeError, ValueError):
+            except (TypeError, ValueError, OverflowError):
                 continue
             if (
                 _is_plausible_serial(serial)
@@ -300,7 +328,7 @@ def _save_manual_assignments_locked(device_id: str, assignments: dict) -> None:
         explicit_serials.add(value)
         clean[slot] = value
 
-    all_manual = _load_manual_positions()
+    all_manual = _load_manual_positions(raise_io_errors=True)
     if all(value == AUTO_ASSIGNMENT for value in clean.values()):
         all_manual.pop(device_id, None)
     else:
@@ -352,7 +380,7 @@ def _load_battery_ui_state_locked() -> dict:
 def _position_maps(client) -> dict[str, dict[str, int]]:
     positions = getattr(client, "_battery_position_maps", None)
     if positions is None:
-        positions = _load_all_positions()
+        positions = _load_all_positions(raise_io_errors=True)
         client._battery_position_maps = positions
     return positions
 
@@ -396,7 +424,18 @@ def _stabilize_battery_payload_locked(
     # Initialize the per-client persistent map even when the current packet does
     # not contain a valid serial. This keeps runtime state deterministic without
     # creating any slot assignment from invalid/noisy serial fragments.
-    all_positions = _position_maps(client)
+    try:
+        all_positions = _position_maps(client)
+    except OSError as exc:
+        if not getattr(client, "_battery_positions_read_failed", False):
+            LOG.warning("Could not read stable battery assignments; automatic assignment deferred (%s)", exc)
+        client._battery_positions_read_failed = True
+        # Keep explicit manual choices usable, but never overwrite unread
+        # automatic history with assignments derived from an empty fallback.
+        all_positions = {}
+        use_stable_auto = False
+    else:
+        client._battery_positions_read_failed = False
     if not current_serials and not manual_assignments:
         return payload, 1
 

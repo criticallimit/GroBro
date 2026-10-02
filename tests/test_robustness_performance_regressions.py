@@ -130,7 +130,7 @@ def test_single_battery_snapshot_preserves_manual_changes(tmp_path, monkeypatch,
     assert serials.call_count == manual.call_count == 1
     # Manual changes remain visible on the next packet and override automatic slots.
     client._battery_manual_position_maps = {"0PVPTEST": {3: "SN00200000000001"}}
-    client._battery_manual_position_mtime = None
+    client._battery_manual_position_signature = None
     mapped, maximum = bp.prepare_battery_payload(client, "0PVPTEST", SERIAL, use_stable_auto=stable)
     assert mapped["bat3_ser_part_1"] == "SN00200000000001"
     assert maximum == 3
