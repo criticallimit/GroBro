@@ -225,8 +225,19 @@ def _record_detected_serials(client, device_id: str, serials: dict[int, str]) ->
 
     if cache.get(device_id) == entries:
         return
-    cache[device_id] = entries
-    _save_json_atomic(cache, _DETECTED_FILE)
+    updated = {**cache, device_id: entries}
+    failures = getattr(client, "_battery_detected_failures", None)
+    if failures is None:
+        failures = client._battery_detected_failures = set()
+    try:
+        _save_json_atomic(updated, _DETECTED_FILE)
+    except OSError:
+        if device_id not in failures:
+            LOG.exception("Could not persist detected batteries for %s; will retry", device_id)
+        failures.add(device_id)
+        return
+    failures.discard(device_id)
+    client._battery_detected_serials = updated
 
 
 def _load_detected_serials(path: str = _DETECTED_FILE) -> dict[str, list[dict]]:
@@ -365,6 +376,7 @@ def _stabilize_battery_payload_locked(
     payload: dict,
     *,
     use_stable_auto: bool = True,
+    prepared: tuple[dict[int, str], dict] | None = None,
 ) -> tuple[dict, int]:
     """Return payload remapped to stable logical battery slots.
 
@@ -374,9 +386,12 @@ def _stabilize_battery_payload_locked(
 
     Returns the remapped payload and the highest logical slot currently present.
     """
-    current_serials = _serials_from_payload(payload)
-    _record_detected_serials(client, device_id, current_serials)
-    manual_assignments = _manual_positions(client).get(device_id, {})
+    if prepared is None:
+        current_serials = _serials_from_payload(payload)
+        _record_detected_serials(client, device_id, current_serials)
+        manual_assignments = _manual_positions(client).get(device_id, {})
+    else:
+        current_serials, manual_assignments = prepared
 
     # Initialize the per-client persistent map even when the current packet does
     # not contain a valid serial. This keeps runtime state deterministic without
@@ -422,8 +437,16 @@ def _stabilize_battery_payload_locked(
                 device_id,
             )
 
-        if changed:
-            _save_all_positions(all_positions)
+        if changed or getattr(client, "_battery_positions_dirty", False):
+            already_dirty = getattr(client, "_battery_positions_dirty", False)
+            client._battery_positions_dirty = True
+            try:
+                _save_all_positions(all_positions)
+            except OSError:
+                if not already_dirty:
+                    LOG.exception("Could not persist battery positions; will retry")
+            else:
+                client._battery_positions_dirty = False
 
     physical_to_logical: dict[int, int] = {}
     explicit_slot_by_serial = {
@@ -547,4 +570,19 @@ def stabilize_battery_payload(
             device_id,
             payload,
             use_stable_auto=use_stable_auto,
+        )
+
+
+def prepare_battery_payload(client, device_id: str, payload: dict, *, use_stable_auto: bool) -> tuple[dict, int]:
+    """Observe and optionally remap a packet using a single battery snapshot."""
+    with _PERSISTENCE_LOCK:
+        serials = _serials_from_payload(payload)
+        _record_detected_serials(client, device_id, serials)
+        assignments = _manual_positions(client).get(device_id, {})
+        if not use_stable_auto and not any(value != AUTO_ASSIGNMENT for value in assignments.values()):
+            return payload, 1
+        return _stabilize_battery_payload_locked(
+            client, device_id, payload,
+            use_stable_auto=use_stable_auto,
+            prepared=(serials, assignments),
         )

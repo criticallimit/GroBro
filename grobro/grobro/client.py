@@ -10,6 +10,7 @@ import re
 import ssl
 import struct
 import threading
+import time
 from collections import deque
 from functools import lru_cache
 from typing import Callable
@@ -28,6 +29,7 @@ from grobro.grobro.builder import (
 )
 from grobro.grobro.cloud_policy import CloudForwardingPolicy
 from grobro.grobro.noah_heater import heater_state_from_unscrambled
+from grobro.grobro.diagnostic_io import DiagnosticWriter, diagnostic_scope
 from grobro.grobro.raw_dump import dump_message_jsonl
 from grobro.grobro.register_debug import (
     REGISTER_DEBUG as REGISTER_CAPTURE_ENABLED,
@@ -167,7 +169,14 @@ def _current_cloud_policy() -> CloudForwardingPolicy:
         cloud_value = ",".join(sorted(GROWATT_CLOUD_FILTER))
     else:
         cloud_value = GROWATT_CLOUD or "true"
-    return CloudForwardingPolicy.parse(cloud_value, GROWATT_CLOUD_CONFIG_FILTER)
+    return _cached_cloud_policy(cloud_value, GROWATT_CLOUD_CONFIG_FILTER)
+
+
+CLOUD_SHUTDOWN_TIMEOUT = 3.0
+
+@lru_cache(maxsize=16)
+def _cached_cloud_policy(cloud_value, config_filter):
+    return CloudForwardingPolicy.parse(cloud_value, config_filter)
 
 
 DUMP_MESSAGES = os.getenv("DUMP_MESSAGES", "false").lower() == "true"
@@ -180,6 +189,10 @@ MQTT_PROP_FORWARD_GROWATT.UserProperty = [("forwarded-for", "growatt")]
 # Property to flag messages as forwarded from ha
 MQTT_PROP_FORWARD_HA = mqtt.Properties(mqtt.PacketTypes.PUBLISH)
 MQTT_PROP_FORWARD_HA.UserProperty = [("forwarded-for", "ha")]
+
+
+class _PendingRegister(int):
+    """Identity-bearing int for safe rollback if another callback consumes an ACK."""
 
 
 class Client:
@@ -221,9 +234,13 @@ class Client:
         self._forward_ready: dict[str, threading.Event] = {}
         self._forward_pending: dict[str, deque[tuple[str, bytes, int, bool]]] = {}
         self._forward_pending_lock = threading.Lock()
-        self._forward_flush_lock = threading.Lock()
+        self._forward_flush_locks = {}
+        self._forward_lifecycle_lock = threading.RLock()
+        self._forward_stopped = False
+        self._diagnostic_writer = DiagnosticWriter()
         self._forward_overflow_warned: set[str] = set()
         self._ptq_for_raq: dict[str, str] = {}
+        self._gateway_dirty = set()
         # Dedicated links survive partial gateway config packets and restart.
         # Also restore links from established config files for older data.
         for pattern in ("config_*.json", "gateway_*.json"):
@@ -234,6 +251,7 @@ class Client:
                     self._remember_gateway(gateway_id, config.serial_number if config else None, persist=False)
         self._smart_meter_state_cache: dict[str, str] = {}
         self._pending_config_writes: dict[str, deque[int]] = {}
+        self._pending_config_lock = threading.Lock()
 
     def start(self):
         LOG.debug("GroBro: Start")
@@ -241,26 +259,49 @@ class Client:
 
     def stop(self):
         LOG.debug("GroBro: Stop")
-        clients = [self._client, *self._forward_clients.values()]
-        try:
-            for client in clients:
+        with self._forward_lifecycle_lock:
+            if self._forward_stopped:
+                return
+            self._forward_stopped = True
+            forwards = list(self._forward_clients.values())
+
+        def stop_client(client):
+            try:
+                client.disconnect()
+            except Exception:
+                LOG.exception("Could not disconnect an MQTT client during shutdown")
+            finally:
                 try:
-                    client.disconnect()
+                    client.loop_stop()
                 except Exception:
-                    LOG.exception("Could not disconnect an MQTT client during shutdown")
-                finally:
-                    try:
-                        client.loop_stop()
-                    except Exception:
-                        LOG.exception("Could not stop an MQTT loop during shutdown")
+                    LOG.exception("Could not stop an MQTT loop during shutdown")
+
+        workers = []
+        try:
+            # A DNS/TLS call in a Paho cloud thread must not hold shutdown forever.
+            for client in forwards:
+                worker = threading.Thread(target=stop_client, args=(client,), name="grobro-cloud-stop", daemon=True)
+                worker.start()
+                workers.append(worker)
+            stop_client(self._client)
+            deadline = time.monotonic() + CLOUD_SHUTDOWN_TIMEOUT
+            for worker in workers:
+                worker.join(max(0, deadline - time.monotonic()))
+            if any(worker.is_alive() for worker in workers):
+                LOG.warning("Cloud network shutdown is delayed; continuing shutdown")
         finally:
-            self._forward_clients.clear()
-            self._forward_ready.clear()
+            with self._forward_lifecycle_lock:
+                self._forward_clients.clear()
+                self._forward_ready.clear()
+                self._forward_flush_locks.clear()
             with self._forward_pending_lock:
                 self._forward_pending.clear()
                 self._forward_overflow_warned.clear()
-            self._pending_config_writes.clear()
+            with self._pending_config_lock:
+                self._pending_config_writes.clear()
+            self._diagnostic_writer.stop()
 
+    @diagnostic_scope
     def send_command(self, cmd: GrowattModbusFunctionSingle):
         if model.is_gateway(cmd.device_id):
             endpoint = self._ptq_for_raq.get(cmd.device_id)
@@ -284,12 +325,22 @@ class Client:
     def _remember_gateway(self, gateway_id: str, endpoint: str | None, *, persist=True):
         if not model.is_gateway(gateway_id) or not endpoint or not str(endpoint).startswith("PTQ"):
             return
-        if self._ptq_for_raq.get(gateway_id) == endpoint:
+        changed = self._ptq_for_raq.get(gateway_id) != endpoint
+        if not changed and gateway_id not in self._gateway_dirty:
             return
         self._ptq_for_raq[gateway_id] = endpoint
         if persist:
-            model.DeviceConfig(serial_number=endpoint).to_file(f"gateway_{gateway_id}.json")
+            already_dirty = gateway_id in self._gateway_dirty
+            self._gateway_dirty.add(gateway_id)
+            try:
+                model.DeviceConfig(serial_number=endpoint).to_file(f"gateway_{gateway_id}.json")
+            except OSError:
+                if not already_dirty:
+                    LOG.exception("Could not persist gateway identity for %s; will retry", gateway_id)
+            else:
+                self._gateway_dirty.discard(gateway_id)
 
+    @diagnostic_scope
     def send_config_read_message(self, device_id: str, register_no: int):
         final_payload = build_config_read_packet(device_id, register_no)
         topic = f"s/33/{device_id}"
@@ -306,6 +357,7 @@ class Client:
             properties=MQTT_PROP_FORWARD_HA,
         )
 
+    @diagnostic_scope
     def send_config_message(self, device_id: str, register_no: int, value: str):
         final_payload = build_config_write_packet(device_id, register_no, value)
         topic = f"s/33/{device_id}"
@@ -316,30 +368,45 @@ class Client:
             _device_label(device_id),
             _config_register_label(device_id, register_no),
         )
-        result = _publish_checked(
-            self._client,
-            topic,
-            final_payload,
-            properties=MQTT_PROP_FORWARD_HA,
-        )
-        status = getattr(result, "rc", None)
-        if status is None:
-            try:
-                status = result[0]
-            except (TypeError, IndexError, KeyError):
-                status = None
-        if status in (None, 0):
-            self._pending_config_writes.setdefault(device_id, deque()).append(
-                int(register_no)
+        reservation = _PendingRegister(register_no)
+        with self._pending_config_lock:
+            if self._forward_stopped:
+                return (mqtt.MQTT_ERR_NO_CONN, None)
+            self._pending_config_writes.setdefault(device_id, deque()).append(reservation)
+        accepted = False
+        try:
+            result = _publish_checked(
+                self._client, topic, final_payload, properties=MQTT_PROP_FORWARD_HA,
             )
-        return result
+            status = getattr(result, "rc", None)
+            if status is None:
+                try:
+                    status = result[0]
+                except (TypeError, IndexError, KeyError):
+                    status = None
+            accepted = status in (None, 0)
+            return result
+        finally:
+            if not accepted:
+                with self._pending_config_lock:
+                    pending = self._pending_config_writes.get(device_id)
+                    if pending is not None:
+                        for index, item in enumerate(pending):
+                            if item is reservation:
+                                del pending[index]
+                                break
+                        if not pending:
+                            self._pending_config_writes.pop(device_id, None)
 
     def __on_connect(self, client, userdata, flags, reason_code, properties):
         LOG.debug("Connected to GroBro MQTT server with result code %s", reason_code)
         self._smart_meter_state_cache.clear()
         client.subscribe("c/#")
 
+    @diagnostic_scope
     def __on_message(self, client, userdata, msg: MQTTMessage):
+        if getattr(self, "_forward_stopped", False):
+            return
         # check for forwarded messages and ignore them
         forwarded_for = get_property(msg, "forwarded-for")
         if forwarded_for in {"ha", "growatt"}:
@@ -540,26 +607,26 @@ class Client:
                 cfg = parser.parse_config_ack(unscrambled)
                 ack_device_id = cfg["device_id"]
                 parsed_register = cfg["register_no"]
-                pending = self._pending_config_writes.get(ack_device_id)
-                if _config_register_name(ack_device_id, parsed_register):
-                    register_no = parsed_register
-                    if pending and parsed_register in pending:
-                        pending.remove(parsed_register)
-                elif pending:
-                    register_no = pending.popleft()
-                    LOG.debug(
-                        "%s config acknowledgement reported unknown register %s; "
-                        "matched it to the pending Better GroBro write for register %s",
-                        _device_label(ack_device_id),
-                        parsed_register,
-                        register_no,
-                    )
-                else:
-                    register_no = parsed_register
+                with self._pending_config_lock:
+                    pending = self._pending_config_writes.get(ack_device_id)
+                    if _config_register_name(ack_device_id, parsed_register):
+                        register_no = parsed_register
+                        if pending and parsed_register in pending:
+                            pending.remove(parsed_register)
+                    elif pending:
+                        register_no = pending.popleft()
+                        LOG.debug(
+                            "%s config acknowledgement reported unknown register %s; "
+                            "matched it to the pending Better GroBro write for register %s",
+                            _device_label(ack_device_id),
+                            parsed_register,
+                            register_no,
+                        )
+                    else:
+                        register_no = parsed_register
 
-                if pending is not None and not pending:
-                    self._pending_config_writes.pop(ack_device_id, None)
-
+                    if pending is not None and not pending:
+                        self._pending_config_writes.pop(ack_device_id, None)
                 LOG.info(
                     "%s -> Better GroBro: setting accepted for %s",
                     _device_label(ack_device_id),
@@ -700,7 +767,10 @@ class Client:
         except Exception as exc:
             LOG.exception("Unexpected error while processing device data from %s (%s)", msg.topic, exc)
 
+    @diagnostic_scope
     def __on_message_forward_client(self, client, userdata, msg: MQTTMessage):
+        if getattr(self, "_forward_stopped", False):
+            return
         LOG.debug("Received Growatt forward message: %s: %s", msg.topic, msg.payload)
         if DUMP_MESSAGES:
             dump_message_binary(msg.topic, msg.payload)
@@ -780,6 +850,8 @@ class Client:
     ) -> None:
         key = f"forward_client_{client_id}"
         with self._forward_pending_lock:
+            if self._forward_stopped:
+                return
             queue = self._forward_pending.setdefault(key, deque())
             if len(queue) >= 100:
                 queue.popleft()
@@ -792,20 +864,27 @@ class Client:
             queue.append((topic, bytes(payload), int(qos), bool(retain)))
 
     def __flush_growatt_forward_queue(self, client_id: str, client) -> None:
-        # CONNACK and source callbacks can drain the same queue concurrently.
-        with self._forward_flush_lock:
+        # Serialize each device independently; a busy cloud link cannot block others.
+        with self._forward_lifecycle_lock:
+            if self._forward_stopped:
+                return
+            lock = self._forward_flush_locks.setdefault(client_id, threading.Lock())
+        with lock:
             self.__drain_growatt_forward_queue(client_id, client)
 
     def __drain_growatt_forward_queue(self, client_id: str, client) -> None:
         key = f"forward_client_{client_id}"
         while True:
             with self._forward_pending_lock:
+                if self._forward_stopped:
+                    return
                 queue = self._forward_pending.get(key)
                 if not queue:
                     self._forward_pending.pop(key, None)
                     self._forward_overflow_warned.discard(key)
                     return
-                topic, payload, qos, retain = queue[0]
+                pending = queue[0]
+                topic, payload, qos, retain = pending
 
             result = client.publish(
                 topic,
@@ -835,7 +914,9 @@ class Client:
 
             with self._forward_pending_lock:
                 queue = self._forward_pending.get(key)
-                if queue:
+                # Overflow may already have removed this in-flight entry.
+                # Never acknowledge its still-unsent successor.
+                if queue and queue[0] is pending:
                     queue.popleft()
 
     def __publish_to_growatt_server(
@@ -846,68 +927,88 @@ class Client:
         qos: int,
         retain: bool,
     ) -> None:
-        client = self.__connect_to_growatt_server(client_id)
-        key = f"forward_client_{client_id}"
-        ready = self._forward_ready[key]
-        # Enqueue before checking readiness. Either CONNACK or this callback
-        # observes the new item and drains it, without a check/enqueue gap.
-        self.__queue_growatt_forward(client_id, topic, payload, qos, retain)
+        with self._forward_lifecycle_lock:
+            if self._forward_stopped:
+                return
+            # Preserve packets even when creating/starting the network loop fails.
+            self.__queue_growatt_forward(client_id, topic, payload, qos, retain)
+            client = self.__connect_to_growatt_server(client_id)
+            if client is None:
+                return
+            ready = self._forward_ready[f"forward_client_{client_id}"]
         if ready.is_set():
             self.__flush_growatt_forward_queue(client_id, client)
 
     # Setup Growatt MQTT broker for forwarding messages
     def __connect_to_growatt_server(self, client_id):
-        key = f"forward_client_{client_id}"
+        with self._forward_lifecycle_lock:
+            if self._forward_stopped:
+                return None
+            key = f"forward_client_{client_id}"
 
-        if key not in self._forward_clients:
-            LOG.info(
-                "%s: connecting to Growatt Cloud",
-                _device_label(client_id),
-            )
-            client = mqtt.Client(
-                client_id=client_id,
-                callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
-            )
-            client.tls_set(cert_reqs=ssl.CERT_NONE)
-            client.tls_insecure_set(True)
-            client.on_message = self.__on_message_forward_client
+            if key not in self._forward_clients:
+                LOG.info(
+                    "%s: connecting to Growatt Cloud",
+                    _device_label(client_id),
+                )
+                client = mqtt.Client(
+                    client_id=client_id,
+                    callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
+                )
+                client.tls_set(cert_reqs=ssl.CERT_NONE)
+                client.tls_insecure_set(True)
+                client.on_message = self.__on_message_forward_client
 
-            ready = threading.Event()
+                ready = threading.Event()
 
-            def on_connect(forward_client, _userdata, _flags, reason_code, _properties):
-                if getattr(reason_code, "is_failure", False):
-                    LOG.warning(
-                        "%s: could not connect to Growatt Cloud (%s)",
-                        _device_label(client_id),
-                        reason_code,
-                    )
-                    return
-                forward_client.subscribe(f"+/{client_id}")
-                ready.set()
-                self.__flush_growatt_forward_queue(client_id, forward_client)
+                def on_connect(forward_client, _userdata, _flags, reason_code, _properties):
+                    if self._forward_stopped:
+                        forward_client.disconnect()
+                        return
+                    if getattr(reason_code, "is_failure", False):
+                        LOG.warning(
+                            "%s: could not connect to Growatt Cloud (%s)",
+                            _device_label(client_id),
+                            reason_code,
+                        )
+                        return
+                    forward_client.subscribe(f"+/{client_id}")
+                    ready.set()
+                    self.__flush_growatt_forward_queue(client_id, forward_client)
 
-            def on_disconnect(
-                _forward_client,
-                _userdata,
-                _disconnect_flags,
-                _reason_code,
-                _properties,
-            ):
-                ready.clear()
+                def on_disconnect(
+                    _forward_client,
+                    _userdata,
+                    _disconnect_flags,
+                    _reason_code,
+                    _properties,
+                ):
+                    ready.clear()
 
-            client.on_connect = on_connect
-            client.on_disconnect = on_disconnect
-            client.connect(
-                self._forward_mqtt_config.host,
-                self._forward_mqtt_config.port,
-                60,
-            )
-            self._forward_clients[key] = client
-            self._forward_ready[key] = ready
-            client.loop_start()
+                client.on_connect = on_connect
+                client.on_disconnect = on_disconnect
+                client.reconnect_delay_set(min_delay=1, max_delay=60)
+                client.connect_async(
+                    self._forward_mqtt_config.host,
+                    self._forward_mqtt_config.port,
+                    60,
+                )
+                self._forward_clients[key] = client
+                self._forward_ready[key] = ready
+                try:
+                    started = client.loop_start()
+                    if isinstance(started, int) and started != mqtt.MQTT_ERR_SUCCESS:
+                        raise RuntimeError(f"Cloud MQTT loop could not start: {started}")
+                except Exception:
+                    self._forward_clients.pop(key, None)
+                    self._forward_ready.pop(key, None)
+                    try:
+                        client.disconnect()
+                    except Exception:
+                        LOG.exception("Could not clean up a failed cloud loop")
+                    raise
 
-        return self._forward_clients[key]
-
+            return self._forward_clients[key]
 
 # Ensure that the dump directory exists
 if DUMP_MESSAGES and not os.path.exists(DUMP_DIR):

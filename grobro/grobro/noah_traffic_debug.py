@@ -12,7 +12,6 @@ import json
 import logging
 import os
 import struct
-import threading
 from datetime import datetime, timezone
 
 from grobro.grobro.noah_protocol_debug import decode_interesting_noah_packet
@@ -23,7 +22,7 @@ LOG = logging.getLogger(__name__)
 REGISTER_DEBUG = os.getenv("REGISTER_DEBUG", "false").lower() == "true"
 REGISTER_DEBUG_DIR = os.getenv("REGISTER_DEBUG_DIR", "/share/GroBro/register_debug")
 
-_LOCK = threading.Lock()
+from grobro.grobro.diagnostic_io import append_lines
 
 
 def _message_types(data: bytes | None) -> tuple[int | None, int | None]:
@@ -81,12 +80,8 @@ def capture_noah_mqtt_traffic(
             "decoded_msg_type_offset6": clear_type6,
             "decoded_interpretation": interpretation,
         }
-        os.makedirs(REGISTER_DEBUG_DIR, exist_ok=True)
         path = os.path.join(REGISTER_DEBUG_DIR, "noah_mqtt_traffic.jsonl")
-        with _LOCK:
-            with open(path, "a", encoding="utf-8") as handle:
-                handle.write(json.dumps(record, separators=(",", ":")))
-                handle.write("\n")
+        append_lines(path, json.dumps(record, separators=(",", ":")) + "\n")
     except (OSError, TypeError, ValueError, struct.error) as exc:
         LOG.warning("NOAH MQTT traffic capture failed: %s", exc)
 

@@ -14,6 +14,7 @@ import struct
 import threading
 from datetime import datetime, timezone
 
+from grobro.grobro.diagnostic_io import append_lines
 from grobro.grobro.noah_0103 import find_embedded_register_block
 from grobro.model.modbus_message import GrowattModbusMessage
 
@@ -41,7 +42,7 @@ REGISTER_DEBUG_MAX_REGISTER = max(0, min(65535, REGISTER_DEBUG_MAX_REGISTER))
 NOAH_0103_WATCH_REGISTERS = frozenset(range(299, 305))
 NOAH_0103_WATCH_GROUP = "noah_r299_r304_unknown_descriptor"
 
-_LOCK = threading.Lock()
+_LOCK = threading.RLock()
 _LAST_VALUES: dict[tuple[str, int, int], int] = {}
 # Fast path for change-only mode: most telemetry frames reuse the same register
 # block layout, and many blocks are byte-for-byte identical to the previous one.
@@ -70,13 +71,9 @@ def _canonical_0103_device_id(raw_device_id: str) -> str:
 def _append_records(records: list[dict]) -> None:
     if not records:
         return
-    os.makedirs(REGISTER_DEBUG_DIR, exist_ok=True)
     path = os.path.join(REGISTER_DEBUG_DIR, "registers.jsonl")
     with _LOCK:
-        with open(path, "a", encoding="utf-8") as handle:
-            for record in records:
-                handle.write(json.dumps(record, separators=(",", ":")))
-                handle.write("\n")
+        append_lines(path, "".join(json.dumps(record, separators=(",", ":")) + "\n" for record in records))
 
 
 def _write_modbus_message(message: GrowattModbusMessage) -> None:
@@ -259,7 +256,8 @@ def capture_modbus_message(message: GrowattModbusMessage | None) -> None:
     if not REGISTER_DEBUG or message is None:
         return
     try:
-        _write_modbus_message(message)
+        with _LOCK:
+            _write_modbus_message(message)
     except Exception as exc:
         LOG.warning("Register debug dump failed: %s", exc)
 
@@ -278,7 +276,8 @@ def capture_noah_0103(data: bytes, result: dict | None) -> None:
                 "end": block.end,
                 "values": list(block.values),
             }
-        _write_noah_0103(debug_result)
+        with _LOCK:
+            _write_noah_0103(debug_result)
     except Exception as exc:
         LOG.warning("NOAH 0x0103 debug dump failed: %s", exc)
 

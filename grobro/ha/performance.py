@@ -9,13 +9,12 @@ suppresses byte-identical repeated state payloads per device.
 from __future__ import annotations
 
 import math
+from collections import OrderedDict
 
 from grobro.ha import client as ha_client_module
 
-_REGISTER_RULES_CACHE: dict[
-    int,
-    tuple[dict, frozenset[str], frozenset[str], bool],
-] = {}
+_REGISTER_RULES_CACHE = OrderedDict()
+_REGISTER_RULES_CACHE_LIMIT = 32
 _BAT_SERIAL_GROUPS = (
     (2, ("bat2_ser_part_1", "bat2_ser_part_2", "bat2_ser_part_3", "bat2_ser_part_4"), "bat2_serial"),
     (3, ("bat3_ser_part_1", "bat3_ser_part_2", "bat3_ser_part_3", "bat3_ser_part_4"), "bat3_serial"),
@@ -30,8 +29,9 @@ def _register_rules(known_registers):
 
     cache_key = id(known_registers)
     cached = _REGISTER_RULES_CACHE.get(cache_key)
-    if cached is not None:
-        return cached
+    if cached is not None and cached[0] is known_registers:
+        _REGISTER_RULES_CACHE.move_to_end(cache_key)
+        return cached[1]
 
     enum_registers: dict = {}
     invalid_battery_temps: set[str] = set()
@@ -59,7 +59,10 @@ def _register_rules(known_registers):
         frozenset(whole_watt_power),
         has_battery_serial_parts,
     )
-    _REGISTER_RULES_CACHE[cache_key] = rules
+    _REGISTER_RULES_CACHE[cache_key] = (known_registers, rules)
+    _REGISTER_RULES_CACHE.move_to_end(cache_key)
+    while len(_REGISTER_RULES_CACHE) > _REGISTER_RULES_CACHE_LIMIT:
+        _REGISTER_RULES_CACHE.popitem(last=False)
     return rules
 
 

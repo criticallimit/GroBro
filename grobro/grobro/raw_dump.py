@@ -6,11 +6,10 @@ import base64
 import json
 import logging
 import os
-import threading
 import time
 
 LOG = logging.getLogger(__name__)
-_DUMP_LOCK = threading.Lock()
+from grobro.grobro.diagnostic_io import append_lines
 
 
 def dump_message_jsonl(dump_dir: str, topic, payload) -> None:
@@ -26,7 +25,6 @@ def dump_message_jsonl(dump_dir: str, topic, payload) -> None:
 
         raw = bytes(payload)
         root = os.path.abspath(str(dump_dir))
-        os.makedirs(root, exist_ok=True)
         file_path = os.path.abspath(os.path.join(root, "messages.jsonl"))
         if os.path.commonpath([root, file_path]) != root:
             raise ValueError("resolved dump path escaped dump directory")
@@ -40,9 +38,7 @@ def dump_message_jsonl(dump_dir: str, topic, payload) -> None:
         }
         line = json.dumps(record, separators=(",", ":"))
 
-        with _DUMP_LOCK, open(file_path, "a", encoding="utf-8") as handle:
-            handle.write(line)
-            handle.write("\n")
+        append_lines(file_path, line + "\n")
     except (OSError, TypeError, ValueError) as exc:
         LOG.error("Failed to dump message for topic %s: %s", topic, exc)
 

@@ -83,3 +83,50 @@ def restore_config_cache_by_filename(client) -> None:
         if config is not None:
             client._config_cache[mqtt_device_id] = config
             observe_device(mqtt_device_id)
+
+
+def load_persisted_config(client, path: str):
+    """Reuse parsed metadata while detecting external edits and atomic replaces."""
+    absolute = os.path.abspath(path)
+    try:
+        stat = os.stat(absolute)
+    except OSError:
+        # Missing/unreadable files must remain retryable.
+        getattr(client, "_persisted_config_snapshots", {}).pop(absolute, None)
+        return ha_client_module.model.DeviceConfig.from_file(path)
+    signature = (stat.st_mtime_ns, stat.st_ctime_ns, stat.st_size, stat.st_ino)
+    snapshots = getattr(client, "_persisted_config_snapshots", None)
+    if snapshots is None:
+        snapshots = client._persisted_config_snapshots = {}
+    cached = snapshots.get(absolute)
+    if cached is not None and cached[0] == signature:
+        return cached[1]
+    config = ha_client_module.model.DeviceConfig.from_file(path)
+    if config is not None:
+        snapshots[absolute] = (signature, config)
+    else:
+        snapshots.pop(absolute, None)
+    return config
+
+
+def persist_device_config(client, device_id: str, config) -> bool:
+    """Keep live metadata usable while retrying transient persistence failures."""
+    dirty = getattr(client, "_dirty_device_configs", None)
+    if dirty is None:
+        dirty = client._dirty_device_configs = set()
+    try:
+        config.to_file(f"config_{device_id}.json")
+    except OSError:
+        if device_id not in dirty:
+            ha_client_module.LOG.exception("Could not persist device information for %s; will retry", device_id)
+        dirty.add(device_id)
+        return False
+    dirty.discard(device_id)
+    return True
+
+
+def retry_pending_device_config(client, device_id: str) -> None:
+    if device_id in getattr(client, "_dirty_device_configs", ()):
+        config = client._config_cache.get(device_id)
+        if config is not None:
+            persist_device_config(client, device_id, config)
