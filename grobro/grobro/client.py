@@ -69,7 +69,7 @@ def _config_register_label(device_id: str, register_no: int) -> str:
             if reg.growatt.register_no == register_no:
                 display_name = getattr(reg.homeassistant, "name", None) or name
                 return f'"{display_name}" (register {register_no})'
-    return f"register {register_no}"
+    return f'"Unknown setting" (register {register_no})'
 
 
 def _publish_checked(client, topic: str, payload=None, **kwargs):
@@ -173,6 +173,7 @@ class Client:
         self._forward_overflow_warned: set[str] = set()
         self._ptq_for_raq: dict[str, str] = {}
         self._smart_meter_state_cache: dict[str, str] = {}
+        self._pending_config_writes: dict[str, deque[int]] = {}
 
     def start(self):
         LOG.debug("GroBro: Start")
@@ -192,6 +193,7 @@ class Client:
         with self._forward_pending_lock:
             self._forward_pending.clear()
             self._forward_overflow_warned.clear()
+        self._pending_config_writes.clear()
 
     def send_command(self, cmd: GrowattModbusFunctionSingle):
         scrambled = scramble(cmd.build_grobro())
@@ -233,12 +235,23 @@ class Client:
             _device_label(device_id),
             _config_register_label(device_id, register_no),
         )
-        return _publish_checked(
+        result = _publish_checked(
             self._client,
             topic,
             final_payload,
             properties=MQTT_PROP_FORWARD_HA,
         )
+        status = getattr(result, "rc", None)
+        if status is None:
+            try:
+                status = result[0]
+            except (TypeError, IndexError, KeyError):
+                status = None
+        if status in (None, 0):
+            self._pending_config_writes.setdefault(device_id, deque()).append(
+                int(register_no)
+            )
+        return result
 
     def __on_connect(self, client, userdata, flags, reason_code, properties):
         LOG.debug("Connected to GroBro MQTT server with result code %s", reason_code)
@@ -392,12 +405,30 @@ class Client:
             # Config WRITE response (280)
             if msg_type == 280:
                 cfg = parser.parse_config_ack(unscrambled)
+                ack_device_id = cfg["device_id"]
+                parsed_register = cfg["register_no"]
+                pending = self._pending_config_writes.get(ack_device_id)
+                if pending:
+                    register_no = pending.popleft()
+                    if not pending:
+                        self._pending_config_writes.pop(ack_device_id, None)
+                    if parsed_register != register_no:
+                        LOG.debug(
+                            "%s config acknowledgement reported register %s; "
+                            "matched it to the pending Better GroBro write for register %s",
+                            _device_label(ack_device_id),
+                            parsed_register,
+                            register_no,
+                        )
+                else:
+                    register_no = parsed_register
+
                 LOG.info(
                     "%s -> Better GroBro: setting accepted for %s",
-                    _device_label(cfg["device_id"]),
+                    _device_label(ack_device_id),
                     _config_register_label(
-                        cfg["device_id"],
-                        cfg["register_no"],
+                        ack_device_id,
+                        register_no,
                     ),
                 )
                 return
