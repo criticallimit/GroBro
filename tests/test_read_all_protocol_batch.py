@@ -28,7 +28,7 @@ def test_rejected_read_all_publish_releases_sequence_and_allows_retry(tmp_path, 
             assert device not in target._config_read_timers
             assert device not in target._read_all_active
             target.on_config_read.assert_called_once_with(device, 4)
-            target.on_config_read.reset_mock(return_value=True)
+            target.on_config_read.reset_mock()
             target.on_config_read.return_value = (0, None)
             target._read_all_active.add(device)
             target._config_read_queues[device] = deque([4, 5])
