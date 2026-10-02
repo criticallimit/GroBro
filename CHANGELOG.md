@@ -1,6 +1,17 @@
-# Better GroBro 3.1.69 — Differences from robertzaage/GroBro
+# Better GroBro 3.1.70 — Differences from robertzaage/GroBro
 
 Comparison baseline: `robertzaage/GroBro` main at `e4d59b20ba472853ae6ec0b7a17cf15cd774cb23` (2026-09-18).
+
+## Reliability fixes in this release
+
+- MQTT publication failures no longer interrupt independent telemetry, device information or received configuration responses.
+- Saved battery assignments and detection history are protected against transient file-read errors; manual choices remain authoritative.
+- Read All can recover from rejected MQTT requests and interrupted sequences.
+- Device and background timer failures leave processing and subsequent retries usable.
+- Register diagnostics retain changes correctly when received register blocks overlap.
+- Reduced repeated JSON processing, buffer copies and register searches; optimized configuration and NOAH/NEXA parsing.
+
+Entity identifiers, supported device controls and normal device protocol behavior remain unchanged. Validation: 933 tests passed; CI passed on Python 3.11, 3.12 and 3.13.
 
 ## User-relevant differences
 
