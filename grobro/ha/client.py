@@ -772,14 +772,10 @@ class Client:
                                 q.append(cfg.growatt.register_no)
 
                         # give the datalogger time to answer modbus reads
-                        timer = Timer(
-                            3.0,
-                            self.__kickoff_next_config_read,
-                            args=(device_id,),
+                        self.__start_config_read_timer(
+                            3.0, self.__kickoff_next_config_read,
+                            self._read_all_start_timers, device_id,
                         )
-                        timer.daemon = True
-                        self._read_all_start_timers[device_id] = timer
-                        timer.start()
                     else:
                         with self._config_read_lock:
                             self._read_all_active.discard(device_id)
@@ -1373,6 +1369,18 @@ class Client:
 
         return device_info
 
+    def __start_config_read_timer(self, delay, callback, timers, device_id, *args):
+        """Run only if this timer still belongs to the current read sequence."""
+        def run():
+            with runtime_lock(self):
+                if timers.get(device_id) is timer:
+                    callback(device_id, *args)
+
+        timer = Timer(delay, run)
+        timer.daemon = True
+        timers[device_id] = timer
+        timer.start()
+
     def __cancel_config_read_sequence(self, device_id: str):
         """Release failed reads; caller must hold _config_read_lock."""
         self._config_read_inflight.pop(device_id, None)
@@ -1404,10 +1412,10 @@ class Client:
             # Arm before sending: a fast/synchronous response may already start
             # the next read and must not have its timer overwritten afterward.
             try:
-                timer = Timer(60, self.__config_read_timeout, args=(device_id, register_no))
-                timer.daemon = True
-                self._config_read_timers[device_id] = timer
-                timer.start()
+                self.__start_config_read_timer(
+                    60, self.__config_read_timeout,
+                    self._config_read_timers, device_id, register_no,
+                )
             except Exception:
                 self.__cancel_config_read_sequence(device_id)
                 raise

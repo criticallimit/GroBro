@@ -62,7 +62,7 @@ def schedule_next_time_sync(client) -> None:
 
     def run_and_reschedule():
         with runtime_lock(client):
-            if getattr(client, "_stopped", False):
+            if getattr(client, "_stopped", False) or client._time_sync_timer is not timer:
                 return
             client._time_sync_timer = None
             sync_supported_clocks(client)

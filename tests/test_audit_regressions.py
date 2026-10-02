@@ -317,3 +317,63 @@ def test_read_all_timer_failure_cleans_sequence_and_allows_retry(clients, stage,
         assert queued == expected
         target._Client__kickoff_next_config_read(DEVICE)
     target.on_config_read.assert_called_once_with(DEVICE, expected[0])
+
+
+@pytest.mark.parametrize("stage", ["kickoff", "response"])
+def test_cancelled_config_timer_cannot_affect_restarted_read_all(clients, stage):
+    target, _ = clients
+    request = message(f"homeassistant/button/grobro/{DEVICE}/read_all/press", b"")
+    with patch("grobro.ha.client.Timer.start"):
+        if stage == "kickoff":
+            target._Client__on_message(target._client, None, request)
+            previous = target._read_all_start_timers[DEVICE]
+        else:
+            target._read_all_active.add(DEVICE)
+            target._config_read_queues[DEVICE] = deque([4, 5])
+            target._Client__kickoff_next_config_read(DEVICE)
+            previous = target._config_read_timers[DEVICE]
+        target._Client__reset_config_read_state()
+        if stage == "kickoff":
+            target._Client__on_message(target._client, None, request)
+            current = target._read_all_start_timers[DEVICE]
+        else:
+            target._read_all_active.add(DEVICE)
+            target._config_read_queues[DEVICE] = deque([4, 5])
+            target._Client__kickoff_next_config_read(DEVICE)
+            current = target._config_read_timers[DEVICE]
+        queued = list(target._config_read_queues[DEVICE])
+        sent = target.on_config_read.call_count
+        # Replay a callback that entered before cancellation and waited for
+        # the runtime lock until after HA recovery installed a new sequence.
+        previous.function(*previous.args, **previous.kwargs)
+        assert target.on_config_read.call_count == sent
+        assert list(target._config_read_queues[DEVICE]) == queued
+        timers = target._read_all_start_timers if stage == "kickoff" else target._config_read_timers
+        assert timers[DEVICE] is current
+        current.function(*current.args, **current.kwargs)
+        assert target.on_config_read.call_count == sent + 1
+
+
+@pytest.mark.parametrize("service", ["neo", "clock"])
+def test_replaced_runtime_timer_cannot_execute_or_replace_current_timer(clients, service):
+    from grobro.ha.neo_power_runtime import schedule_known_neo_state_probe
+    from grobro.ha.time_sync_runtime import schedule_next_time_sync
+    target, _ = clients
+    if service == "neo":
+        schedule = schedule_known_neo_state_probe
+        attribute = "_neo_startup_probe_timer"
+        callback = "grobro.ha.neo_power_runtime.request_known_neo_states"
+    else:
+        schedule = schedule_next_time_sync
+        attribute = "_time_sync_timer"
+        callback = "grobro.ha.time_sync_runtime.sync_supported_clocks"
+    with patch("threading.Timer.start"), patch(callback) as work:
+        schedule(target)
+        previous = getattr(target, attribute)
+        schedule(target)
+        current = getattr(target, attribute)
+        previous.function(*previous.args, **previous.kwargs)
+        work.assert_not_called()
+        assert getattr(target, attribute) is current
+        current.function(*current.args, **current.kwargs)
+        work.assert_called_once_with(target)
