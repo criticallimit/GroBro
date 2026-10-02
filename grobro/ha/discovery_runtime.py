@@ -8,6 +8,7 @@ import ipaddress
 import grobro.model as model
 from grobro.ha import client as ha_client_module
 from grobro.ha.localization import runtime_language, translate_entity_name
+from grobro.model.mqtt_config import publish_succeeded
 
 FORK_URL = "https://github.com/criticallimit/GroBro"
 def configured_serial(client, device_id: str) -> str:
@@ -98,11 +99,11 @@ def build_discovery_repair_payload(device_id: str, clean_data: dict) -> dict:
     return repair
 
 
-def clear_legacy_component_discovery(original_publish, device_id: str) -> None:
+def clear_legacy_component_discovery(original_publish, device_id: str) -> bool:
     """Clear obsolete retained component topics, except NEO Inverter Power."""
     known_registers = model.get_known_registers(device_id)
     if not known_registers:
-        return
+        return True
 
     base = ha_client_module.HA_BASE_TOPIC
     topics = {f"{base}/number/grobro/{device_id}_set_wirk/config"}
@@ -121,5 +122,8 @@ def clear_legacy_component_discovery(original_publish, device_id: str) -> None:
     for name in known_registers.input_registers:
         topics.add(f"{base}/sensor/grobro/{device_id}_{name}/config")
 
+    succeeded = True
     for topic in sorted(topics):
-        original_publish(topic, "", retain=True)
+        result = original_publish(topic, "", retain=True)
+        succeeded = publish_succeeded(result) and succeeded
+    return succeeded

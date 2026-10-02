@@ -596,7 +596,7 @@ class BatteryIngressHandler(BaseHTTPRequestHandler):
             return None
         try:
             payload = json.loads(self.rfile.read(content_length))
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, UnicodeDecodeError):
             self._send_json({"error": "Ungültiges JSON"}, HTTPStatus.BAD_REQUEST)
             return None
         if not isinstance(payload, dict):

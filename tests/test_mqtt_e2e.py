@@ -153,7 +153,8 @@ def test_real_mqtt_bidirectional_bridge(tmp_path, monkeypatch):
     not os.getenv("E2E_MQTT_HOST"),
     reason="requires a real MQTT broker (set E2E_MQTT_HOST)",
 )
-def test_real_mqtt_noah_bridge(tmp_path, monkeypatch):
+@pytest.mark.parametrize("username,password", [(None, None), ("e2e-user", "")])
+def test_real_mqtt_noah_bridge(tmp_path, monkeypatch, username, password):
     """Exercise NOAH config, telemetry and HA command paths through a real broker."""
     host = os.environ["E2E_MQTT_HOST"]
     port = int(os.getenv("E2E_MQTT_PORT", "1883"))
@@ -162,7 +163,7 @@ def test_real_mqtt_noah_bridge(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("MQTT_CLIENT_SUFFIX", suffix)
 
-    broker = MQTTConfig(host=host, port=port)
+    broker = MQTTConfig(host=host, port=port, username=username, password=password)
     received = {}
     received_lock = threading.Lock()
     probe_connected = threading.Event()

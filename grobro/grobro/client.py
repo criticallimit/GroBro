@@ -208,7 +208,7 @@ class Client:
             protocol=mqtt.MQTTv5,
         )
 
-        if grobro_mqtt.username and grobro_mqtt.password:
+        if grobro_mqtt.username:
             self._client.username_pw_set(grobro_mqtt.username, grobro_mqtt.password)
         if grobro_mqtt.use_tls:
             self._client.tls_set(cert_reqs=ssl.CERT_NONE)
@@ -241,19 +241,25 @@ class Client:
 
     def stop(self):
         LOG.debug("GroBro: Stop")
-        self._client.loop_stop()
-        self._client.disconnect()
-        for forward_client in list(self._forward_clients.values()):
-            try:
-                forward_client.loop_stop()
-            finally:
-                forward_client.disconnect()
-        self._forward_clients.clear()
-        self._forward_ready.clear()
-        with self._forward_pending_lock:
-            self._forward_pending.clear()
-            self._forward_overflow_warned.clear()
-        self._pending_config_writes.clear()
+        clients = [self._client, *self._forward_clients.values()]
+        try:
+            for client in clients:
+                try:
+                    client.disconnect()
+                except Exception:
+                    LOG.exception("Could not disconnect an MQTT client during shutdown")
+                finally:
+                    try:
+                        client.loop_stop()
+                    except Exception:
+                        LOG.exception("Could not stop an MQTT loop during shutdown")
+        finally:
+            self._forward_clients.clear()
+            self._forward_ready.clear()
+            with self._forward_pending_lock:
+                self._forward_pending.clear()
+                self._forward_overflow_warned.clear()
+            self._pending_config_writes.clear()
 
     def send_command(self, cmd: GrowattModbusFunctionSingle):
         if model.is_gateway(cmd.device_id):

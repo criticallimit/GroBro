@@ -137,7 +137,7 @@ def _supervisor_request(method: str, path: str, payload=None):
         return None
     try:
         return _unwrap(json.loads(raw))
-    except json.JSONDecodeError as exc:
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
         raise SupervisorConfigError("Ungültige Supervisor-Antwort") from exc
 
 
@@ -234,8 +234,10 @@ def normalize_options(raw: dict) -> dict:
                 raise SupervisorConfigError(f"{key}: Zahl erwartet")
             try:
                 number = int(value)
-            except (TypeError, ValueError) as exc:
+            except (TypeError, ValueError, OverflowError) as exc:
                 raise SupervisorConfigError(f"{key}: ungültige Zahl") from exc
+            if isinstance(value, float) and value != number:
+                raise SupervisorConfigError(f"{key}: ungültige Zahl")
             if key in {"SOURCE_MQTT_PORT", "TARGET_MQTT_PORT"} and not 1 <= number <= 65535:
                 raise SupervisorConfigError(f"{key}: Port muss zwischen 1 und 65535 liegen")
             if key == "REGISTER_DEBUG_MAX_REGISTER" and not 0 <= number <= 65535:
@@ -249,6 +251,8 @@ def normalize_options(raw: dict) -> dict:
             result[key] = number
             continue
 
+        if isinstance(value, (dict, list)):
+            raise SupervisorConfigError(f"{key}: Text erwartet")
         text = "" if value is None else str(value)
         if key not in {"SOURCE_MQTT_PASS", "TARGET_MQTT_PASS"}:
             text = text.strip()
@@ -308,7 +312,9 @@ def save_addon_options(raw_changes: dict) -> dict:
     """Validate and save changes through the Supervisor options API."""
     changes = normalize_options(raw_changes)
     info = _supervisor_request("GET", "/addons/self/info") or {}
-    current = info.get("options", {}) if isinstance(info, dict) else {}
+    if not isinstance(info, dict):
+        raise SupervisorConfigError("Ungültige Supervisor-Antwort")
+    current = info.get("options", {})
     if not isinstance(current, dict):
         current = {}
 
