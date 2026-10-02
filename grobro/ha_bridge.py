@@ -18,7 +18,6 @@ from grobro.grobro.register_debug import install_register_debug_hook
 from grobro.grobro.signals import SignalHandler
 from grobro.ha.battery_ingress import start_battery_ingress_server
 from grobro.ha.cleanup import install_ha_cleanup_hook
-from grobro.ha.discovery_runtime import install_mac_runtime
 from grobro.ha.performance import install_ha_performance_hook
 from grobro.ha.supervisor_config import mark_process_log_start
 
@@ -59,7 +58,6 @@ def install_runtime_layers() -> None:
     install_noah_heater_hook()
     install_ha_cleanup_hook()
     install_ha_performance_hook()
-    install_mac_runtime()
 
 
 def install_optional_diagnostics() -> None:
