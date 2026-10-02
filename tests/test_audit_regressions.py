@@ -283,3 +283,37 @@ def test_bridge_stops_both_clients_after_lifecycle_failure(failure):
         run_clients(target, source, signal)
     target.stop.assert_called_once()
     source.stop.assert_called_once()
+
+
+@pytest.mark.parametrize("stage", ["kickoff", "response"])
+@pytest.mark.parametrize("failure", ["construct", "start"])
+@pytest.mark.parametrize("error", [RuntimeError, OSError])
+def test_read_all_timer_failure_cleans_sequence_and_allows_retry(clients, stage, failure, error):
+    target, _ = clients
+    request = message(f"homeassistant/button/grobro/{DEVICE}/read_all/press", b"")
+    broken = MagicMock()
+    with patch("grobro.ha.client.Timer", return_value=broken) as timers:
+        if failure == "construct":
+            timers.side_effect = error("threads unavailable")
+        else:
+            broken.start.side_effect = error("threads unavailable")
+        if stage == "kickoff":
+            target._Client__on_message(target._client, None, request)
+        else:
+            target._read_all_active.add(DEVICE)
+            target._config_read_queues[DEVICE] = deque([4, 5])
+            with pytest.raises(error):
+                target._Client__kickoff_next_config_read(DEVICE)
+    assert DEVICE not in target._config_read_queues
+    assert DEVICE not in target._config_read_inflight
+    assert DEVICE not in target._config_read_timers
+    assert DEVICE not in target._read_all_start_timers
+    assert DEVICE not in target._read_all_active
+    target.on_config_read.assert_not_called()
+    with patch("grobro.ha.client.Timer"):
+        target._Client__on_message(target._client, None, request)
+        queued = list(target._config_read_queues[DEVICE])
+        expected = [r.growatt.register_no for r in model.get_known_registers(DEVICE).config_registers.values()]
+        assert queued == expected
+        target._Client__kickoff_next_config_read(DEVICE)
+    target.on_config_read.assert_called_once_with(DEVICE, expected[0])

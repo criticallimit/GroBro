@@ -785,7 +785,7 @@ class Client:
                             self._read_all_active.discard(device_id)
                 except Exception:
                     with self._config_read_lock:
-                        self._read_all_active.discard(device_id)
+                        self.__cancel_config_read_sequence(device_id)
                     raise
 
                 return
@@ -1373,6 +1373,16 @@ class Client:
 
         return device_info
 
+    def __cancel_config_read_sequence(self, device_id: str):
+        """Release failed reads; caller must hold _config_read_lock."""
+        self._config_read_inflight.pop(device_id, None)
+        self._config_read_queues.pop(device_id, None)
+        for timers in (self._config_read_timers, getattr(self, "_read_all_start_timers", {})):
+            timer = timers.pop(device_id, None)
+            if timer is not None:
+                timer.cancel()
+        getattr(self, "_read_all_active", set()).discard(device_id)
+
     @guard_runtime
     def __kickoff_next_config_read(self, device_id: str):
         with self._config_read_lock:
@@ -1393,22 +1403,21 @@ class Client:
 
             # Arm before sending: a fast/synchronous response may already start
             # the next read and must not have its timer overwritten afterward.
-            timer = Timer(60, self.__config_read_timeout, args=(device_id, register_no))
-            timer.daemon = True
-            self._config_read_timers[device_id] = timer
-            timer.start()
+            try:
+                timer = Timer(60, self.__config_read_timeout, args=(device_id, register_no))
+                timer.daemon = True
+                self._config_read_timers[device_id] = timer
+                timer.start()
+            except Exception:
+                self.__cancel_config_read_sequence(device_id)
+                raise
 
         if self.on_config_read:
             try:
                 self.on_config_read(device_id, register_no)
             except Exception:
                 with self._config_read_lock:
-                    self._config_read_inflight.pop(device_id, None)
-                    self._config_read_queues.pop(device_id, None)
-                    timer = self._config_read_timers.pop(device_id, None)
-                    if timer is not None:
-                        timer.cancel()
-                    getattr(self, "_read_all_active", set()).discard(device_id)
+                    self.__cancel_config_read_sequence(device_id)
                 raise
 
     @guard_runtime
