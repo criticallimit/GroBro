@@ -80,7 +80,7 @@ def _load_all_positions(path: str = _POSITION_FILE) -> dict[str, dict[str, int]]
             raw = json.load(handle)
     except FileNotFoundError:
         return {}
-    except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
+    except (OSError, json.JSONDecodeError, TypeError, ValueError, RecursionError) as exc:
         LOG.warning("Failed to load battery position map %s: %s", path, exc)
         return {}
 
@@ -125,7 +125,7 @@ def _load_manual_positions(
             raw = json.load(handle)
     except FileNotFoundError:
         return {}
-    except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
+    except (OSError, json.JSONDecodeError, TypeError, ValueError, RecursionError) as exc:
         LOG.warning("Failed to load manual battery position map %s: %s", path, exc)
         return {}
 
@@ -219,7 +219,7 @@ def _record_detected_serials(client, device_id: str, serials: dict[int, str]) ->
             with open(_DETECTED_FILE, "r", encoding="utf-8") as handle:
                 raw = json.load(handle)
             cache = raw if isinstance(raw, dict) else {}
-        except (FileNotFoundError, OSError, json.JSONDecodeError, TypeError, ValueError):
+        except (FileNotFoundError, OSError, json.JSONDecodeError, TypeError, ValueError, RecursionError):
             cache = {}
         client._battery_detected_serials = cache
 
@@ -244,7 +244,7 @@ def _load_detected_serials(path: str = _DETECTED_FILE) -> dict[str, list[dict]]:
     try:
         with open(path, "r", encoding="utf-8") as handle:
             raw = json.load(handle)
-    except (FileNotFoundError, OSError, json.JSONDecodeError, TypeError, ValueError):
+    except (FileNotFoundError, OSError, json.JSONDecodeError, TypeError, ValueError, RecursionError):
         return {}
     if not isinstance(raw, dict):
         return {}

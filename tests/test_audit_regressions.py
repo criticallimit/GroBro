@@ -377,3 +377,29 @@ def test_replaced_runtime_timer_cannot_execute_or_replace_current_timer(clients,
         assert getattr(target, attribute) is current
         current.function(*current.args, **current.kwargs)
         work.assert_called_once_with(target)
+
+
+@pytest.mark.parametrize("kind", ["device", "automatic", "manual", "detected", "observe"])
+def test_deeply_nested_persistence_is_recoverable(tmp_path, monkeypatch, kind):
+    from grobro.ha import battery_position as batteries
+    monkeypatch.chdir(tmp_path)
+    names = {"device": "config_TEST.json", "automatic": "battery_positions.json",
+             "manual": "battery_manual_positions.json", "detected": "battery_detected.json",
+             "observe": "battery_detected.json"}
+    path = tmp_path / names[kind]
+    path.write_text("[" * 20000 + "0" + "]" * 20000, encoding="utf-8")
+    if kind == "device":
+        assert model.DeviceConfig.from_file(str(path)) is None
+        model.DeviceConfig(serial_number="TEST").to_file(str(path))
+        assert model.DeviceConfig.from_file(str(path)).serial_number == "TEST"
+    elif kind == "observe":
+        client = SimpleNamespace()
+        batteries.observe_battery_serials(client, "0PVPTEST", {"bat2_ser_part_1": "SN00200000000001"})
+        assert json.loads(path.read_text())["0PVPTEST"] == [
+            {"physical_slot": 2, "serial": "SN00200000000001"},
+        ]
+    else:
+        loader = {"automatic": batteries._load_all_positions,
+                  "manual": batteries._load_manual_positions,
+                  "detected": batteries._load_detected_serials}[kind]
+        assert loader() == {}
