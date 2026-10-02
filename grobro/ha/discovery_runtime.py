@@ -7,7 +7,6 @@ import ipaddress
 
 import grobro.model as model
 from grobro.ha import client as ha_client_module
-from grobro.ha.firmware_runtime import _rewrite_firmware_discovery
 from grobro.ha.localization import runtime_language, translate_entity_name
 
 FORK_URL = "https://github.com/criticallimit/GroBro"
