@@ -222,7 +222,7 @@ class TestClientSend:
         topic = client._client.publish.call_args[0][0]
         assert topic == "s/33/QMN000ABC1D2E3FG"
         assert (
-            "Better GroBro -> NEO QMN000ABC1D2E3FG: request config register 1280"
+            "Better GroBro -> NEO QMN000ABC1D2E3FG: request config \"Unknown setting\" (register 1280)"
             in caplog.text
         )
 
