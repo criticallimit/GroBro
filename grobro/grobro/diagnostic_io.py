@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import json
 import os
 import threading
 import time
@@ -28,6 +29,49 @@ def diagnostic_scope(callback):
     return scoped
 
 
+def _repair_incomplete_tail(path: str, size: int) -> int:
+    """Discard only an incomplete trailing record after failed writes/restarts."""
+    if not size:
+        return 0
+    with open(path, "r+b") as handle:
+        handle.seek(size - 1)
+        if handle.read(1) == b"\n":
+            return size
+        position = size
+        tail = []
+        tail_size = 0
+        while position:
+            start = max(0, position - 8192)
+            handle.seek(start)
+            chunk = handle.read(position - start)
+            newline = chunk.rfind(b"\n")
+            suffix = chunk[newline + 1:] if newline >= 0 else chunk
+            if tail is not None and len(suffix) + tail_size <= MAX_FILE_BYTES:
+                tail.append(suffix)
+                tail_size += len(suffix)
+            else:
+                tail = None
+            if newline >= 0:
+                boundary = start + newline + 1
+                break
+            position = start
+        else:
+            boundary = 0
+        if tail is not None:
+            try:
+                json.loads(b"".join(reversed(tail)))
+            except (ValueError, UnicodeDecodeError, RecursionError):
+                pass
+            else:
+                handle.seek(0, os.SEEK_END)
+                handle.write(b"\n")
+                return size + 1
+        size = boundary
+        handle.truncate(size)
+    LOG.warning("Incomplete diagnostic record removed before resuming capture")
+    return size
+
+
 def _write_lines(path: str, text: str) -> None:
     with _FILE_LOCK:
         os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
@@ -35,6 +79,7 @@ def _write_lines(path: str, text: str) -> None:
             existing = os.path.getsize(path)
         except FileNotFoundError:
             existing = 0
+        existing = _repair_incomplete_tail(path, existing)
         handle = None
         try:
             for line in text.splitlines(keepends=True):
