@@ -143,8 +143,8 @@ class DiagnosticWriter:
             self._queue.append((path, text, size))
             self._bytes += size
             if self._thread is None:
-                self._thread = threading.Thread(target=self._run, name="grobro-diagnostics", daemon=True)
                 try:
+                    self._thread = threading.Thread(target=self._run, name="grobro-diagnostics", daemon=True)
                     self._thread.start()
                 except (RuntimeError, OSError):
                     self._thread = None
