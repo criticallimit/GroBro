@@ -249,7 +249,7 @@ class Client:
         self._bridge_availability_topic = f"{HA_BASE_TOPIC}/grobro/{client_id}/availability"
         self._client.will_set(self._bridge_availability_topic, "offline", qos=1, retain=True)
 
-        if mqtt_config.username and mqtt_config.password:
+        if mqtt_config.username:
             self._client.username_pw_set(mqtt_config.username, mqtt_config.password)
         if mqtt_config.use_tls:
             self._client.tls_set(cert_reqs=ssl.CERT_NONE)
@@ -379,9 +379,9 @@ class Client:
         device_id = topic[len(prefix) : -len(suffix)] if is_device_config else None
 
         if device_id is None:
-            parts = topic.split("/")
-            if len(parts) >= 4 and parts[0] == base and parts[1] == "grobro":
-                device_id = parts[2]
+            state_prefix = f"{base}/grobro/"
+            if topic.startswith(state_prefix):
+                device_id = topic[len(state_prefix):].split("/", 1)[0]
 
         if not device_id:
             return self._client.publish(topic, payload, *args, **kwargs)
@@ -449,12 +449,15 @@ class Client:
         result = self._client.publish(topic, payload, *args, **kwargs)
 
         if is_device_config and payload and publish_succeeded(result) and device_id not in legacy_cleanup_done:
-            clear_legacy_component_discovery(
+            cleanup_succeeded = clear_legacy_component_discovery(
                 self._client.publish,
                 device_id,
             )
-            legacy_cleanup_done.add(device_id)
-            self._client.publish(topic, payload, *args, **kwargs)
+            result = self._client.publish(topic, payload, *args, **kwargs)
+            if cleanup_succeeded is False:
+                return (mqtt.MQTT_ERR_UNKNOWN, None)
+            if publish_succeeded(result):
+                legacy_cleanup_done.add(device_id)
 
         return result
 
@@ -1049,13 +1052,14 @@ class Client:
             self._neo_pv_count.get(device_id),
             runtime_language(),
         )
+        # Retry incomplete legacy migration even if the current device-level
+        # discovery was already accepted in a previous packet.
+        self.__migrate_entity_discovery(device_id, known_registers)
         if (
             device_id in self._discovery_cache
             and self._discovery_signature.get(device_id) == signature
         ):
             return
-
-        self.__migrate_entity_discovery(device_id, known_registers)
 
         topic = f"{HA_BASE_TOPIC}/device/{device_id}/config"
 
@@ -1285,33 +1289,35 @@ class Client:
         if device_id in self._migration_done:
             return
 
+        results = []
         old_entities = [("set_wirk", "number")]
         for e_name, e_type in old_entities:
-            self._publish_discovery_message(
+            results.append(self._publish_discovery_message(
                 f"{HA_BASE_TOPIC}/{e_type}/grobro/{device_id}_{e_name}/config",
                 json.dumps({"migrate_discovery": True}),
                 retain=True,
-            )
+            ))
         for cmd_name, cmd in known_registers.holding_registers.items():
             cmd_type = cmd.homeassistant.type
-            self._publish_discovery_message(
+            results.append(self._publish_discovery_message(
                 f"{HA_BASE_TOPIC}/{cmd_type}/grobro/{device_id}_{cmd_name}/config",
                 json.dumps({"migrate_discovery": True}),
                 retain=True,
-            )
-            self._publish_discovery_message(
+            ))
+            results.append(self._publish_discovery_message(
                 f"{HA_BASE_TOPIC}/{cmd_type}/grobro/{device_id}_{cmd_name}_read/config",
                 json.dumps({"migrate_discovery": True}),
                 retain=True,
-            )
+            ))
         for state_name in known_registers.input_registers:
-            self._publish_discovery_message(
+            results.append(self._publish_discovery_message(
                 f"{HA_BASE_TOPIC}/sensor/grobro/{device_id}_{state_name}/config",
                 json.dumps({"migrate_discovery": True}),
                 retain=True,
-            )
+            ))
 
-        self._migration_done.add(device_id)
+        if all(publish_succeeded(result) for result in results):
+            self._migration_done.add(device_id)
 
     def __device_info_from_config(self, device_id: str):
         # Find matching config
