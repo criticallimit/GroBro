@@ -165,4 +165,4 @@ def install_firmware_runtime() -> None:
     if _INSTALLED:
         return
     _INSTALLED = True
-    LOG.info("Firmware runtime is integrated into the consolidated HA pipeline")
+    LOG.debug("Firmware runtime is integrated into the consolidated HA pipeline")
