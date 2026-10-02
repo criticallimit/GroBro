@@ -348,3 +348,22 @@ def test_diagnostic_thread_start_failure_is_retryable(tmp_path):
     assert writer.submit(path, "recovered\n")
     assert writer.stop(3)
     assert (tmp_path / "capture.jsonl").read_text() == "recovered\n"
+
+
+
+def test_ingress_headers_have_total_deadline_and_preserve_buffer(monkeypatch):
+    from io import BytesIO
+    from grobro.ha.battery_ingress import _HeaderDeadlineReader
+    connection = MagicMock()
+    connection.gettimeout.return_value = 10
+    clock = [0]
+    monkeypatch.setattr("grobro.ha.battery_ingress.time.monotonic", lambda: clock[0])
+    reader = _HeaderDeadlineReader(BytesIO(b"GET / HTTP/1.0\r\nHeader: one\r\n\r\nbody"), connection)
+    assert reader.readline(65537) == b"GET / HTTP/1.0\r\n"
+    clock[0] = 9
+    assert reader.readline(65537) == b"Header: one\r\n"
+    clock[0] = 11
+    with pytest.raises(TimeoutError):
+        reader.readline(65537)
+    assert reader.read1(6) == b"\r\nbody"
+    assert connection.settimeout.call_args.args == (10,)

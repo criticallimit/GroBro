@@ -528,8 +528,43 @@ loadConfig().then(loadBatteries).catch(showError);
 """
 
 
+
+class _HeaderDeadlineReader:
+    """Keep BufferedReader semantics while enforcing one total header deadline."""
+    def __init__(self, stream, connection, timeout=10):
+        self._stream = stream
+        self._connection = connection
+        self._deadline = time.monotonic() + timeout
+
+    def __getattr__(self, name):
+        return getattr(self._stream, name)
+
+    def readline(self, limit=-1):
+        previous = self._connection.gettimeout()
+        line = bytearray()
+        try:
+            while limit < 0 or len(line) < limit:
+                remaining = self._deadline - time.monotonic()
+                if remaining <= 0:
+                    raise TimeoutError()
+                self._connection.settimeout(remaining)
+                # BufferedReader.read(1) uses its existing buffer; no packet over-read.
+                value = self._stream.read(1)
+                if not value:
+                    break
+                line.extend(value)
+                if value == b"\n":
+                    break
+            return bytes(line)
+        finally:
+            self._connection.settimeout(previous)
+
 class BatteryIngressHandler(BaseHTTPRequestHandler):
     server_version = "BetterGroBroIngress/1.0"
+
+    def setup(self):
+        super().setup()
+        self.rfile = _HeaderDeadlineReader(self.rfile, self.connection)
 
     def log_message(self, format, *args):  # noqa: A002
         LOG.debug("Ingress: " + format, *args)
