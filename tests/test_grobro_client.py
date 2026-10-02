@@ -354,6 +354,58 @@ class TestClientOnMessage:
         client._client.on_message(None, None, msg)
         client.on_input_register.assert_called_once()
 
+    def test_neo_debug_version_probe_is_read_only_and_one_shot(self, client):
+        data = (Path(DATA_DIR) / "NeoReadInputRegisters.bin").read_bytes()
+        msg = _msg("c/33/QMN000ABC1D2E3FG", data)
+
+        with patch("grobro.grobro.client.REGISTER_CAPTURE_ENABLED", True):
+            with patch.object(client, "send_config_read_message") as config_read:
+                with patch.object(client, "send_command") as modbus_read:
+                    client._client.on_message(None, None, msg)
+                    client._client.on_message(None, None, msg)
+
+        assert [call.args for call in config_read.call_args_list] == [
+            ("QMN000ABC1D2E3FG", 21),
+            ("QMN000ABC1D2E3FG", 22),
+        ]
+        modbus_read.assert_called_once()
+        command = modbus_read.call_args.args[0]
+        assert isinstance(command, grobro_client.GrowattModbusFunctionMultiple)
+        assert command.function == grobro_client.GrowattModbusFunction.READ_INPUT_REGISTER
+        assert command.start == 119
+        assert command.end == 120
+        assert command.values == b""
+
+    def test_neo_debug_version_probe_is_disabled_without_register_debug(self, client):
+        data = (Path(DATA_DIR) / "NeoReadInputRegisters.bin").read_bytes()
+        msg = _msg("c/33/QMN000ABC1D2E3FG", data)
+
+        with patch("grobro.grobro.client.REGISTER_CAPTURE_ENABLED", False):
+            with patch.object(client, "send_config_read_message") as config_read:
+                with patch.object(client, "send_command") as modbus_read:
+                    client._client.on_message(None, None, msg)
+
+        config_read.assert_not_called()
+        modbus_read.assert_not_called()
+
+    def test_neo_version_config_registers_are_known_but_hidden(self):
+        registers = grobro_client._known_registers_for_device("QMN000ABC1D2E3FG")
+        software = registers.config_registers["software_version"]
+        hardware = registers.config_registers["hardware_version"]
+
+        assert software.growatt.register_no == 21
+        assert hardware.growatt.register_no == 22
+        assert software.homeassistant.publish is False
+        assert hardware.homeassistant.publish is False
+        assert (
+            grobro_client._config_register_label("QMN000ABC1D2E3FG", 21)
+            == '"Software Version" (register 21)'
+        )
+        assert (
+            grobro_client._config_register_label("QMN000ABC1D2E3FG", 22)
+            == '"Hardware Version" (register 22)'
+        )
+
     def test_modbus_single_register_neo(self, client):
         data = (Path(DATA_DIR) / "NeoReadSingleRegister_3.bin").read_bytes()
         msg = _msg("c/33/QMN000ABC1D2E3FG", data)
