@@ -16,13 +16,10 @@ version. No firmware value is hard-coded.
 from __future__ import annotations
 
 import json
-import logging
 from functools import lru_cache
 
 import grobro.model as model
 
-LOG = logging.getLogger(__name__)
-_INSTALLED = False
 
 
 def _supports_combined_firmware(device_id: str) -> bool:
@@ -151,18 +148,3 @@ def _invalidate_discovery_for_firmware_change(client, device_id: str) -> None:
     discovery_signatures = getattr(client, "_discovery_signature", None)
     if isinstance(discovery_signatures, dict):
         discovery_signatures.pop(device_id, None)
-
-
-def install_firmware_runtime() -> None:
-    """Backward-compatible no-op.
-
-    Firmware composition is now part of the single Home Assistant telemetry
-    runtime pipeline in grobro.ha.performance and discovery rewriting is
-    handled by grobro.ha.discovery_runtime. Keeping this function avoids
-    breaking external imports without stacking another Client wrapper.
-    """
-    global _INSTALLED
-    if _INSTALLED:
-        return
-    _INSTALLED = True
-    LOG.debug("Firmware runtime is integrated into the consolidated HA pipeline")
