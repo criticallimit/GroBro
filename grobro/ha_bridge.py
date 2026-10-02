@@ -11,7 +11,6 @@ import logging
 import os
 
 from grobro import grobro, ha, model
-from grobro.grobro.noah_heater import install_noah_heater_hook
 from grobro.grobro.noah_traffic_debug import install_noah_traffic_debug_hook
 from grobro.grobro.raw_dump import install_raw_dump_hook
 from grobro.grobro.register_debug import install_register_debug_hook
@@ -51,9 +50,8 @@ def load_bridge_mqtt_configs():
 
 
 def install_runtime_layers() -> None:
-    """Install the remaining protocol compatibility hooks in stable order."""
+    """Install the remaining protocol compatibility hook."""
     install_raw_dump_hook()
-    install_noah_heater_hook()
 
 
 def install_optional_diagnostics() -> None:

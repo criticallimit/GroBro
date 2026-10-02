@@ -32,13 +32,8 @@ _NOAH_HEATER_STATES = {
 }
 
 
-def heater_state_from_packet(payload, device_id: str) -> str | None:
-    """Return the validated NOAH heater state from a cyclic status packet.
-
-    Only NOAH devices and message type ``0x0104`` are accepted. Values outside
-    the established 0..15 stack heater bitmask are intentionally rejected rather
-    than guessed.
-    """
+def heater_state_from_unscrambled(payload, device_id: str) -> str | None:
+    """Return the NOAH heater state from an already-unscrambled 0x0104 packet."""
     if not model.is_family(device_id, "noah"):
         return None
     if not isinstance(payload, (bytes, bytearray, memoryview)):
@@ -47,7 +42,7 @@ def heater_state_from_packet(payload, device_id: str) -> str | None:
         return None
 
     try:
-        plain = parser.unscramble(bytes(payload))
+        plain = bytes(payload)
         msg_type = struct.unpack_from(">H", plain, 6)[0]
         if msg_type != _NOAH_STATUS_MESSAGE_TYPE:
             return None
@@ -58,43 +53,17 @@ def heater_state_from_packet(payload, device_id: str) -> str | None:
     return _NOAH_HEATER_STATES.get(raw_state)
 
 
-# Keep the hook beside the validated decoder; the two pieces form one feature.
-import logging
-
-from grobro.grobro import client as grobro_client_module
-
-LOG = logging.getLogger(__name__)
-_INSTALLED = False
+def heater_state_from_packet(payload, device_id: str) -> str | None:
+    """Compatibility helper for callers that still pass the scrambled packet."""
+    if not isinstance(payload, (bytes, bytearray, memoryview)):
+        return None
+    try:
+        plain = parser.unscramble(bytes(payload))
+    except (TypeError, ValueError):
+        return None
+    return heater_state_from_unscrambled(plain, device_id)
 
 
 def install_noah_heater_hook() -> None:
-    """Install the validated NOAH heater telemetry override exactly once."""
-    global _INSTALLED
-    if _INSTALLED:
-        return
-
-    client_cls = grobro_client_module.Client
-    original_on_message = client_cls._Client__on_message
-
-    def on_message_with_heater(self, client, userdata, msg):
-        device_id = grobro_client_module._extract_device_id(getattr(msg, "topic", ""))
-        heater_state = heater_state_from_packet(getattr(msg, "payload", None), device_id)
-        original_input_callback = getattr(self, "on_input_register", None)
-
-        if heater_state is None or not callable(original_input_callback):
-            return original_on_message(self, client, userdata, msg)
-
-        def input_register_with_heater(state):
-            if state.device_id == device_id:
-                state.payload["heater"] = heater_state
-            return original_input_callback(state)
-
-        self.on_input_register = input_register_with_heater
-        try:
-            return original_on_message(self, client, userdata, msg)
-        finally:
-            self.on_input_register = original_input_callback
-
-    client_cls._Client__on_message = on_message_with_heater
-    _INSTALLED = True
-    LOG.debug("Installed validated NOAH heater compatibility hook")
+    """Backward-compatible no-op; heater telemetry is decoded directly in Client."""
+    return None

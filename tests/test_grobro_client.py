@@ -369,6 +369,20 @@ class TestClientOnMessage:
         client._client.on_message(None, None, msg)
         client.on_input_register.assert_called_once()
 
+    def test_noah_heater_is_added_directly_to_input_state(self, client):
+        data = (Path(DATA_DIR) / "NoahReadInputRegisters_0-124.bin").read_bytes()
+        msg = _msg("c/33/0PVP0000TEST0001", data)
+
+        with patch(
+            "grobro.grobro.client.heater_state_from_unscrambled",
+            return_value="1&2 On",
+        ) as heater_decoder:
+            client._client.on_message(None, None, msg)
+
+        heater_decoder.assert_called_once()
+        state = client.on_input_register.call_args.args[0]
+        assert state.payload["heater"] == "1&2 On"
+
     @patch("grobro.grobro.client._cloud_lower", "true")
     @patch("grobro.grobro.client.GROWATT_CLOUD", "true")
     @patch("grobro.grobro.client.GROWATT_CLOUD_ENABLED", True)
