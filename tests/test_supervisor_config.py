@@ -279,3 +279,28 @@ def test_current_process_logs_still_hide_old_history_without_current_lines(monke
     assert result["marker_found"] is False
     assert result["logs"] == ""
 
+
+
+def test_current_process_logs_continue_across_midnight(monkeypatch):
+    monkeypatch.setattr(
+        supervisor_config,
+        "_PROCESS_STARTED_AT",
+        "2026-10-01T22:39:27+02:00",
+    )
+    monkeypatch.setattr(
+        supervisor_config,
+        "_supervisor_text_request",
+        lambda _path: (
+            "2026-10-01 22:39:27,553 [INFO] Better GroBro started successfully\n"
+            "2026-10-01 23:59:59,900 [INFO] before midnight\n"
+            "2026-10-02 00:00:00,012 [INFO] after midnight\n"
+            "2026-10-02 00:05:00,000 [INFO] still running\n"
+        ),
+    )
+
+    result = supervisor_config.get_current_process_logs()
+
+    assert result["marker_found"] is True
+    assert "before midnight" in result["logs"]
+    assert "after midnight" in result["logs"]
+    assert "still running" in result["logs"]
