@@ -177,3 +177,43 @@ def test_register_debug_direct_helpers_respect_feature_gate(monkeypatch):
     register_debug.capture_modbus_message(None)
     register_debug.capture_noah_0103(b"", None)
     assert register_debug.install_register_debug_hook() is None
+
+
+def test_register_debug_direct_helpers_write_when_enabled(monkeypatch):
+    calls = []
+    monkeypatch.setattr(register_debug, "REGISTER_DEBUG", True)
+    monkeypatch.setattr(
+        register_debug,
+        "_write_modbus_message",
+        lambda message: calls.append(("modbus", message)),
+    )
+    monkeypatch.setattr(
+        register_debug,
+        "_write_noah_0103",
+        lambda result: calls.append(("0103", result)),
+    )
+    monkeypatch.setattr(
+        register_debug,
+        "find_embedded_register_block",
+        lambda data: None,
+    )
+
+    message = GrowattModbusMessage(
+        unknown=0,
+        device_id="0PVPTEST",
+        function=GrowattModbusFunction.READ_INPUT_REGISTER,
+        register_blocks=[],
+    )
+    result = {
+        "message_type": 0x0103,
+        "device_id": "0PVPTEST",
+        "registers": [],
+    }
+
+    register_debug.capture_modbus_message(message)
+    register_debug.capture_noah_0103(b"packet", result)
+
+    assert calls == [
+        ("modbus", message),
+        ("0103", result),
+    ]

@@ -561,7 +561,8 @@ class Client:
             # 0x0103 uses a NOAH/NEO-specific payload with an embedded device
             # identifier and optional embedded register block. It is not a
             # generic Modbus block starting directly after the common header.
-            # The dedicated decoder/debug hook already handles it.
+            # Keep 0x0103 out of the generic Modbus path; optional diagnostics
+            # consume the already-decoded result directly.
             if noah_msg and noah_msg.get("message_type") == 0x0103:
                 if REGISTER_CAPTURE_ENABLED:
                     capture_noah_0103(unscrambled, noah_msg)
