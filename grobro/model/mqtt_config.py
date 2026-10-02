@@ -5,6 +5,15 @@ from pydantic import BaseModel
 
 LOG = logging.getLogger(__name__)
 
+
+def publish_succeeded(result) -> bool:
+    """Whether Paho accepted a publish locally (not a delivery guarantee)."""
+    status = getattr(result, "rc", None)
+    if status is None and isinstance(result, (list, tuple)) and result:
+        status = result[0]
+    # Legacy callbacks return None; real Paho error codes are integers.
+    return not isinstance(status, int) or status == 0
+
 class MQTTConfig(BaseModel):
     host: str
     port: int

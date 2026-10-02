@@ -8,7 +8,6 @@ import time
 from threading import Timer
 from typing import Callable, Optional
 from collections import deque
-from threading import Lock
 
 import paho.mqtt.client as mqtt
 
@@ -23,6 +22,8 @@ from grobro.model.modbus_function import (
     GrowattModbusFunctionSingle,
 )
 from grobro.ha.localization import runtime_language
+from grobro.model.mqtt_config import publish_succeeded
+from grobro.ha.timer_runtime import runtime_lock, guard_runtime
 
 HA_BASE_TOPIC = os.getenv("HA_BASE_TOPIC", "homeassistant")
 AVAILABILITY_SENSOR = os.getenv("AVAILABILITY_SENSOR", "False").lower() == "true"
@@ -225,38 +226,11 @@ class Client:
     on_config_read_response: Callable[[str, int], None] | None = None
 
     _client: mqtt.Client
-    _config_cache: dict[str, model.DeviceConfig] = {}
-    _discovery_cache: list[str] = []
-    _device_timers: dict[str, Timer] = {}
-
-    # --- Config read sequencing ---
-    _config_read_queues: dict[str, deque[int]] = {}
-    _config_read_inflight: dict[str, int] = {}
-    _config_read_timers: dict[str, Timer] = {}
-    _config_read_lock = Lock()
-
     def __init__(self, mqtt_config: model.MQTTConfig):
         # Runtime state belongs to the client instance. Keeping it here avoids
         # class-level mutable caches and a separate initialization wrapper.
-        self._config_cache = {}
-        self._discovery_cache = []
-        self._discovery_signature = {}
-        self._discovery_payload_cache = {}
-        self._last_state_payload = {}
-        self._last_holding_state = {}
-        self._device_timers = {}
-        self._device_last_seen = {}
-        self._device_timer_lock = Lock()
-        self._last_availability = {}
-        self._config_read_queues = {}
-        self._config_read_inflight = {}
-        self._config_read_timers = {}
-        self._read_all_active = set()
-        self._config_read_lock = Lock()
-        self._migration_done = set()
-        self._neo_inverter_power_read_requested = set()
-        self._time_sync_timer = None
-        self._neo_startup_probe_timer = None
+        from grobro.ha.cleanup import initialize_instance_state
+        initialize_instance_state(self)
 
         # Setup target MQTT client for publishing
         LOG.info(
@@ -272,6 +246,8 @@ class Client:
             mqtt.CallbackAPIVersion.VERSION2,
             client_id=client_id
         )
+        self._bridge_availability_topic = f"{HA_BASE_TOPIC}/grobro/{client_id}/availability"
+        self._client.will_set(self._bridge_availability_topic, "offline", qos=1, retain=True)
 
         if mqtt_config.username and mqtt_config.password:
             self._client.username_pw_set(mqtt_config.username, mqtt_config.password)
@@ -287,28 +263,15 @@ class Client:
 
         # Restore persisted device configs once, keyed by MQTT device id from
         # the filename. This preserves gateway/device identity across restarts.
-        prefix = "config_"
-        suffix = ".json"
-        for fname in os.listdir("."):
-            if not (fname.startswith(prefix) and fname.endswith(suffix)):
-                continue
-            mqtt_device_id = fname[len(prefix) : -len(suffix)]
-            if not mqtt_device_id:
-                continue
-            config = model.DeviceConfig.from_file(fname)
-            if config:
-                self._config_cache[mqtt_device_id] = config
-
-        # Mirror restored devices into the Ingress inventory without a wrapper.
-        from grobro.ha.device_inventory import observe_device
-        for device_id in self._config_cache:
-            observe_device(device_id)
+        from grobro.ha.config_runtime import restore_config_cache_by_filename
+        restore_config_cache_by_filename(self)
 
         self._neo_pv_count: dict[str, int] = {}
 
     # ------------------- Lifecycle -------------------
 
     def start(self):
+        self._stopped = False
         self._client.loop_start()
 
         # Stable background services are scheduled directly instead of wrapping
@@ -322,14 +285,33 @@ class Client:
     def stop(self):
         from grobro.ha.timer_runtime import cancel_runtime_timers
 
-        cancel_runtime_timers(self)
-        self._client.loop_stop()
-        self._client.disconnect()
+        try:
+            with runtime_lock(self):
+                self._stopped = True
+                with self._config_read_lock, self._device_timer_lock:
+                    cancel_runtime_timers(self)
+                for device_id in tuple(self._config_cache):
+                    self.__publish_availability(device_id, False)
+                result = self._client.publish(self._bridge_topic(), "offline", qos=1, retain=True)
+                if publish_succeeded(result) and hasattr(result, "wait_for_publish"):
+                    try:
+                        result.wait_for_publish(timeout=2)
+                    except (RuntimeError, ValueError):
+                        pass
+        finally:
+            try:
+                self._client.disconnect()
+            finally:
+                self._client.loop_stop()
+
+    def _bridge_topic(self):
+        return getattr(self, "_bridge_availability_topic", f"{HA_BASE_TOPIC}/grobro/grobro-ha/availability")
 
     # ------------------- Config Handling -------------------
 
+    @guard_runtime
     def set_config(self, device_id: str, config: model.DeviceConfig):
-        from grobro.ha.config_runtime import _merge_config, persisted_config_data
+        from grobro.ha.config_runtime import _merge_config, persisted_runtime_data, discovery_config_data
         from grobro.ha.device_inventory import observe_device
 
         observe_device(device_id)
@@ -343,10 +325,9 @@ class Client:
         previous_config = self._config_cache.get(device_id) or existing_config
         effective_config = _merge_config(previous_config, config)
 
-        previous_stable_data = persisted_config_data(previous_config)
-        current_stable_data = persisted_config_data(effective_config)
-        disk_stable_data = persisted_config_data(existing_config)
-        discovery_changed = previous_stable_data != current_stable_data
+        current_stable_data = persisted_runtime_data(effective_config)
+        disk_stable_data = persisted_runtime_data(existing_config)
+        discovery_changed = discovery_config_data(previous_config) != discovery_config_data(effective_config)
 
         needs_sensitive_cleanup = bool(
             existing_config
@@ -375,6 +356,7 @@ class Client:
         if device_id in self._discovery_cache:
             self._discovery_cache.remove(device_id)
         getattr(self, "_discovery_signature", {}).pop(device_id, None)
+        getattr(self, "_discovery_payload_cache", {}).pop(device_id, None)
         getattr(self, "_migration_done", set()).discard(device_id)
         self.__publish_device_discovery(device_id)
 
@@ -437,13 +419,14 @@ class Client:
                         sort_keys=True,
                         separators=(",", ":"),
                     )
-                    self._client.publish(
+                    repair_result = self._client.publish(
                         topic,
                         repair_payload,
                         *args,
                         **kwargs,
                     )
-                    repair_done.add(device_id)
+                    if publish_succeeded(repair_result):
+                        repair_done.add(device_id)
 
                 payload = json.dumps(
                     clean_data,
@@ -465,7 +448,7 @@ class Client:
 
         result = self._client.publish(topic, payload, *args, **kwargs)
 
-        if is_device_config and payload and device_id not in legacy_cleanup_done:
+        if is_device_config and payload and publish_succeeded(result) and device_id not in legacy_cleanup_done:
             clear_legacy_component_discovery(
                 self._client.publish,
                 device_id,
@@ -475,6 +458,7 @@ class Client:
 
         return result
 
+    @guard_runtime
     def publish_input_register(self, state: HomeAssistantInputRegister):
         """Publish one telemetry packet through the optimized HA hot path."""
         from types import SimpleNamespace
@@ -581,7 +565,7 @@ class Client:
                     else:
                         payload.pop(combined_key, None)
 
-        if not _should_serialize_state(self, device_id, payload):
+        if not _should_serialize_state(self, device_id, payload, commit=False):
             LOG.debug(
                 "HA state unchanged for %s, skipping serialization and publish",
                 device_id,
@@ -589,14 +573,19 @@ class Client:
             return
 
         payload_json = json.dumps(payload, separators=(",", ":"))
-        if not _should_publish_state(self, device_id, payload_json):
+        if not _should_publish_state(self, device_id, payload_json, commit=False):
             LOG.debug("HA state unchanged for %s, skipping publish", device_id)
             return
 
         topic = f"{HA_BASE_TOPIC}/grobro/{device_id}/state"
-        self._client.publish(topic, payload_json, retain=False)
+        result = self._client.publish(topic, payload_json, retain=False)
+        if not publish_succeeded(result):
+            return
+        _should_serialize_state(self, device_id, payload)
+        _should_publish_state(self, device_id, payload_json)
         request_initial_neo_inverter_power(self, device_id)
 
+    @guard_runtime
     def publish_holding_register_input(self, ha_input: HomeAssistantHoldingRegisterInput):
         """Publish changed holding-register states and refresh availability."""
         from grobro.ha.performance import _should_publish_holding_state
@@ -614,17 +603,44 @@ class Client:
                     device_id,
                     value.name,
                     value.value,
+                    commit=False,
                 ):
                     continue
                 topic = (
                     f"{HA_BASE_TOPIC}/{value.register_def.type}/grobro/"
                     f"{device_id}/{value.name}/get"
                 )
-                self._client.publish(topic, value.value, retain=True)
+                result = self._client.publish(topic, value.value, retain=True)
+                if publish_succeeded(result):
+                    _should_publish_holding_state(self, device_id, value.name, value.value)
         except Exception as exc:
             LOG.error("HA: publish msg: %s", exc)
 
     # ------------------- MQTT Callback -------------------
+
+    @guard_runtime
+    def publish_config_register_value(self, device_id: str, register_no: int, value, *, retain=True):
+        # R7 is the datalogger password. Clear old retained values without
+        # changing the device request/response protocol or exposing the value.
+        if register_no == 7:
+            value, retain = "", True
+        return self._client.publish(
+            f"{HA_BASE_TOPIC}/config/grobro/{device_id}/{register_no}/get", value, retain=retain,
+        )
+
+    @guard_runtime
+    def publish_smart_meter(self, device_id: str, payload: str):
+        cache = getattr(self, "_smart_meter_state_cache", None)
+        if cache is None:
+            cache = self._smart_meter_state_cache = {}
+        if cache.get(device_id) == payload:
+            return None
+        result = self._client.publish(
+            f"{HA_BASE_TOPIC}/sensor/grobro/{device_id}/smart_meter/state", payload, retain=False,
+        )
+        if publish_succeeded(result):
+            cache[device_id] = payload
+        return result
 
     def __reset_config_read_state(self) -> None:
         """Cancel an interrupted Read All/config-read cycle.
@@ -634,6 +650,9 @@ class Client:
         next Read All press from being treated as a duplicate forever.
         """
         with self._config_read_lock:
+            for timer in getattr(self, "_read_all_start_timers", {}).values():
+                timer.cancel()
+            getattr(self, "_read_all_start_timers", {}).clear()
             for timer in list(self._config_read_timers.values()):
                 try:
                     timer.cancel()
@@ -644,6 +663,7 @@ class Client:
             self._config_read_inflight.clear()
             getattr(self, "_read_all_active", set()).clear()
 
+    @guard_runtime
     def __recover_after_home_assistant_restart(self, client) -> None:
         """Restore command handling after HA Core restarts while MQTT stays up."""
         self.__reset_config_read_state()
@@ -653,14 +673,8 @@ class Client:
 
         # Force the next live telemetry/config packet to rebuild discovery and
         # publish fresh state instead of being suppressed by pre-restart caches.
-        getattr(self, "_discovery_cache", []).clear()
-        getattr(self, "_discovery_signature", {}).clear()
-        getattr(self, "_discovery_payload_cache", {}).clear()
-        getattr(self, "_last_state_payload", {}).clear()
-        getattr(self, "_state_publish_cache", {}).clear()
-        getattr(self, "_last_holding_state", {}).clear()
-        getattr(self, "_last_availability", {}).clear()
-        getattr(self, "_neo_inverter_power_read_requested", set()).clear()
+        from grobro.ha.cleanup import clear_reconnect_caches
+        clear_reconnect_caches(self)
 
         # Retained availability from an earlier HA/process session must not keep
         # stale values looking current. Fresh device traffic sets them online.
@@ -672,20 +686,27 @@ class Client:
 
     def __on_connect(self, client, userdata, flags, reason_code, properties):
         LOG.debug("Connected to HA MQTT server with result code %s", reason_code)
-        getattr(self, "_last_availability", {}).clear()
-        getattr(self, "_discovery_signature", {}).clear()
-        getattr(self, "_discovery_payload_cache", {}).clear()
-        getattr(self, "_last_state_payload", {}).clear()
-        getattr(self, "_state_publish_cache", {}).clear()
-        getattr(self, "_last_holding_state", {}).clear()
-        getattr(self, "_neo_inverter_power_read_requested", set()).clear()
-        self._discovery_cache.clear()
-        self.__recover_after_home_assistant_restart(client)
+        with runtime_lock(self):
+            if getattr(self, "_stopped", False) or getattr(reason_code, "is_failure", False):
+                return
+            self._client.publish(self._bridge_topic(), "online", qos=1, retain=True)
+            self.__recover_after_home_assistant_restart(client)
         LOG.info(
             "Connected to Home Assistant; controls and device states are ready"
         )
 
     def __on_message(self, client, userdata, msg: mqtt.MQTTMessage):
+        with runtime_lock(self):
+            if getattr(self, "_stopped", False):
+                return
+            try:
+                self.__handle_message(client, userdata, msg)
+            except (UnicodeError, ValueError, TypeError, KeyError, OverflowError) as exc:
+                LOG.warning("Invalid Home Assistant command on %s (%s)", msg.topic, type(exc).__name__)
+            except Exception:
+                LOG.exception("Home Assistant command failed on %s", msg.topic)
+
+    def __handle_message(self, client, userdata, msg: mqtt.MQTTMessage):
         # A normal HA Core restart often leaves Mosquitto running, so Paho never
         # reconnects and __on_connect is not called. Home Assistant publishes its
         # MQTT birth message on <discovery-prefix>/status instead. Treat that
@@ -754,11 +775,14 @@ class Client:
                                 q.append(cfg.growatt.register_no)
 
                         # give the datalogger time to answer modbus reads
-                        Timer(
+                        timer = Timer(
                             3.0,
                             self.__kickoff_next_config_read,
                             args=(device_id,),
-                        ).start()
+                        )
+                        timer.daemon = True
+                        self._read_all_start_timers[device_id] = timer
+                        timer.start()
                     else:
                         with self._config_read_lock:
                             self._read_all_active.discard(device_id)
@@ -805,10 +829,14 @@ class Client:
                 return
 
             if cmd_type == "switch":
+                if raw_value.upper() not in {"ON", "OFF"}:
+                    raise ValueError("invalid switch state")
                 parsed_value = 1 if raw_value.upper() == "ON" else 0
 
             elif cmd_type == "time":
                 hour, minute = map(int, raw_value.split(":")[:2])
+                if not (0 <= hour <= 23 and 0 <= minute <= 59):
+                    raise ValueError("invalid time")
                 parsed_value = (hour * 256) + minute
 
             elif cmd_type == "select":
@@ -849,7 +877,7 @@ class Client:
                 parsed_value,
             )
 
-            self.on_command(
+            write_result = self.on_command(
                 make_modbus_command(
                     device_id,
                     GrowattModbusFunction.PRESET_SINGLE_REGISTER,
@@ -880,12 +908,10 @@ class Client:
                 and cmd_name == "inverter_power"
                 and model.is_family(device_id, "neo")
                 and raw_value.upper() in {"ON", "OFF"}
+                and publish_succeeded(write_result)
             ):
-                self._client.publish(
-                    f"{HA_BASE_TOPIC}/switch/grobro/{device_id}/inverter_power/get",
-                    raw_value.upper(),
-                    retain=True,
-                )
+                from grobro.ha.neo_power_runtime import _publish_retained_switch_state
+                _publish_retained_switch_state(self, device_id, raw_value.upper())
 
             return
 
@@ -909,7 +935,10 @@ class Client:
 
     # ------------------- Internals -------------------
 
+    @guard_runtime
     def __reset_device_timer(self, device_id: str):
+        if getattr(self, "_stopped", False):
+            return
         from grobro.ha.timer_runtime import daemon_timer, effective_device_timeout
 
         now = time.monotonic()
@@ -917,6 +946,8 @@ class Client:
 
         def check_timeout(d_id: str):
             with lock:
+                if getattr(self, "_stopped", False):
+                    return
                 last_seen = self._device_last_seen.get(d_id)
                 if last_seen is None:
                     self._device_timers.pop(d_id, None)
@@ -959,17 +990,21 @@ class Client:
             return False
 
         LOG.debug("Set device %s availability: %s", device_id, online)
-        self._client.publish(
+        result = self._client.publish(
             f"{HA_BASE_TOPIC}/grobro/{device_id}/availability",
             "online" if online else "offline",
             retain=True,
         )
+        if not publish_succeeded(result):
+            return False
         if AVAILABILITY_SENSOR:
-            self._client.publish(
+            result = self._client.publish(
                 f"{HA_BASE_TOPIC}/grobro/{device_id}/online",
                 "ON" if online else "OFF",
                 retain=True,
             )
+            if not publish_succeeded(result):
+                return False
 
         availability[device_id] = online
         return True
@@ -977,7 +1012,7 @@ class Client:
     def __detect_neo_pv_count(self, device_id: str, payload: dict) -> None:
         if not model.uses_dynamic_pv_count(device_id):
             return
-        if device_id in self._neo_pv_count:
+        if self._neo_pv_count.get(device_id) == 4:
             return
 
         pv = payload.get("Ppv", 0) or 0
@@ -1027,7 +1062,11 @@ class Client:
         # prepare discovery payload
         payload: dict = {
             "dev": self.__device_info_from_config(device_id),
-            "avty_t": f"{HA_BASE_TOPIC}/grobro/{device_id}/availability",
+            "availability": [
+                {"topic": f"{HA_BASE_TOPIC}/grobro/{device_id}/availability"},
+                {"topic": self._bridge_topic()},
+            ],
+            "availability_mode": "all",
             "o": {"name": "grobro", "url": "https://github.com/robertzaage/GroBro"},
             "cmps": {},
         }
@@ -1231,7 +1270,9 @@ class Client:
             _device_label(device_id),
         )
         self._publish_discovery_message(topic, "", retain=True)  # force HA to refresh
-        self._publish_discovery_message(topic, payload_str, retain=True)
+        result = self._publish_discovery_message(topic, payload_str, retain=True)
+        if not publish_succeeded(result):
+            return
         self._discovery_payload_cache[device_id] = payload_str
         if device_id not in self._discovery_cache:
             self._discovery_cache.append(device_id)
@@ -1330,8 +1371,12 @@ class Client:
 
         return device_info
 
+    @guard_runtime
     def __kickoff_next_config_read(self, device_id: str):
         with self._config_read_lock:
+            timer = getattr(self, "_read_all_start_timers", {}).pop(device_id, None)
+            if timer is not None:
+                timer.cancel()
             # already waiting for a response
             if device_id in self._config_read_inflight:
                 return
@@ -1344,6 +1389,13 @@ class Client:
             register_no = q.popleft()
             self._config_read_inflight[device_id] = register_no
 
+            # Arm before sending: a fast/synchronous response may already start
+            # the next read and must not have its timer overwritten afterward.
+            timer = Timer(60, self.__config_read_timeout, args=(device_id, register_no))
+            timer.daemon = True
+            self._config_read_timers[device_id] = timer
+            timer.start()
+
         if self.on_config_read:
             try:
                 self.on_config_read(device_id, register_no)
@@ -1351,18 +1403,13 @@ class Client:
                 with self._config_read_lock:
                     self._config_read_inflight.pop(device_id, None)
                     self._config_read_queues.pop(device_id, None)
+                    timer = self._config_read_timers.pop(device_id, None)
+                    if timer is not None:
+                        timer.cancel()
                     getattr(self, "_read_all_active", set()).discard(device_id)
                 raise
 
-        # start 1 minute timeout
-        timer = Timer(
-            60,
-            self.__config_read_timeout,
-            args=(device_id, register_no),
-        )
-        self._config_read_timers[device_id] = timer
-        timer.start()
-
+    @guard_runtime
     def __config_read_timeout(self, device_id: str, register_no: int):
         with self._config_read_lock:
             inflight = self._config_read_inflight.get(device_id)
@@ -1381,6 +1428,7 @@ class Client:
         # continue with next queued register
         self.__kickoff_next_config_read(device_id)
 
+    @guard_runtime
     def handle_config_read_response(self, device_id: str, register_no: int):
         # A successful config read is a direct response from the device and must
         # refresh its availability even if regular telemetry is infrequent.

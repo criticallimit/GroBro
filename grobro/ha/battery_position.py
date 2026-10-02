@@ -21,6 +21,7 @@ _BAT_KEY_PATTERNS = (
     re.compile(r"^bat([234])(?=_)"),
     re.compile(r"^bat_([234])(?=_)"),
     re.compile(r"^battery([234])(?=[A-Z_])"),
+    re.compile(r"^(?:maxcvbat|mincvbat)([234])(?=$|_)"),
 )
 
 
@@ -41,10 +42,15 @@ def _serials_from_payload(payload: dict) -> dict[int, str]:
     """Build the currently reported serial number for physical slots 2..4."""
     serials: dict[int, str] = {}
     for slot in _TRACKED_SLOTS:
+        keys = tuple(f"bat{slot}_ser_part_{index}" for index in range(1, 5))
         parts = [
-            _clean_serial_part(payload.get(f"bat{slot}_ser_part_{index}"))
-            for index in range(1, 5)
+            _clean_serial_part(payload.get(key)) for key in keys
         ]
+        # Wire fragments are four bytes each. Also accept the established API
+        # representation that places a complete serial in the first field.
+        complete_serial = len(parts[0]) > 4 and not any(parts[1:])
+        if not complete_serial and any(key not in payload or payload[key] is None for key in keys):
+            continue
         serial = "".join(part for part in parts if part).strip()
         if _is_plausible_serial(serial):
             serials[slot] = serial
@@ -108,25 +114,7 @@ def _save_all_positions(
     positions: dict[str, dict[str, int]],
     path: str = _POSITION_FILE,
 ) -> None:
-    directory = os.path.dirname(os.path.abspath(path)) or "."
-    os.makedirs(directory, exist_ok=True)
-    temp_path = f"{path}.tmp"
-    try:
-        with open(temp_path, "w", encoding="utf-8") as handle:
-            json.dump(positions, handle, sort_keys=True, separators=(",", ":"))
-            handle.flush()
-            os.fsync(handle.fileno())
-        try:
-            os.chmod(temp_path, 0o600)
-        except OSError:
-            pass
-        os.replace(temp_path, path)
-    finally:
-        try:
-            if os.path.exists(temp_path):
-                os.remove(temp_path)
-        except OSError:
-            pass
+    _save_json_atomic(positions, path)
 
 
 def _load_manual_positions(
@@ -394,7 +382,7 @@ def _stabilize_battery_payload_locked(
     # not contain a valid serial. This keeps runtime state deterministic without
     # creating any slot assignment from invalid/noisy serial fragments.
     all_positions = _position_maps(client)
-    if not current_serials:
+    if not current_serials and not manual_assignments:
         return payload, 1
 
     mapping = all_positions.setdefault(device_id, {})
@@ -516,10 +504,10 @@ def _stabilize_battery_payload_locked(
                 device_id,
             )
 
-    if all(
+    if not reserved_manual_slots and all(
         physical_to_logical.get(slot, slot) == slot
         for slot in physical_to_logical
-    ):
+    ) and len(physical_to_logical) == len(current_serials):
         return payload, max(physical_to_logical.values(), default=1)
 
     remapped: dict = {}
@@ -532,6 +520,14 @@ def _stabilize_battery_payload_locked(
             slot_items.append((key, value, slot))
 
     for key, value, physical_slot in slot_items:
+        # An identified pack owns its logical destination. Unidentified/empty
+        # physical slots must not overwrite it, nor populate reserved slots.
+        if physical_slot not in physical_to_logical and (
+            physical_slot in used_slots
+            or physical_slot in reserved_manual_slots
+            or physical_slot in current_serials
+        ):
+            continue
         logical_slot = physical_to_logical.get(physical_slot, physical_slot)
         remapped[_remap_key(key, logical_slot)] = value
 
@@ -552,4 +548,3 @@ def stabilize_battery_payload(
             payload,
             use_stable_auto=use_stable_auto,
         )
-

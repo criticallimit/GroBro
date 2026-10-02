@@ -215,6 +215,8 @@ def test_repeated_availability_state_is_not_republished(monkeypatch):
 def test_mqtt_reconnect_invalidates_publish_caches():
     install_ha_cleanup_hook()
     client = object.__new__(ha_client_module.Client)
+    _initialize_instance_state(client)
+    client._client = MagicMock()
     client._last_availability = {"0PVPTEST": True}
     client._discovery_signature = {"0PVPTEST": (3, None)}
     client._discovery_payload_cache = {"0PVPTEST": "cached"}
@@ -330,6 +332,9 @@ def test_client_init_immediately_populates_inventory_from_persisted_config(
         def __init__(self, *args, **kwargs):
             self.on_message = None
             self.on_connect = None
+
+        def will_set(self, *args, **kwargs):
+            pass
 
         def username_pw_set(self, *args, **kwargs):
             pass

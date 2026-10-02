@@ -26,7 +26,7 @@ _BAT_SERIAL_GROUPS = (
 def _register_rules(known_registers):
     """Cache static per-register HA rules for one immutable runtime register map."""
     if known_registers is None:
-        return {}, frozenset(), frozenset(), frozenset(), False
+        return {}, frozenset(), frozenset(), False
 
     cache_key = id(known_registers)
     cached = _REGISTER_RULES_CACHE.get(cache_key)
@@ -131,7 +131,7 @@ def _payload_compare_cache(client) -> dict[str, dict]:
     return cache
 
 
-def _should_serialize_state(client, device_id: str, payload: dict) -> bool:
+def _should_serialize_state(client, device_id: str, payload: dict, *, commit: bool = True) -> bool:
     """Return False when the prepared payload is unchanged.
 
     Comparing dictionaries before JSON encoding avoids repeated serialization and
@@ -140,16 +140,18 @@ def _should_serialize_state(client, device_id: str, payload: dict) -> bool:
     cache = _payload_compare_cache(client)
     if cache.get(device_id) == payload:
         return False
-    cache[device_id] = payload.copy()
+    if commit:
+        cache[device_id] = payload.copy()
     return True
 
 
-def _should_publish_state(client, device_id: str, payload_json: str) -> bool:
+def _should_publish_state(client, device_id: str, payload_json: str, *, commit: bool = True) -> bool:
     """Return True only when this device's HA state actually changed."""
     cache = _state_publish_cache(client)
     if cache.get(device_id) == payload_json:
         return False
-    cache[device_id] = payload_json
+    if commit:
+        cache[device_id] = payload_json
     return True
 
 
@@ -167,7 +169,7 @@ def _clear_state_publish_cache(client) -> None:
         holding_cache.clear()
 
 
-def _should_publish_holding_state(client, device_id: str, name: str, value) -> bool:
+def _should_publish_holding_state(client, device_id: str, name: str, value, *, commit: bool = True) -> bool:
     """Return True only when one holding-register state actually changed."""
     cache = getattr(client, "_last_holding_state", None)
     if cache is None:
@@ -176,7 +178,8 @@ def _should_publish_holding_state(client, device_id: str, name: str, value) -> b
     key = (device_id, name)
     if key in cache and cache[key] == value:
         return False
-    cache[key] = value
+    if commit:
+        cache[key] = value
     return True
 
 

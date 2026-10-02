@@ -4,12 +4,19 @@ import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from paho.mqtt.client import MQTTMessage
 
 from grobro import ha, grobro
 from grobro.model.mqtt_config import MQTTConfig
 
 DATA_DIR = Path(__file__).parent / "model" / "data"
+
+
+@pytest.fixture(autouse=True)
+def isolate_runtime(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
 
 
 def _msg(topic: str, payload: bytes, properties=None):

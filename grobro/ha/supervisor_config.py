@@ -249,7 +249,9 @@ def normalize_options(raw: dict) -> dict:
             result[key] = number
             continue
 
-        text = "" if value is None else str(value).strip()
+        text = "" if value is None else str(value)
+        if key not in {"SOURCE_MQTT_PASS", "TARGET_MQTT_PASS"}:
+            text = text.strip()
         if key == "LOG_LEVEL":
             text = text.upper()
             if text not in {"ERROR", "INFO", "DEBUG"}:

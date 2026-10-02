@@ -1,6 +1,7 @@
 import os
 import json
 import logging
+from pathlib import Path
 from collections import deque
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -30,7 +31,7 @@ from grobro.model.growatt_registers import HomeAssistantInputRegister
 from grobro.grobro.parser import unscramble
 
 
-DATA_DIR = __file__[: __file__.rfind("/")] + "/model/data"
+DATA_DIR = Path(__file__).parent / "model" / "data"
 
 
 def _msg(topic: str, payload: bytes = b""):
@@ -805,12 +806,12 @@ class TestNeoPvCountDetection:
         )
         assert "QMN000TESTDEVICE1" not in ha_client._neo_pv_count
 
-    def test_already_cached_returns_early(self, ha_client):
+    def test_two_inputs_upgrade_when_four_inputs_become_active(self, ha_client):
         ha_client._neo_pv_count["QMN000CACHED1"] = 2
         ha_client._Client__detect_neo_pv_count(
             "QMN000CACHED1", {"Ppv": 999, "Ppv1": 100, "Ppv2": 100, "Ppv3": 400, "Ppv4": 400}
         )
-        assert ha_client._neo_pv_count["QMN000CACHED1"] == 2
+        assert ha_client._neo_pv_count["QMN000CACHED1"] == 4
 
     def test_2_input_neo_detected(self, ha_client):
         ha_client._Client__detect_neo_pv_count(
@@ -928,9 +929,11 @@ class TestClientAvailability:
             and call.args[1]
         )
         payload = json.loads(discovery_call.args[1])
-        assert payload["avty_t"] == (
-            f"homeassistant/grobro/{device_id}/availability"
-        )
+        assert {item["topic"] for item in payload["availability"]} == {
+            f"homeassistant/grobro/{device_id}/availability",
+            ha_client._bridge_availability_topic,
+        }
+        assert payload["availability_mode"] == "all"
 
         ha_client._client.publish.reset_mock()
         ha_client._Client__publish_availability(device_id, False)
@@ -1008,12 +1011,6 @@ class TestClientDeviceTimer:
 
 
 class TestClientConfigReadSequencing:
-    @pytest.fixture(autouse=True)
-    def _reset_shared_state(self):
-        Client._config_read_queues.clear()
-        Client._config_read_inflight.clear()
-        Client._config_read_timers.clear()
-
     def test_kickoff_inflight(self):
         with patch("grobro.ha.client.mqtt.Client"):
             with patch("grobro.ha.client.os.listdir", return_value=[]):

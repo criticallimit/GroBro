@@ -45,9 +45,16 @@ jobs:
           allow_anonymous true
           persistence false
           EOF
+          cat > /tmp/grobro-target-mosquitto.conf <<'EOF'
+          listener 1884 127.0.0.1
+          allow_anonymous true
+          persistence false
+          EOF
           mosquitto -c /tmp/grobro-mosquitto.conf -d
+          mosquitto -c /tmp/grobro-target-mosquitto.conf -d
           for attempt in {1..20}; do
-            if mosquitto_pub -h 127.0.0.1 -p 1883 -t grobro/ci/health -m ready; then
+            if mosquitto_pub -h 127.0.0.1 -p 1883 -t grobro/ci/health -m ready &&
+               mosquitto_pub -h 127.0.0.1 -p 1884 -t grobro/ci/health -m ready; then
               exit 0
             fi
             sleep 0.25
@@ -59,4 +66,5 @@ jobs:
         env:
           E2E_MQTT_HOST: 127.0.0.1
           E2E_MQTT_PORT: "1883"
+          E2E_MQTT_TARGET_PORT: "1884"
         run: python -m pytest tests/ -v --cov=grobro --cov-report=term-missing --cov-report=xml

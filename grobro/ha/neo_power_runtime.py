@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import grobro.model as model
 from grobro.ha import client as ha_client_module
-from grobro.ha.timer_runtime import daemon_timer
+from grobro.ha.timer_runtime import daemon_timer, guard_runtime, runtime_lock
+from grobro.model.mqtt_config import publish_succeeded
 from grobro.model.modbus_message import GrowattModbusFunction
 
 
@@ -67,6 +68,7 @@ def request_known_neo_states(client) -> int:
     return requested
 
 
+@guard_runtime
 def schedule_known_neo_state_probe(client, delay: float = 1.0) -> None:
     """Probe known NEOs after startup/recovery and retry briefly if MQTT is not ready."""
     previous = getattr(client, "_neo_startup_probe_timer", None)
@@ -77,6 +79,12 @@ def schedule_known_neo_state_probe(client, delay: float = 1.0) -> None:
             pass
 
     def run(attempt: int = 0):
+        with runtime_lock(client):
+            if getattr(client, "_stopped", False):
+                return
+            run_probe(attempt)
+
+    def run_probe(attempt):
         client._neo_startup_probe_timer = None
         request_known_neo_states(client)
 
@@ -99,8 +107,14 @@ def schedule_known_neo_state_probe(client, delay: float = 1.0) -> None:
 
 
 def _publish_retained_switch_state(client, device_id: str, state: str) -> None:
-    client._client.publish(
+    result = client._client.publish(
         f"{ha_client_module.HA_BASE_TOPIC}/switch/grobro/{device_id}/inverter_power/get",
         state,
         retain=True,
     )
+    if publish_succeeded(result):
+        # A subsequent real readback must correct this optimistic state, even
+        # when it equals the last real value from before the user command.
+        cache = getattr(client, "_last_holding_state", None)
+        if cache is not None:
+            cache.pop((device_id, "inverter_power"), None)

@@ -3,6 +3,8 @@ import os
 import threading
 import time
 import uuid
+import subprocess
+import sys
 from pathlib import Path
 
 import paho.mqtt.client as mqtt
@@ -10,6 +12,7 @@ import pytest
 
 from grobro import grobro, ha
 from grobro.model.mqtt_config import MQTTConfig
+from grobro.ha_bridge import wire_clients
 
 
 DATA_DIR = Path(__file__).parent / "model" / "data"
@@ -76,15 +79,7 @@ def test_real_mqtt_bidirectional_bridge(tmp_path, monkeypatch):
         ha_client = ha.Client(broker)
         grobro_client = grobro.Client(broker, forward)
 
-        grobro_client.on_input_register = ha_client.publish_input_register
-        grobro_client.on_holding_register_input = ha_client.publish_holding_register_input
-        grobro_client.on_config = ha_client.set_config
-        grobro_client.on_config_read_response = ha_client.handle_config_read_response
-        ha_client.on_command = grobro_client.send_command
-        ha_client.on_config_read = grobro_client.send_config_read_message
-        ha_client.on_config_command = (
-            lambda dev, reg, val: grobro_client.send_config_message(dev, reg, val)
-        )
+        wire_clients(ha_client, grobro_client)
 
         ha_client.start()
         grobro_client.start()
@@ -203,15 +198,7 @@ def test_real_mqtt_noah_bridge(tmp_path, monkeypatch):
 
         ha_client = ha.Client(broker)
         grobro_client = grobro.Client(broker, broker)
-        grobro_client.on_input_register = ha_client.publish_input_register
-        grobro_client.on_holding_register_input = ha_client.publish_holding_register_input
-        grobro_client.on_config = ha_client.set_config
-        grobro_client.on_config_read_response = ha_client.handle_config_read_response
-        ha_client.on_command = grobro_client.send_command
-        ha_client.on_config_read = grobro_client.send_config_read_message
-        ha_client.on_config_command = (
-            lambda dev, reg, val: grobro_client.send_config_message(dev, reg, val)
-        )
+        wire_clients(ha_client, grobro_client)
 
         ha_client.start()
         grobro_client.start()
@@ -275,3 +262,123 @@ def test_real_mqtt_noah_bridge(tmp_path, monkeypatch):
         probe.loop_stop()
         probe.disconnect()
 
+
+
+@pytest.mark.skipif(
+    not os.getenv("E2E_MQTT_TARGET_PORT"),
+    reason="requires two separate real MQTT brokers (set E2E_MQTT_TARGET_PORT)",
+)
+def test_separate_brokers_readback_smart_meter_and_shutdown(tmp_path, monkeypatch):
+    host = os.environ["E2E_MQTT_HOST"]
+    source_port = int(os.environ["E2E_MQTT_PORT"])
+    target_port = int(os.environ["E2E_MQTT_TARGET_PORT"])
+    assert source_port != target_port
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("MQTT_CLIENT_SUFFIX", "split-" + uuid.uuid4().hex[:10])
+    seen = [{}, {}]
+    probes = []
+    target = source = None
+    try:
+        for index, port in enumerate((source_port, target_port)):
+            probe = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, protocol=mqtt.MQTTv5)
+            ready = threading.Event()
+            probe.on_connect = lambda client, *_args, event=ready: (
+                client.subscribe([("homeassistant/#", 1), ("s/#", 1)]), event.set()
+            )
+            probe.on_message = lambda client, userdata, msg, bucket=seen[index]: bucket.update({msg.topic: bytes(msg.payload)})
+            probe.connect(host, port, 60)
+            probe.loop_start()
+            probes.append(probe)
+            assert ready.wait(5)
+        target_cfg = MQTTConfig(host=host, port=target_port)
+        source_cfg = MQTTConfig(host=host, port=source_port)
+        target = ha.Client(target_cfg)
+        source = grobro.Client(source_cfg, source_cfg)
+        wire_clients(target, source)
+        target.start()
+        source.start()
+        assert _wait_until(lambda: target._client.is_connected() and source._client.is_connected())
+        time.sleep(0.2)
+        config = (DATA_DIR / "NeoConfigReadResponse_337.bin").read_bytes()
+        info = probes[0].publish("c/33/QMN000ABC1D2E3FG", config, qos=1)
+        info.wait_for_publish(timeout=5)
+        readback_prefix = "homeassistant/config/grobro/QMN000ABC1D2E3FG/"
+        assert _wait_until(lambda: any(key.startswith(readback_prefix) for key in seen[1]))
+        assert not any(key.startswith(readback_prefix) for key in seen[0])
+
+        # Build the same smart-meter wire format as the parser's captured cases.
+        from grobro.grobro.builder import scramble, append_crc
+        device = "0PVPTEST123456789"
+        body = b'{"t_act":150}'
+        data = bytearray(79 + len(body))
+        data[0:4] = b"\x00\x01\x00\x07"
+        data[4:6] = (len(data) + 2).to_bytes(2, "big")
+        data[6:8] = b"\x6f\x64"
+        data[8:38] = device.encode().ljust(30, b"\x00")
+        data[38:68] = b"meter".ljust(30, b"\x00")
+        data[68:75] = bytes([26, 5, 15, 17, 12, 9, 1])
+        data[75:79] = len(body).to_bytes(4, "big")
+        data[79:] = body
+        packet = append_crc(scramble(bytes(data)))
+        smart_topic = f"homeassistant/sensor/grobro/{device}/smart_meter/state"
+        probes[0].publish(f"c/33/{device}", packet, qos=1).wait_for_publish(timeout=5)
+        assert _wait_until(lambda: seen[1].get(smart_topic) == body)
+        assert smart_topic not in seen[0]
+        seen[1].pop(smart_topic)
+        probes[1].publish("homeassistant/status", "online", qos=1).wait_for_publish(timeout=5)
+        assert _wait_until(lambda: not target._smart_meter_state_cache)
+        probes[0].publish(f"c/33/{device}", packet, qos=1).wait_for_publish(timeout=5)
+        assert _wait_until(lambda: seen[1].get(smart_topic) == body)
+
+        command_topic = "homeassistant/switch/grobro/QMN000ABC1D2E3FG/inverter_power/set"
+        probes[1].publish(command_topic, b"\xff", qos=1).wait_for_publish(timeout=5)
+        probes[1].publish(command_topic, "ON", qos=1).wait_for_publish(timeout=5)
+        assert _wait_until(lambda: "s/33/QMN000ABC1D2E3FG" in seen[0])
+        bridge_topic = target._bridge_availability_topic
+        target.stop()
+        assert _wait_until(lambda: seen[1].get(bridge_topic) == b"offline")
+    finally:
+        if target is not None:
+            target.stop()
+        if source is not None:
+            source.stop()
+        for probe in probes:
+            probe.disconnect()
+            probe.loop_stop()
+
+
+@pytest.mark.skipif(not os.getenv("E2E_MQTT_HOST"), reason="requires a real MQTT broker")
+def test_bridge_last_will_on_abrupt_process_exit(tmp_path):
+    host = os.environ["E2E_MQTT_HOST"]
+    port = int(os.environ["E2E_MQTT_PORT"])
+    suffix = "will-" + uuid.uuid4().hex[:10]
+    topic = f"homeassistant/grobro/grobro-ha-{suffix}/availability"
+    received = []
+    ready = threading.Event()
+    probe = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, protocol=mqtt.MQTTv5)
+    probe.on_connect = lambda client, *_: (client.subscribe(topic, qos=1), ready.set())
+    probe.on_message = lambda client, userdata, msg: received.append(bytes(msg.payload))
+    probe.connect(host, port, 60)
+    child = None
+    try:
+        probe.loop_start()
+        assert ready.wait(5)
+        env = os.environ.copy()
+        env["MQTT_CLIENT_SUFFIX"] = suffix
+        env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1])
+        code = (
+            "import time; from grobro import ha; from grobro.model.mqtt_config import MQTTConfig; "
+            f"client=ha.Client(MQTTConfig(host={host!r}, port={port})); client.start(); time.sleep(60)"
+        )
+        child = subprocess.Popen([sys.executable, "-c", code], cwd=tmp_path, env=env,
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        assert _wait_until(lambda: b"online" in received)
+        child.kill()
+        child.wait(timeout=5)
+        assert _wait_until(lambda: received[-1:] == [b"offline"])
+    finally:
+        if child is not None and child.poll() is None:
+            child.kill()
+            child.wait(timeout=5)
+        probe.disconnect()
+        probe.loop_stop()
