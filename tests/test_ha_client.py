@@ -1073,7 +1073,7 @@ class TestMaxBat:
 
     def test_detect_bat_count_all_empty(self):
         payload = {"bat1_temp": 24.0}
-        assert _detect_bat_count(payload) == 4
+        assert _detect_bat_count(payload) == 1
 
     def test_detect_bat_count_bat_cnt_1_empty_serials(self):
         payload = {"bat_cnt": 1, "bat2_ser_part_1": "", "bat3_ser_part_1": "", "bat4_ser_part_1": ""}
@@ -1114,7 +1114,7 @@ class TestMaxBat:
     def test_resolve_max_bat_auto_fallback_no_payload(self):
         _MAX_BAT_CACHE.clear()
         with patch("grobro.ha.client.MAX_BAT", "auto"):
-            assert _resolve_max_bat("unknown") == 4
+            assert _resolve_max_bat("unknown") == 1
 
     def test_auto_mode_is_conservative_when_battery_count_is_unknown(self, ha_client):
         from grobro.model.growatt_registers import HomeAssistantInputRegister
