@@ -1,17 +1,18 @@
-# Better GroBro 3.1.70 — Differences from robertzaage/GroBro
+# Better GroBro 3.2.0 — Differences from robertzaage/GroBro
 
 Comparison baseline: `robertzaage/GroBro` main at `e4d59b20ba472853ae6ec0b7a17cf15cd774cb23` (2026-09-18).
 
 ## Reliability fixes in this release
 
-- MQTT publication failures no longer interrupt independent telemetry, device information or received configuration responses.
-- Saved battery assignments and detection history are protected against transient file-read errors; manual choices remain authoritative.
-- Read All can recover from rejected MQTT requests and interrupted sequences.
-- Device and background timer failures leave processing and subsequent retries usable.
-- Register diagnostics retain changes correctly when received register blocks overlap.
-- Reduced repeated JSON processing, buffer copies and register searches; optimized configuration and NOAH/NEXA parsing.
+- MQTT connections recover without blocking add-on startup; connection and subscription failures remain visible without repeated log noise.
+- Configuration saves preserve unrelated settings during concurrent updates and validate MQTT options before restart.
+- Read All, compound configuration responses and NEO readback continue after independent processing failures.
+- Smart-meter traffic refreshes device availability, including unchanged readings.
+- Diagnostic storage failures no longer prevent startup; pending acknowledgement tracking is bounded.
+- Home Assistant discovery construction is simplified, and temporary language API failures preserve established entity names.
+- Release images can recover after interrupted publication; prereleases no longer replace the stable image tag.
 
-Entity identifiers, supported device controls and normal device protocol behavior remain unchanged. Validation: 933 tests passed; CI passed on Python 3.11, 3.12 and 3.13.
+Entity identifiers, supported device controls, manual battery assignments and normal device protocol behavior remain unchanged. Validation: 1,020 tests passed; CI passed on Python 3.11, 3.12 and 3.13.
 
 ## User-relevant differences
 
