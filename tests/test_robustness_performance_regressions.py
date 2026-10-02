@@ -185,3 +185,42 @@ def test_ingress_incomplete_body_times_out_and_restores_socket_timeout():
     assert handler.close_connection
     assert handler.connection.settimeout.call_args_list[0].args == (30,)
     assert handler.connection.settimeout.call_args_list[-1].args == (None,)
+
+
+@pytest.mark.parametrize("replace", ["restart", "reschedule"])
+def test_cancelled_device_timer_cannot_replace_current_timer(clients, monkeypatch, replace):
+    from grobro.ha.timer_runtime import cancel_runtime_timers
+
+    _, target = clients
+    clock = [0.0]
+    timers = []
+    def timer(interval, function, args):
+        item = SimpleNamespace(function=function, args=args, start=lambda: None,
+                               cancel=lambda: None, is_alive=lambda: True)
+        timers.append(item)
+        return item
+    monkeypatch.setattr("grobro.ha.timer_runtime.daemon_timer", timer)
+    monkeypatch.setattr("grobro.ha.client.time.monotonic", lambda: clock[0])
+    monkeypatch.setattr("grobro.ha.client.DEVICE_TIMEOUT", 120)
+    availability = MagicMock()
+    monkeypatch.setattr(target, "_Client__publish_availability", availability)
+    target._Client__reset_device_timer("QMNTEST")
+    old = timers[0]
+    clock[0] = 60.0
+    if replace == "restart":
+        cancel_runtime_timers(target)
+        target._Client__reset_device_timer("QMNTEST")
+    else:
+        target._Client__reset_device_timer("QMNTEST")
+        clock[0] = 120.0
+        old.function(*old.args)
+    current = target._device_timers["QMNTEST"]
+    count = len(timers)
+    old.function(*old.args)
+    assert len(timers) == count
+    assert target._device_timers["QMNTEST"] is current
+    availability.assert_not_called()
+    clock[0] = 180.0
+    current.function(*current.args)
+    availability.assert_called_once_with("QMNTEST", False)
+    assert "QMNTEST" not in target._device_timers

@@ -939,6 +939,16 @@ class Client:
         now = time.monotonic()
         lock = self._device_timer_lock
 
+        def arm_timeout(delay: float, d_id: str):
+            def run(current_device: str):
+                with runtime_lock(self):
+                    if self._device_timers.get(current_device) is timer:
+                        check_timeout(current_device)
+
+            timer = daemon_timer(delay, run, args=(d_id,))
+            self._device_timers[d_id] = timer
+            timer.start()
+
         def check_timeout(d_id: str):
             with runtime_lock(self):
                 with lock:
@@ -952,9 +962,7 @@ class Client:
                     timeout = effective_device_timeout(self, d_id)
                     remaining = timeout - (time.monotonic() - last_seen)
                     if remaining > 0:
-                        timer = daemon_timer(remaining, check_timeout, args=(d_id,))
-                        self._device_timers[d_id] = timer
-                        timer.start()
+                        arm_timeout(remaining, d_id)
                         return
 
                     self._device_timers.pop(d_id, None)
@@ -972,13 +980,7 @@ class Client:
             if timer is not None and timer.is_alive():
                 return
 
-            timer = daemon_timer(
-                effective_device_timeout(self, device_id),
-                check_timeout,
-                args=(device_id,),
-            )
-            self._device_timers[device_id] = timer
-            timer.start()
+            arm_timeout(effective_device_timeout(self, device_id), device_id)
 
     def __publish_availability(self, device_id: str, online: bool):
         availability = self._last_availability
