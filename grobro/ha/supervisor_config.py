@@ -8,6 +8,7 @@ import threading
 import time
 import uuid
 from datetime import datetime, timedelta
+from http.client import HTTPException
 import urllib.error
 import urllib.request
 
@@ -97,6 +98,8 @@ def _token() -> str:
 
 
 def _unwrap(payload):
+    if isinstance(payload, dict) and "result" in payload and not isinstance(payload["result"], str):
+        raise SupervisorConfigError("Ungültige Supervisor-Antwort")
     if isinstance(payload, dict) and payload.get("result") in {"ok", "error"}:
         if payload.get("result") == "error":
             raise SupervisorConfigError(str(payload.get("message", "Supervisor-Fehler")))
@@ -130,14 +133,14 @@ def _supervisor_request(method: str, path: str, payload=None):
         except Exception:
             message = str(exc)
         raise SupervisorConfigError(message) from exc
-    except (OSError, urllib.error.URLError) as exc:
+    except (OSError, HTTPException) as exc:
         raise SupervisorConfigError(str(exc)) from exc
 
     if not raw:
         return None
     try:
         return _unwrap(json.loads(raw))
-    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+    except (json.JSONDecodeError, UnicodeDecodeError, RecursionError) as exc:
         raise SupervisorConfigError("Ungültige Supervisor-Antwort") from exc
 
 
@@ -161,7 +164,7 @@ def _supervisor_text_request(path: str) -> str:
             return response.read().decode("utf-8", errors="replace")
     except urllib.error.HTTPError as exc:
         raise SupervisorConfigError(str(exc)) from exc
-    except (OSError, urllib.error.URLError) as exc:
+    except (OSError, HTTPException) as exc:
         raise SupervisorConfigError(str(exc)) from exc
 
 
@@ -298,7 +301,11 @@ def get_addon_options() -> dict:
                 if key not in _RETIRED_OPTIONS
             }
         )
-    if int(options.get("DEVICE_TIMEOUT", 120) or 0) <= 0:
+    try:
+        valid_timeout = int(options.get("DEVICE_TIMEOUT", 120) or 0) > 0
+    except (TypeError, ValueError, OverflowError):
+        valid_timeout = False
+    if not valid_timeout:
         options["DEVICE_TIMEOUT"] = 120
     return {
         "options": options,
@@ -345,8 +352,13 @@ def schedule_restart(delay: float = 1.4) -> None:
             # observed. There is nothing useful to recover inside the old process.
             pass
 
-    threading.Thread(
-        target=worker,
-        name="better-grobro-self-restart",
-        daemon=True,
-    ).start()
+    try:
+        threading.Thread(
+            target=worker,
+            name="better-grobro-self-restart",
+            daemon=True,
+        ).start()
+    except (RuntimeError, OSError):
+        # The HTTP response has already been sent. Preserve the promised restart
+        # even when no additional worker can be created; the API has a timeout.
+        worker()

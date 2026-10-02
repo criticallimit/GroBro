@@ -35,51 +35,33 @@ def find_embedded_register_block(
     if len(decoded_packet) < 24 + 30 + 6 + 2:
         return None
 
-    payload = decoded_packet[24:]
-    if len(payload) < 30:
-        return None
-
-    # Keep the same post-device-serial region used by the existing 0x0103 parser.
-    data = payload[30:]
+    # Search directly in the post-serial region without copying the packet.
+    data = memoryview(decoded_packet)[54:]
     trailer_size = 2
     data_end = len(data) - trailer_size
-    if data_end < 6:
-        return None
-
-    candidates: list[EmbeddedRegisterBlock] = []
-    for offset in range(0, data_end - 5):
+    best = None
+    best_count = 0
+    # Exact fit requires an even number of value bytes. Skip offsets with
+    # incompatible parity and prefixes too long for the 2048-register limit.
+    search_start = max(0, data_end - 4 - 2048 * 2)
+    search_start += (data_end - search_start) % 2
+    for offset in range(search_start, data_end - 5, 2):
         start, end = struct.unpack_from(">HH", data, offset)
         if end < start:
             continue
         count = end - start + 1
-        # Defensive upper bound; Growatt blocks observed here are small enough
-        # that a huge accidental range should not be treated as a candidate.
-        if count <= 0 or count > 2048:
+        # Keep the observed-block bound and exact trailer fit unchanged.
+        if count > 2048 or offset + 4 + count * 2 != data_end:
             continue
-        block_size = 4 + count * 2
-        if offset + block_size != data_end:
-            continue
+        # Decode only the largest candidate. Equal counts retain the first
+        # candidate, matching the previous max() selection.
+        if count > best_count:
+            best = (offset, start, end)
+            best_count = count
 
-        values_raw = data[offset + 4 : offset + block_size]
-        if len(values_raw) != count * 2:
-            continue
-        values = tuple(
-            struct.unpack_from(">H", values_raw, index * 2)[0]
-            for index in range(count)
-        )
-        candidates.append(
-            EmbeddedRegisterBlock(
-                offset=offset,
-                start=start,
-                end=end,
-                values=values,
-            )
-        )
-
-    if not candidates:
+    if best is None:
         return None
 
-    # Prefer the candidate with the largest register range. A valid embedded
-    # Growatt block contains many registers; tiny accidental suffix matches are
-    # much more likely to be false positives.
-    return max(candidates, key=lambda candidate: len(candidate.values))
+    offset, start, end = best
+    values = tuple(value for (value,) in struct.iter_unpack(">H", data[offset + 4:data_end]))
+    return EmbeddedRegisterBlock(offset=offset, start=start, end=end, values=values)

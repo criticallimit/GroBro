@@ -5,66 +5,60 @@ import logging
 import struct
 
 import grobro.model as model
+from grobro.grobro.builder import scramble as _scramble
 
 LOG = logging.getLogger(__name__)
-_SCRAMBLE_MASK = b"Growatt"
-_SCRAMBLE_MASK_LEN = len(_SCRAMBLE_MASK)
+
+_CONFIG_RESPONSE_HEADER = struct.Struct(">4sHH16s14sH1x")
+_CONFIG_LEGACY_HEADER = struct.Struct(">4sHH16s14sH1xH2x")
+_CONFIG_ACK_HEADER = struct.Struct(">4sHH16s14sH")
+_CONFIG_TLV_HEADER = struct.Struct(">HH")
+
+_CONFIG_PARAM_NAMES = {
+    4: "data_interval",
+    5: "unknown_5",
+    6: "unknown_6",
+    7: "password",
+    8: "serial_number",
+    9: "protocol_version",
+    10: "unknown_10",
+    11: "unknown_11",
+    12: "dns_address",
+    13: "device_type",
+    14: "local_ip",
+    15: "unknown_port",
+    16: "mac_address",
+    17: "remote_ip",
+    18: "remote_port",
+    19: "remote_url",
+    20: "model_id",
+    21: "sw_version",
+    22: "hw_version",
+    23: "unknown_23",
+    24: "unknown_24",
+    25: "subnet_mask",
+    26: "default_gateway",
+    27: "unknown_27",
+    28: "unknown_28",
+    29: "unknown_29",
+    30: "timezone",
+    31: "datetime",
+    76: "wifi_signal",
+}
 
 
 def unscramble(decdata: bytes):
     """Unscramble Growatt payload bytes using the repeating ``Growatt`` mask."""
-    # Growatt leaves the first eight protocol bytes unchanged and XORs every
-    # following byte with the repeating ASCII mask. Mutating one bytearray avoids
-    # the quadratic bytes concatenation and repeated hex/int conversions used by
-    # the legacy implementation while remaining bit-for-bit identical.
-    result = bytearray(decdata)
-    mask_index = 0
-    for index in range(8, len(result)):
-        result[index] ^= _SCRAMBLE_MASK[mask_index]
-        mask_index += 1
-        if mask_index == _SCRAMBLE_MASK_LEN:
-            mask_index = 0
-    return bytes(result)
+    # XOR is its own inverse; use the same implementation in both directions.
+    return _scramble(decdata)
 
 
 def parse_config_type(data, offset) -> model.DeviceConfig:
     """Parse a TLV configuration block starting at ``offset``."""
     config = {}
     end = len(data)
-    raw_hex = data[offset:].hex()
+    initial_offset = offset
     any_params = False
-
-    param_map = {
-        4: "data_interval",
-        5: "unknown_5",
-        6: "unknown_6",
-        7: "password",
-        8: "serial_number",
-        9: "protocol_version",
-        10: "unknown_10",
-        11: "unknown_11",
-        12: "dns_address",
-        13: "device_type",
-        14: "local_ip",
-        15: "unknown_port",
-        16: "mac_address",
-        17: "remote_ip",
-        18: "remote_port",
-        19: "remote_url",
-        20: "model_id",
-        21: "sw_version",
-        22: "hw_version",
-        23: "unknown_23",
-        24: "unknown_24",
-        25: "subnet_mask",
-        26: "default_gateway",
-        27: "unknown_27",
-        28: "unknown_28",
-        29: "unknown_29",
-        30: "timezone",
-        31: "datetime",
-        76: "wifi_signal",
-    }
 
     max_len = 512
 
@@ -86,12 +80,12 @@ def parse_config_type(data, offset) -> model.DeviceConfig:
         except (UnicodeDecodeError, ValueError):
             val = raw_val.hex()
 
-        label = param_map.get(key_id, f"param_{key_id}")
+        label = _CONFIG_PARAM_NAMES.get(key_id, f"param_{key_id}")
         config[label] = val
         any_params = True
 
     if not any_params:
-        config["raw"] = raw_hex
+        config["raw"] = data[initial_offset:].hex()
 
     return model.DeviceConfig(**config)
 
@@ -99,8 +93,7 @@ def parse_config_type(data, offset) -> model.DeviceConfig:
 def find_config_offset(data):
     """Heuristically locate the start of a TLV configuration block."""
     for i in range(0x1C, len(data) - 4):
-        key = int.from_bytes(data[i : i + 2], "big")
-        length = int.from_bytes(data[i + 2 : i + 4], "big")
+        key, length = _CONFIG_TLV_HEADER.unpack_from(data, i)
         if 0 < key < 1000 and 0 < length < 256:
             return i
     return 0x1C
@@ -113,7 +106,7 @@ def parse_config_message(data: bytes):
     Keep the historic top-level register_no/value fields for compatibility and
     expose every decoded TLV through entries.
     """
-    header_struct = struct.Struct(">4sHH16s14sH1x")
+    header_struct = _CONFIG_RESPONSE_HEADER
     if len(data) < header_struct.size + 4 + 2:
         raise ValueError("config read response is truncated")
 
@@ -133,7 +126,7 @@ def parse_config_message(data: bytes):
     end = len(data) - 2
     entries = []
     while pos + 4 <= end:
-        register_no, value_len = struct.unpack_from(">HH", data, pos)
+        register_no, value_len = _CONFIG_TLV_HEADER.unpack_from(data, pos)
         pos += 4
         if value_len <= 0 or pos + value_len > end:
             break
@@ -149,7 +142,7 @@ def parse_config_message(data: bytes):
     if not entries:
         # Compatibility with older/single-value 0x0119 packets that use the
         # historic fixed layout: register(2) + reserved(2) + value.
-        legacy_struct = struct.Struct(">4sHH16s14sH1xH2x")
+        legacy_struct = _CONFIG_LEGACY_HEADER
         if len(data) < legacy_struct.size + 2:
             raise ValueError("config read response contains no valid register value")
         (
@@ -185,7 +178,7 @@ def parse_config_message(data: bytes):
 
 
 def parse_config_ack(data: bytes):
-    config_ack_struct = struct.Struct(">4sHH16s14sH")
+    config_ack_struct = _CONFIG_ACK_HEADER
     if len(data) < config_ack_struct.size:
         raise ValueError("config acknowledgement is truncated")
 
@@ -214,12 +207,10 @@ def parse_config_ack(data: bytes):
 
 def parse_noah_0103(data: bytes) -> dict:
     """Parse NOAH type 0x0103 as an address-unknown sequence of 16-bit values."""
-    payload = data[24:]
-    device_id = payload[14:30].rstrip(b"\x00").decode("ascii", errors="replace")
-    reg_data = payload[30:]
-    registers = []
-    for i in range(0, len(reg_data) - 1, 2):
-        registers.append(struct.unpack_from(">H", reg_data, i)[0])
+    device_id = data[38:54].rstrip(b"\x00").decode("ascii", errors="replace")
+    reg_data = memoryview(data)[54:]
+    complete_words = reg_data[:len(reg_data) - len(reg_data) % 2]
+    registers = [value for (value,) in struct.iter_unpack(">H", complete_words)]
     return {
         "message_type": 0x0103,
         "device_id": device_id,

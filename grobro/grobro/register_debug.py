@@ -94,6 +94,17 @@ def _write_modbus_message(message: GrowattModbusMessage) -> None:
             previous_block = _LAST_BLOCK_VALUES.get(block_key)
             if previous_block == block.values:
                 continue
+            # Another layout may overwrite shared registers before this layout
+            # returns. Its historical bytes no longer describe current values.
+            for cached_key in tuple(_LAST_BLOCK_VALUES):
+                device_id, cached_function, start, end = cached_key
+                if (
+                    device_id == message.device_id
+                    and cached_function == function
+                    and start <= block.end
+                    and block.start <= end
+                ):
+                    del _LAST_BLOCK_VALUES[cached_key]
             _LAST_BLOCK_VALUES[block_key] = block.values
 
         for register_no in range(block.start, block.end + 1):

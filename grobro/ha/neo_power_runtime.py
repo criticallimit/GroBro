@@ -33,13 +33,17 @@ def request_initial_neo_inverter_power(client, device_id: str) -> bool:
     if not register or not callable(getattr(client, "on_command", None)):
         return False
 
-    result = client.on_command(
-        ha_client_module.make_modbus_command(
-            device_id,
-            GrowattModbusFunction.READ_SINGLE_REGISTER,
-            register.growatt.position.register_no,
+    try:
+        result = client.on_command(
+            ha_client_module.make_modbus_command(
+                device_id,
+                GrowattModbusFunction.READ_SINGLE_REGISTER,
+                register.growatt.position.register_no,
+            )
         )
-    )
+    except Exception as exc:
+        ha_client_module.LOG.warning("Could not request initial NEO inverter power for %s (%s)", device_id, exc)
+        return False
     status = getattr(result, "rc", None)
     if status is None:
         try:
@@ -85,9 +89,14 @@ def schedule_known_neo_state_probe(client, delay: float = 1.0) -> None:
                     return
                 run_probe(attempt)
 
-        timer = daemon_timer(interval, run)
-        client._neo_startup_probe_timer = timer
-        timer.start()
+        client._neo_startup_probe_timer = None
+        try:
+            timer = daemon_timer(interval, run)
+            client._neo_startup_probe_timer = timer
+            timer.start()
+        except (RuntimeError, OSError) as exc:
+            client._neo_startup_probe_timer = None
+            ha_client_module.LOG.warning("Could not schedule NEO state probe (%s)", exc)
 
     def run_probe(attempt):
         client._neo_startup_probe_timer = None

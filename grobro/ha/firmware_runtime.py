@@ -118,19 +118,12 @@ def _rewrite_firmware_discovery(
     try:
         raw = payload.decode() if isinstance(payload, (bytes, bytearray)) else payload
         data = json.loads(raw)
-    except (UnicodeDecodeError, TypeError, ValueError):
+    except (UnicodeDecodeError, TypeError, ValueError, RecursionError):
         return payload
 
-    components = data.get("cmps")
-    if isinstance(components, dict):
-        component = components.get(f"grobro_{device_id}_fw_version")
-        if isinstance(component, dict):
-            component["value_template"] = "{{ value_json['fw_version'] }}"
-
-    if firmware_version:
-        device_info = data.get("dev")
-        if isinstance(device_info, dict):
-            device_info["sw_version"] = firmware_version
+    if not isinstance(data, dict):
+        return payload
+    _apply_firmware_discovery(device_id, data, firmware_version)
 
     return json.dumps(data, sort_keys=True, separators=(",", ":"))
 
@@ -148,3 +141,17 @@ def _invalidate_discovery_for_firmware_change(client, device_id: str) -> None:
     discovery_signatures = getattr(client, "_discovery_signature", None)
     if isinstance(discovery_signatures, dict):
         discovery_signatures.pop(device_id, None)
+
+
+def _apply_firmware_discovery(device_id: str, data: dict, firmware_version: str | None) -> None:
+    """Apply firmware fields to an already decoded discovery object in place."""
+    components = data.get("cmps")
+    if isinstance(components, dict):
+        component = components.get(f"grobro_{device_id}_fw_version")
+        if isinstance(component, dict):
+            component["value_template"] = "{{ value_json['fw_version'] }}"
+
+    if firmware_version:
+        device_info = data.get("dev")
+        if isinstance(device_info, dict):
+            device_info["sw_version"] = firmware_version

@@ -292,8 +292,7 @@ class Client:
                 self._stopped = True
                 with self._config_read_lock, self._device_timer_lock:
                     cancel_runtime_timers(self)
-                for device_id in tuple(self._config_cache):
-                    self.__publish_availability(device_id, False)
+                self.__publish_offline_devices()
                 result = self._client.publish(self._bridge_topic(), "offline", qos=1, retain=True)
                 if publish_succeeded(result) and hasattr(result, "wait_for_publish"):
                     try:
@@ -309,6 +308,25 @@ class Client:
     def _bridge_topic(self):
         return getattr(self, "_bridge_availability_topic", f"{HA_BASE_TOPIC}/grobro/grobro-ha/availability")
 
+    def __publish_offline_devices(self):
+        for device_id in tuple(self._config_cache):
+            try:
+                self.__publish_availability(device_id, False)
+            except Exception:
+                LOG.exception("Could not publish offline availability for %s", device_id)
+
+    def __publish_bridge_online(self):
+        was_pending = getattr(self, "_bridge_online_pending", False)
+        self._bridge_online_pending = True
+        try:
+            result = self._client.publish(self._bridge_topic(), "online", qos=1, retain=True)
+        except Exception:
+            if not was_pending:
+                LOG.exception("Could not publish bridge availability; will retry on device activity")
+            return False
+        self._bridge_online_pending = not publish_succeeded(result)
+        return not self._bridge_online_pending
+
     # ------------------- Config Handling -------------------
 
     @guard_runtime
@@ -318,9 +336,7 @@ class Client:
 
         observe_device(device_id)
         if hasattr(self, "_client") and hasattr(self, "_device_last_seen"):
-            self.__publish_availability(device_id, True)
-            if DEVICE_TIMEOUT > 0:
-                self.__reset_device_timer(device_id)
+            self.__refresh_device_activity(device_id)
 
         config_path = f"config_{device_id}.json"
         existing_config = load_persisted_config(self, config_path)
@@ -372,7 +388,7 @@ class Client:
             clear_legacy_component_discovery,
             configured_serial,
         )
-        from grobro.ha.firmware_runtime import _rewrite_firmware_discovery
+        from grobro.ha.firmware_runtime import _apply_firmware_discovery
 
         base = HA_BASE_TOPIC
         prefix = f"{base}/device/"
@@ -408,12 +424,7 @@ class Client:
                     "_composed_firmware_cache",
                     {},
                 ).get(device_id)
-                clean_payload = _rewrite_firmware_discovery(
-                    device_id,
-                    json.dumps(clean_data, separators=(",", ":")),
-                    firmware_version,
-                )
-                clean_data = json.loads(clean_payload)
+                _apply_firmware_discovery(device_id, clean_data, firmware_version)
 
                 if device_id not in repair_done:
                     repair_payload = json.dumps(
@@ -529,10 +540,11 @@ class Client:
             effective_max_bat = stable_logical_max
 
         self.__detect_neo_pv_count(device_id, state_payload)
-        self.__publish_device_discovery(device_id, effective_max_bat)
-        self.__publish_availability(device_id, True)
-        if DEVICE_TIMEOUT > 0:
-            self.__reset_device_timer(device_id)
+        try:
+            self.__publish_device_discovery(device_id, effective_max_bat)
+        except Exception:
+            LOG.exception("Could not update discovery for %s; continuing with telemetry", device_id)
+        self.__refresh_device_activity(device_id)
 
         known_registers = get_known_registers(device_id)
         rules = _register_rules(known_registers)
@@ -569,11 +581,13 @@ class Client:
                 "HA state unchanged for %s, skipping serialization and publish",
                 device_id,
             )
+            request_initial_neo_inverter_power(self, device_id)
             return
 
         payload_json = json.dumps(payload, separators=(",", ":"))
         if not _should_publish_state(self, device_id, payload_json, commit=False):
             LOG.debug("HA state unchanged for %s, skipping publish", device_id)
+            request_initial_neo_inverter_power(self, device_id)
             return
 
         topic = f"{HA_BASE_TOPIC}/grobro/{device_id}/state"
@@ -592,9 +606,7 @@ class Client:
         try:
             LOG.debug("HA: publish: %s", ha_input)
             device_id = ha_input.device_id
-            self.__publish_availability(device_id, True)
-            if DEVICE_TIMEOUT > 0:
-                self.__reset_device_timer(device_id)
+            self.__refresh_device_activity(device_id)
 
             for value in ha_input.payload:
                 if not _should_publish_holding_state(
@@ -609,7 +621,11 @@ class Client:
                     f"{HA_BASE_TOPIC}/{value.register_def.type}/grobro/"
                     f"{device_id}/{value.name}/get"
                 )
-                result = self._client.publish(topic, value.value, retain=True)
+                try:
+                    result = self._client.publish(topic, value.value, retain=True)
+                except Exception:
+                    LOG.exception("Could not publish holding state for %s setting %s; will retry", device_id, value.name)
+                    continue
                 if publish_succeeded(result):
                     _should_publish_holding_state(self, device_id, value.name, value.value)
         except Exception as exc:
@@ -677,8 +693,7 @@ class Client:
 
         # Retained availability from an earlier HA/process session must not keep
         # stale values looking current. Fresh device traffic sets them online.
-        for device_id in self._config_cache:
-            self.__publish_availability(device_id, False)
+        self.__publish_offline_devices()
 
         from grobro.ha.neo_power_runtime import schedule_known_neo_state_probe
         schedule_known_neo_state_probe(self, delay=0.5)
@@ -688,7 +703,7 @@ class Client:
         with runtime_lock(self):
             if getattr(self, "_stopped", False) or getattr(reason_code, "is_failure", False):
                 return
-            self._client.publish(self._bridge_topic(), "online", qos=1, retain=True)
+            self.__publish_bridge_online()
             self.__recover_after_home_assistant_restart(client)
         LOG.info(
             "Connected to Home Assistant; controls and device states are ready"
@@ -930,6 +945,15 @@ class Client:
 
     # ------------------- Internals -------------------
 
+    def __refresh_device_activity(self, device_id: str):
+        """Record live traffic even when its availability publish fails."""
+        try:
+            self.__publish_availability(device_id, True)
+        except Exception:
+            LOG.exception("Could not publish online availability for %s; will retry on device activity", device_id)
+        if DEVICE_TIMEOUT > 0:
+            self.__reset_device_timer(device_id)
+
     @guard_runtime
     def __reset_device_timer(self, device_id: str):
         if getattr(self, "_stopped", False):
@@ -945,9 +969,14 @@ class Client:
                     if self._device_timers.get(current_device) is timer:
                         check_timeout(current_device)
 
-            timer = daemon_timer(delay, run, args=(d_id,))
-            self._device_timers[d_id] = timer
-            timer.start()
+            self._device_timers.pop(d_id, None)
+            try:
+                timer = daemon_timer(delay, run, args=(d_id,))
+                self._device_timers[d_id] = timer
+                timer.start()
+            except (RuntimeError, OSError) as exc:
+                self._device_timers.pop(d_id, None)
+                LOG.warning("Could not schedule device timeout for %s (%s)", d_id, exc)
 
         def check_timeout(d_id: str):
             with runtime_lock(self):
@@ -983,6 +1012,8 @@ class Client:
             arm_timeout(effective_device_timeout(self, device_id), device_id)
 
     def __publish_availability(self, device_id: str, online: bool):
+        if online and getattr(self, "_bridge_online_pending", False):
+            self.__publish_bridge_online()
         availability = self._last_availability
         if availability.get(device_id) is online:
             return False
@@ -1257,11 +1288,8 @@ class Client:
             LOG.debug("Discovery unchanged for %s, skipping", device_id)
             if device_id not in self._discovery_cache:
                 self._discovery_cache.append(device_id)
-            # trotzdem States aktualisieren
-            self._publish_discovery_message(f"{HA_BASE_TOPIC}/grobro/{device_id}/serial", device_id, retain=True)
-            self._publish_discovery_message(f"{HA_BASE_TOPIC}/grobro/{device_id}/type", get_device_type_name(device_id), retain=True)
-            self._publish_discovery_message(f"{HA_BASE_TOPIC}/grobro/{device_id}/sw_version", device_id, retain=True)
-            self._discovery_signature[device_id] = signature
+            if self.__publish_discovery_metadata(device_id, include_sw_version=True):
+                self._discovery_signature[device_id] = signature
             return
 
         LOG.info(
@@ -1276,9 +1304,20 @@ class Client:
         if device_id not in self._discovery_cache:
             self._discovery_cache.append(device_id)
 
-        self._publish_discovery_message(f"{HA_BASE_TOPIC}/grobro/{device_id}/serial", device_id, retain=True)
-        self._publish_discovery_message(f"{HA_BASE_TOPIC}/grobro/{device_id}/type", get_device_type_name(device_id), retain=True)
-        self._discovery_signature[device_id] = signature
+        if self.__publish_discovery_metadata(device_id):
+            self._discovery_signature[device_id] = signature
+
+    def __publish_discovery_metadata(self, device_id: str, *, include_sw_version=False) -> bool:
+        metadata = [("serial", device_id), ("type", get_device_type_name(device_id))]
+        if include_sw_version:
+            metadata.append(("sw_version", device_id))
+        succeeded = True
+        for name, value in metadata:
+            result = self._publish_discovery_message(
+                f"{HA_BASE_TOPIC}/grobro/{device_id}/{name}", value, retain=True,
+            )
+            succeeded = publish_succeeded(result) and succeeded
+        return succeeded
 
     def __migrate_entity_discovery(self, device_id: str, known_registers: GroBroRegisters):
         if device_id in self._migration_done:
@@ -1426,7 +1465,11 @@ class Client:
 
         if self.on_config_read:
             try:
-                self.on_config_read(device_id, register_no)
+                result = self.on_config_read(device_id, register_no)
+                if not publish_succeeded(result):
+                    with self._config_read_lock:
+                        self.__cancel_config_read_sequence(device_id)
+                    LOG.warning("%s: MQTT rejected the config read; Read All can be retried", _device_label(device_id))
             except Exception:
                 with self._config_read_lock:
                     self.__cancel_config_read_sequence(device_id)
@@ -1455,9 +1498,7 @@ class Client:
     def handle_config_read_response(self, device_id: str, register_no: int):
         # A successful config read is a direct response from the device and must
         # refresh its availability even if regular telemetry is infrequent.
-        self.__publish_availability(device_id, True)
-        if DEVICE_TIMEOUT > 0:
-            self.__reset_device_timer(device_id)
+        self.__refresh_device_activity(device_id)
         with self._config_read_lock:
             inflight = self._config_read_inflight.get(device_id)
             if inflight != register_no:

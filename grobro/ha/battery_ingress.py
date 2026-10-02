@@ -542,18 +542,27 @@ class _HeaderDeadlineReader:
     def readline(self, limit=-1):
         previous = self._connection.gettimeout()
         line = bytearray()
+        peek = getattr(self._stream, "peek", None)
         try:
             while limit < 0 or len(line) < limit:
                 remaining = self._deadline - time.monotonic()
                 if remaining <= 0:
                     raise TimeoutError()
                 self._connection.settimeout(remaining)
-                # BufferedReader.read(1) uses its existing buffer; no packet over-read.
-                value = self._stream.read(1)
+                if peek is not None:
+                    # Consume only this line from bytes already buffered. Body
+                    # bytes remain in the same stream for the POST reader.
+                    buffered = peek(1)
+                    size = buffered.find(b"\n") + 1 or len(buffered)
+                    if limit >= 0:
+                        size = min(size, limit - len(line))
+                    value = self._stream.read(size)
+                else:
+                    value = self._stream.read(1)
                 if not value:
                     break
                 line.extend(value)
-                if value == b"\n":
+                if value.endswith(b"\n"):
                     break
             return bytes(line)
         finally:
@@ -572,23 +581,20 @@ class BatteryIngressHandler(BaseHTTPRequestHandler):
     def _allowed(self) -> bool:
         return self.client_address[0] in _ALLOWED_CLIENTS
 
-    def _send_json(self, payload: object, status: HTTPStatus = HTTPStatus.OK) -> None:
-        body = json.dumps(payload, separators=(",", ":")).encode()
+    def _send_body(self, body: bytes, content_type: str, status: HTTPStatus = HTTPStatus.OK) -> None:
         self.send_response(status)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(body)
 
+    def _send_json(self, payload: object, status: HTTPStatus = HTTPStatus.OK) -> None:
+        body = json.dumps(payload, separators=(",", ":")).encode()
+        self._send_body(body, "application/json; charset=utf-8", status)
+
     def _send_html(self) -> None:
-        body = _INDEX_HTML.encode()
-        self.send_response(HTTPStatus.OK)
-        self.send_header("Content-Type", "text/html; charset=utf-8")
-        self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "no-store")
-        self.end_headers()
-        self.wfile.write(body)
+        self._send_body(_INDEX_HTML.encode(), "text/html; charset=utf-8")
 
     def _reject_untrusted_client(self) -> bool:
         if self._allowed():

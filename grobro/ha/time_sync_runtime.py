@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 
 from grobro.ha.timer_runtime import daemon_timer, guard_runtime, runtime_lock
 from grobro.model.device_family import get_device_type_name, supports_time_sync
+from grobro.model.mqtt_config import publish_succeeded
 
 LOG = logging.getLogger(__name__)
 _TIME_SYNC_REGISTER = 31
@@ -37,7 +38,10 @@ def sync_supported_clocks(client, now: datetime | None = None) -> int:
         if not supports_time_sync(device_id):
             continue
         try:
-            callback(device_id, _TIME_SYNC_REGISTER, value)
+            result = callback(device_id, _TIME_SYNC_REGISTER, value)
+            if not publish_succeeded(result):
+                LOG.warning("%s %s: MQTT rejected automatic clock synchronization", get_device_type_name(device_id), device_id)
+                continue
             synced += 1
         except Exception as exc:
             LOG.warning(
@@ -68,6 +72,11 @@ def schedule_next_time_sync(client) -> None:
             sync_supported_clocks(client)
             schedule_next_time_sync(client)
 
-    timer = daemon_timer(seconds_until_next_time_sync(), run_and_reschedule)
-    client._time_sync_timer = timer
-    timer.start()
+    client._time_sync_timer = None
+    try:
+        timer = daemon_timer(seconds_until_next_time_sync(), run_and_reschedule)
+        client._time_sync_timer = timer
+        timer.start()
+    except (RuntimeError, OSError) as exc:
+        client._time_sync_timer = None
+        LOG.warning("Could not schedule automatic clock synchronization (%s)", exc)
