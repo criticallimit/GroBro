@@ -60,12 +60,12 @@ schema:
   SOURCE_MQTT_PORT: int
   SOURCE_MQTT_TLS: bool
   SOURCE_MQTT_USER: str?
-  SOURCE_MQTT_PASS: str?
+  SOURCE_MQTT_PASS: password?
   TARGET_MQTT_HOST: str
   TARGET_MQTT_PORT: int
   TARGET_MQTT_TLS: bool
   TARGET_MQTT_USER: "str?"
-  TARGET_MQTT_PASS: "str?"
+  TARGET_MQTT_PASS: password?
   MQTT_CLIENT_SUFFIX: "str?"
   HA_BASE_TOPIC: "str?"
   GROWATT_CLOUD: bool
