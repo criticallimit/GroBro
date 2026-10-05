@@ -279,7 +279,7 @@ class Client:
     @guard_runtime
     def set_config(self, device_id: str, config: model.DeviceConfig):
         from grobro.ha.config_runtime import _merge_config, persisted_runtime_data, discovery_config_data, load_persisted_config, persist_device_config
-        from grobro.ha.device_inventory import observe_device
+        from grobro.ha.device_inventory import observe_device, observe_telemetry
 
         observe_device(device_id)
         if hasattr(self, "_client") and hasattr(self, "_device_last_seen"):
@@ -482,6 +482,7 @@ class Client:
         if stable_logical_max > effective_max_bat:
             effective_max_bat = stable_logical_max
 
+        observe_telemetry(device_id, state_payload, effective_max_bat)
         self.__detect_neo_pv_count(device_id, state_payload)
         try:
             self.__publish_device_discovery(device_id, effective_max_bat)
