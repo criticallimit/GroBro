@@ -240,7 +240,7 @@ _INDEX_HTML = r"""<!doctype html>
     }
     .battery-icon::before { content:""; position:absolute; width:10px; height:4px; left:6px; top:-6px; border-radius:2px 2px 0 0; background:#6f8b9e; }
     .battery-fill {
-      position:absolute; left:3px; right:3px; bottom:3px; min-height:2px;
+      position:absolute; left:3px; right:3px; bottom:3px; max-height:calc(100% - 6px);
       border-radius:2px; background:linear-gradient(180deg,#77e49e,#33bd70);
       transition:height .25s ease;
     }
@@ -260,7 +260,6 @@ _INDEX_HTML = r"""<!doctype html>
       grid-column:1/-1; padding:18px; border:1px dashed #28485d; border-radius:9px;
       color:var(--muted); text-align:center; background:#091722;
     }
-    .overview-link { min-height:30px; padding:5px 9px; font-size:10px; }
 
     .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px 18px; }
     .field { min-width:0; }
@@ -363,7 +362,6 @@ _INDEX_HTML = r"""<!doctype html>
       .grid,.battery-row,.device-cards,.battery-cards { grid-template-columns:1fr; }
       .dashboard-head,.dashboard-section-title { flex-direction:column; align-items:stretch; }
       .dashboard-state { align-self:flex-start; }
-      .overview-link { width:100%; }
       .actions button,.header button { width:100%; }
       .header { align-items:stretch; }
       .header > div:first-child { align-self:center; }
@@ -781,28 +779,8 @@ function renderOverviewDevices(){
   }
 }
 
-function overviewLogicalSlot(device,entry){
-  const serial=entry.serial;
-  for(const slot of [2,3,4]){
-    if(device.manual&&device.manual[String(slot)]===serial)return {slot,kind:"manual"};
-  }
-  for(const slot of [2,3,4]){
-    if(device.automatic&&device.automatic[String(slot)]===serial)return {slot,kind:"auto"};
-  }
-  return {slot:Number(entry.physical_slot)||null,kind:"physical"};
-}
-
-function overviewSerialForSlot(device,slot){
-  if(slot===1)return device.device_id;
-  const detected=Array.isArray(device.detected)?device.detected:[];
-  for(const entry of detected){
-    const logical=overviewLogicalSlot(device,entry);
-    if(logical.slot===slot)return entry.serial;
-  }
-  return "";
-}
-
 function clampSoc(value){
+  if(value===null||value===undefined||value==="")return null;
   const number=Number(value);
   if(!Number.isFinite(number))return null;
   return Math.max(0,Math.min(100,number));
@@ -826,12 +804,14 @@ function renderOverviewBatteries(){
       count++;
 
       const soc=clampSoc(battery.soc);
-      const serial=overviewSerialForSlot(positionDevice,slot);
+      // The backend has already applied manual/stable slot remapping to
+      // both serial fragments and measurements. Do not map them a second time.
+      const serial=slot===1?item.device_id:(battery.serial||"");
       const card=document.createElement("div");card.className="battery-card";
 
       const icon=document.createElement("div");icon.className="battery-icon";
       const fill=document.createElement("span");fill.className="battery-fill";
-      fill.style.height=(soc===null?8:soc)+"%";icon.appendChild(fill);
+      fill.style.height=(soc===null?0:soc)+"%";icon.appendChild(fill);
 
       const body=document.createElement("div");
       const title=document.createElement("strong");
@@ -844,11 +824,11 @@ function renderOverviewBatteries(){
       if(slot===1){
         assignment.textContent=l({de:"Master-Batterie",en:"Master battery",fr:"Batterie maître",es:"Batería maestra",nl:"Masterbatterij"});
       }else{
-        const detected=(positionDevice.detected||[]).find(entry=>entry.serial===serial);
-        const logical=detected?overviewLogicalSlot(positionDevice,detected):{kind:"physical"};
-        assignment.textContent=logical.kind==="manual"
+        const manual=serial&&positionDevice.manual&&positionDevice.manual[String(slot)]===serial;
+        const stable=serial&&batteryState.keep_battery_position&&positionDevice.automatic&&positionDevice.automatic[String(slot)]===serial;
+        assignment.textContent=manual
           ? l({de:"Manuell zugeordnet",en:"Manually assigned",fr:"Affectation manuelle",es:"Asignación manual",nl:"Handmatig toegewezen"})
-          : logical.kind==="auto"
+          : stable
             ? l({de:"Stabil automatisch zugeordnet",en:"Stable automatic assignment",fr:"Affectation automatique stable",es:"Asignación automática estable",nl:"Stabiele automatische toewijzing"})
             : l({de:"Live erkannt",en:"Detected live",fr:"Détectée en direct",es:"Detectada en vivo",nl:"Live gedetecteerd"});
       }
@@ -893,8 +873,6 @@ async function loadOverviewLogs(){
     output.textContent=l({de:"Protokoll konnte nicht geladen werden.",en:"Could not load log.",fr:"Impossible de charger le journal.",es:"No se pudo cargar el registro.",nl:"Logboek kon niet worden geladen."});
   }
 }
-
-document.querySelectorAll("[data-go-tab]").forEach(button=>button.addEventListener("click",()=>activateTab(button.dataset.goTab)));
 
 function renderBatteries(){
   const d=currentDevice(), detected=document.getElementById("detected");detected.replaceChildren();

@@ -168,6 +168,7 @@ class Client:
     on_command: Optional[Callable[[GrowattModbusFunctionSingle], None]] = None
     on_config_command: Optional[Callable[[str, int, str], None]] = None
     on_config_read: Optional[Callable[[str, int], None]] = None
+    config_reads_ready: Optional[Callable[[], bool]] = None
     on_config_read_response: Callable[[str, int], None] | None = None
 
     _client: mqtt.Client
@@ -314,6 +315,7 @@ class Client:
             LOG.debug("Device metadata unchanged for %s; skipping config save", device_id)
 
         self._config_cache[device_id] = effective_config
+        self.__refresh_config_if_needed(device_id)
         if not discovery_changed and device_id in self._discovery_cache:
             LOG.debug("No discovery-relevant config change for %s", device_id)
             return
@@ -449,6 +451,7 @@ class Client:
         device_id = state.device_id
         from grobro.ha.config_runtime import retry_pending_device_config
         retry_pending_device_config(self, device_id)
+        self.__refresh_config_if_needed(device_id)
         state_payload = state.payload
         observe_device(device_id)
         live_config = self._config_cache.get(device_id)
@@ -604,10 +607,27 @@ class Client:
             cache[device_id] = payload
         return result
 
+    def __refresh_config_if_needed(self, device_id: str) -> None:
+        # Only the wired source can declare automatic startup reads ready.
+        if self.config_reads_ready and device_id not in self._config_refresh_started:
+            try:
+                self.__queue_all_config_reads(device_id)
+            except (RuntimeError, OSError) as exc:
+                LOG.warning("Could not schedule config refresh for %s (%s); will retry on device activity", device_id, type(exc).__name__)
+
+    @guard_runtime
+    def handle_source_ready(self) -> None:
+        """Restart interrupted reads after the source broker acknowledges c/#."""
+        self.__reset_config_read_state()
+        for device_id in tuple(self._config_cache):
+            self.__refresh_config_if_needed(device_id)
+
     def __queue_all_config_reads(self, device_id: str, *, delay: float = 0.0) -> bool:
         """Queue the device's full config-register set using the standard read sequence."""
         known_registers = get_known_registers(device_id)
         if not self.on_config_read or not known_registers or not known_registers.config_registers:
+            return False
+        if self.config_reads_ready and not self.config_reads_ready():
             return False
 
         with self._config_read_lock:
@@ -626,12 +646,16 @@ class Client:
             for cfg in known_registers.config_registers.values():
                 queue.append(cfg.growatt.register_no)
 
-        self.__start_config_read_timer(
-            delay,
-            self.__kickoff_next_config_read,
-            self._read_all_start_timers,
-            device_id,
-        )
+        self._config_refresh_started.add(device_id)
+        try:
+            self.__start_config_read_timer(
+                delay, self.__kickoff_next_config_read,
+                self._read_all_start_timers, device_id,
+            )
+        except Exception:
+            with self._config_read_lock:
+                self.__cancel_config_read_sequence(device_id)
+            raise
         return True
 
     def __reset_config_read_state(self) -> None:
@@ -654,6 +678,7 @@ class Client:
             self._config_read_queues.clear()
             self._config_read_inflight.clear()
             getattr(self, "_read_all_active", set()).clear()
+            self._config_refresh_started.clear()
 
     @guard_runtime
     def __recover_after_home_assistant_restart(self, client) -> None:
@@ -676,7 +701,7 @@ class Client:
         # same generic queue used by Read All. This includes Wi-Fi RSSI (R76)
         # without introducing any device-family-specific request.
         for known_device_id in tuple(self._config_cache):
-            self.__queue_all_config_reads(known_device_id, delay=0.0)
+            self.__refresh_config_if_needed(known_device_id)
 
         from grobro.ha.neo_power_runtime import schedule_known_neo_state_probe
         schedule_known_neo_state_probe(self, delay=0.5)
@@ -1260,9 +1285,14 @@ class Client:
             if timer is not None:
                 timer.cancel()
         getattr(self, "_read_all_active", set()).discard(device_id)
+        self._config_refresh_started.discard(device_id)
 
     @guard_runtime
     def __kickoff_next_config_read(self, device_id: str):
+        if self.config_reads_ready and not self.config_reads_ready():
+            with self._config_read_lock:
+                self.__cancel_config_read_sequence(device_id)
+            return
         with self._config_read_lock:
             timer = getattr(self, "_read_all_start_timers", {}).pop(device_id, None)
             if timer is not None:
@@ -1273,6 +1303,7 @@ class Client:
 
             q = self._config_read_queues.get(device_id)
             if not q:
+                self._config_read_queues.pop(device_id, None)
                 getattr(self, "_read_all_active", set()).discard(device_id)
                 return
 

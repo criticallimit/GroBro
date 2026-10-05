@@ -54,9 +54,11 @@ def wire_clients(ha_client, grobro_client) -> None:
     grobro_client.on_config_read_response = ha_client.handle_config_read_response
     grobro_client.on_config_register_value = ha_client.publish_config_register_value
     grobro_client.on_smart_meter = ha_client.publish_smart_meter
+    grobro_client.on_ready = ha_client.handle_source_ready
 
     ha_client.on_command = grobro_client.send_command
     ha_client.on_config_read = grobro_client.send_config_read_message
+    ha_client.config_reads_ready = grobro_client.config_reads_ready
     ha_client.on_config_command = (
         lambda dev, reg, val: grobro_client.send_config_message(dev, reg, val)
     )

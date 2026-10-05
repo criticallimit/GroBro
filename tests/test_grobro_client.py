@@ -589,6 +589,21 @@ class TestClientOnMessage:
         assert raq_call[0][0] == "RAQ0TEST01"
         assert ptq_call[0][0].startswith("PTQ")
 
+    def test_gateway_wifi_readback_updates_mapped_inverter_without_redirecting_reads(self, client):
+        client._ptq_for_raq["RAQTEST"] = "PTQTEST"
+        client.send_config_read_message("RAQTEST", 76)
+        assert client._client.publish.call_args.args[0] == "s/33/RAQTEST"
+        data = b"\x00" * 6 + b"\x01\x19" + b"\x00" * 32
+        with patch("grobro.grobro.client.parser.unscramble", return_value=data), patch(
+            "grobro.grobro.client.parser.parse_config_message",
+            return_value={"device_id": "RAQTEST", "register_no": 76, "value": "-61"},
+        ):
+            client._client.on_message(None, None, _msg("c/33/RAQTEST", b"wire"))
+        configs = {call.args[0]: call.args[1] for call in client.on_config.call_args_list}
+        assert configs["RAQTEST"].wifi_signal == "-61"
+        assert configs["PTQTEST"].wifi_signal == "-61"
+        client.on_config_read_response.assert_called_once_with("RAQTEST", 76)
+
     def test_topic_sanitization_normal(self, client):
         data = (Path(DATA_DIR) / "NeoConfigTLV_340.bin").read_bytes()
         msg = _msg("c/33/QMN000ABC1D2E3FG", data)

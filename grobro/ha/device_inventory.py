@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+from grobro.ha.battery_position import _serials_from_payload
 from grobro.model.device_family import get_device_family
 
 _LOCK = threading.Lock()
@@ -60,11 +61,15 @@ def observe_telemetry(device_id: str, payload: dict, max_bat: int = 1) -> None:
     if not device_id:
         return
 
+    observe_wifi_signal(device_id, payload.get("wifi_signal_strength"))
+    serials = _serials_from_payload(payload)
     batteries = []
     for slot in range(1, max(1, min(4, int(max_bat))) + 1):
         soc = payload.get(f"bat_{slot}_soc_pct")
         temp = payload.get(f"bat{slot}_temp")
         battery = {"slot": slot}
+        if slot in serials:
+            battery["serial"] = serials[slot]
         if soc is not None:
             battery["soc"] = soc
         if temp is not None:
@@ -87,7 +92,6 @@ def observe_telemetry(device_id: str, payload: dict, max_bat: int = 1) -> None:
             "out_power",
             "pv_tot_power",
             "tot_bat_soc_pct",
-            "wifi_signal_strength",
         ):
             value = payload.get(key)
             if value is not None:

@@ -203,6 +203,7 @@ class Client:
     on_config_read_response = None
     on_config_register_value = None
     on_smart_meter = None
+    on_ready = None
 
     _client: mqtt.Client
     _forward_mqtt_config: model.MQTTConfig
@@ -232,6 +233,8 @@ class Client:
         self._client.on_connect = self.__on_connect
         self._client.on_connect_fail = self.__on_connect_fail
         self._client.on_subscribe = self.__on_subscribe
+        self._client.on_disconnect = self.__on_disconnect
+        self._config_read_ready = threading.Event()
         self._forward_mqtt_config = forward_mqtt
         self._forward_clients: dict[str, mqtt.Client] = {}
         self._forward_ready: dict[str, threading.Event] = {}
@@ -265,6 +268,7 @@ class Client:
 
     def stop(self):
         LOG.debug("GroBro: Stop")
+        self._config_read_ready.clear()
         with self._forward_lifecycle_lock:
             if self._forward_stopped:
                 return
@@ -426,15 +430,26 @@ class Client:
                         if not pending:
                             self._pending_config_writes.pop(device_id, None)
 
+    def config_reads_ready(self) -> bool:
+        """Reads need both a connection and the subscription for their replies."""
+        return self._config_read_ready.is_set() and self._client.is_connected()
+
+    def __on_disconnect(self, client, userdata, disconnect_flags, reason_code, properties):
+        self._config_read_ready.clear()
+
     def __on_subscribe(self, client, userdata, mid, reason_codes, properties):
         if self._forward_stopped:
             return
         if subscription_rejected(reason_codes):
+            self._config_read_ready.clear()
             if not getattr(self, "_subscription_failure_logged", False):
                 LOG.error("Growatt MQTT broker rejected a subscription; check broker permissions")
             self._subscription_failure_logged = True
         else:
             self._subscription_failure_logged = False
+            self._config_read_ready.set()
+            if self.on_ready:
+                self.on_ready()
 
     def __on_connect_fail(self, client, userdata):
         if self._forward_stopped or getattr(self, "_connection_failure_logged", False):
@@ -443,6 +458,7 @@ class Client:
         LOG.error("Growatt MQTT connection failed; automatic reconnection remains active")
 
     def __on_connect(self, client, userdata, flags, reason_code, properties):
+        self._config_read_ready.clear()
         if self._forward_stopped:
             return
         if getattr(reason_code, "is_failure", False):
@@ -645,9 +661,6 @@ class Client:
                                         wifi_signal=str(value),
                                     )
                                     self.on_config(mapped_neo, neo_wifi_config)
-                                # A zero/positive R76 response is not a valid dBm
-                                # reading. Allow the next live packet to retry the
-                                # probe instead of treating the placeholder as final.
                         except Exception as exc:
                             LOG.warning("Could not update device metadata for %s register %s (%s)", cfg["device_id"], register_no, type(exc).__name__)
 

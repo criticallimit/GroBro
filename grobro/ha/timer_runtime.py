@@ -45,7 +45,7 @@ def cancel_runtime_timers(client) -> None:
         timer_map.clear()
 
     getattr(client, "_device_last_seen", {}).clear()
-    for state in ("_config_read_queues", "_config_read_inflight", "_read_all_active"):
+    for state in ("_config_read_queues", "_config_read_inflight", "_read_all_active", "_config_refresh_started"):
         getattr(client, state, {}).clear()
 
     time_sync_timer = getattr(client, "_time_sync_timer", None)

@@ -2,6 +2,9 @@ from grobro.ha_bridge import wire_clients
 
 
 class _HAClient:
+    def handle_source_ready(self):
+        pass
+
     def publish_config_register_value(self, *args, **kwargs):
         return args
 
@@ -22,6 +25,9 @@ class _HAClient:
 
 
 class _GroBroClient:
+    def config_reads_ready(self):
+        return True
+
     def send_command(self, value):
         return value
 
@@ -50,4 +56,6 @@ def test_wire_clients_connects_both_directions():
     )
     assert ha_client.on_command == grobro_client.send_command
     assert ha_client.on_config_read == grobro_client.send_config_read_message
+    assert ha_client.config_reads_ready == grobro_client.config_reads_ready
+    assert grobro_client.on_ready == ha_client.handle_source_ready
     assert ha_client.on_config_command("dev", 257, 400) == ("dev", 257, 400)
