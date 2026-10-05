@@ -276,6 +276,51 @@ class Client:
 
     # ------------------- Config Handling -------------------
 
+    def __request_wifi_signal_if_missing(self, device_id: str) -> None:
+        """Request Wi-Fi RSSI generically for any family that exposes register 76."""
+        registers = get_known_registers(device_id)
+        if not registers:
+            return
+        wifi_register = registers.config_registers.get("wifi_signal_strength")
+        if not wifi_register or not getattr(wifi_register, "growatt", None):
+            return
+
+        config = self._config_cache.get(device_id)
+        value = getattr(config, "wifi_signal", None) if config else None
+        try:
+            signal = int(str(value).strip())
+        except (TypeError, ValueError):
+            signal = None
+        if signal is not None and -120 <= signal < 0:
+            return
+
+        if not callable(getattr(self, "on_config_read", None)):
+            return
+
+        probes = getattr(self, "_wifi_signal_probe_times", None)
+        if probes is None:
+            probes = {}
+            self._wifi_signal_probe_times = probes
+
+        now = time.monotonic()
+        if now - probes.get(device_id, 0.0) < 10.0:
+            return
+
+        try:
+            result = self.on_config_read(
+                device_id,
+                wifi_register.growatt.register_no,
+            )
+        except Exception as exc:
+            LOG.debug(
+                "Could not request Wi-Fi signal for %s (%s)",
+                device_id,
+                type(exc).__name__,
+            )
+            return
+        if publish_succeeded(result):
+            probes[device_id] = now
+
     @guard_runtime
     def set_config(self, device_id: str, config: model.DeviceConfig):
         from grobro.ha.config_runtime import _merge_config, persisted_runtime_data, discovery_config_data, load_persisted_config, persist_device_config
@@ -314,6 +359,7 @@ class Client:
             LOG.debug("Device metadata unchanged for %s; skipping config save", device_id)
 
         self._config_cache[device_id] = effective_config
+        self.__request_wifi_signal_if_missing(device_id)
 
         if not discovery_changed and device_id in self._discovery_cache:
             LOG.debug("No discovery-relevant config change for %s", device_id)
@@ -455,6 +501,7 @@ class Client:
         live_config = self._config_cache.get(device_id)
         if live_config is not None:
             observe_wifi_signal(device_id, getattr(live_config, "wifi_signal", None))
+        self.__request_wifi_signal_if_missing(device_id)
 
         if _supports_combined_firmware(device_id):
             config = self._config_cache.get(device_id)
