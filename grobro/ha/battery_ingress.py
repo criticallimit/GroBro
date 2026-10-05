@@ -178,6 +178,7 @@ _INDEX_HTML = r"""<!doctype html>
       background:linear-gradient(180deg,#0e1d2b 0%,#0b1825 100%);
       box-shadow:0 12px 28px rgba(0,0,0,.16);
     }
+    #tab-overview > .dashboard-panel:first-child { margin-top:0; }
     .dashboard-section-title {
       display:flex; align-items:flex-start; justify-content:space-between; gap:12px;
       margin-bottom:9px;
