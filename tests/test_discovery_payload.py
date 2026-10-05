@@ -25,6 +25,9 @@ def test_discovery_builder_preserves_definitions_and_entity_identity(family):
     assert first["availability_mode"] == "all"
     assert first["cmps"][f"grobro_{device}_serial"]["state_topic"] == f"ha-test/grobro/{device}/serial"
     assert first["cmps"][f"grobro_{device}_restart_datalogger"]["command_topic"] == f"ha-test/config/grobro/{device}/32/set"
+    for component in first["cmps"].values():
+        if component.get("device_class") == "battery":
+            assert component.get("icon") != "mdi:battery"
     assert all(key == component["unique_id"] for key, component in first["cmps"].items())
     first["cmps"].clear()
     second = build_discovery_payload(device, family.registers, metadata, **options)
