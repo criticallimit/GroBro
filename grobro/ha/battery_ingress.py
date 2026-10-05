@@ -233,19 +233,28 @@ _INDEX_HTML = r"""<!doctype html>
     .overview-grid { display:grid; grid-template-columns:minmax(0,1.15fr) minmax(340px,.85fr); gap:14px; }
     .battery-cards { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
     .battery-card {
-      display:grid; grid-template-columns:34px minmax(0,1fr); gap:10px; align-items:center;
-      min-height:70px; padding:11px 12px;
-      border:1px solid #1e3e55; border-radius:11px; background:#0d2031;
+      display:grid; grid-template-columns:42px minmax(0,1fr) auto; gap:12px; align-items:center;
+      min-height:88px; padding:13px 14px;
+      border:1px solid #1e3e55; border-radius:12px;
+      background:linear-gradient(180deg,#10263a,#0c1e2e);
     }
     .battery-icon {
-      position:relative; width:22px; height:38px; margin:auto;
-      border:2px solid #7e97a9; border-radius:4px; background:#08131c;
+      position:relative; width:25px; height:43px; margin:auto;
+      border:2px solid #7e97a9; border-radius:5px; background:#08131c; overflow:hidden;
     }
-    .battery-icon::before { content:""; position:absolute; width:8px; height:3px; left:5px; top:-5px; border-radius:2px 2px 0 0; background:#7e97a9; }
-    .battery-icon::after { content:""; position:absolute; inset:4px; border-radius:2px; background:linear-gradient(180deg,#6ae294,#2dbc6a); }
-    .battery-card strong { display:block; font-size:12px; }
+    .battery-icon::before { content:""; position:absolute; width:9px; height:4px; left:6px; top:-6px; border-radius:2px 2px 0 0; background:#7e97a9; }
+    .battery-fill {
+      position:absolute; left:3px; right:3px; bottom:3px; min-height:2px;
+      border-radius:2px; background:linear-gradient(180deg,#72e7a0,#2fbe6d);
+      transition:height .25s ease;
+    }
+    .battery-card strong { display:block; font-size:13px; }
     .battery-card .muted { font-size:10px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .battery-assignment { margin-top:4px; color:#73dca0; font-size:10px; }
+    .battery-meter { margin-top:8px; height:6px; overflow:hidden; border-radius:999px; background:#07131d; border:1px solid #1a394f; }
+    .battery-meter > span { display:block; height:100%; border-radius:999px; background:linear-gradient(90deg,#2fbd70,#74e39d); transition:width .25s ease; }
+    .battery-value { min-width:54px; text-align:right; font-size:20px; font-weight:800; letter-spacing:-.03em; color:#eaf8ef; }
+    .battery-value small { display:block; margin-top:2px; font-size:9px; font-weight:650; letter-spacing:.04em; color:var(--muted); text-transform:uppercase; }
     .overview-log {
       margin:0; height:198px; min-height:198px; max-height:198px; overflow:auto;
       white-space:pre; background:#050d14; border:1px solid #1d3a50; border-radius:10px;
@@ -790,33 +799,94 @@ function overviewLogicalSlot(device,entry){
   return {slot:Number(entry.physical_slot)||null,kind:"physical"};
 }
 
+function overviewSerialForSlot(device,slot){
+  if(slot===1)return device.device_id;
+  const detected=Array.isArray(device.detected)?device.detected:[];
+  for(const entry of detected){
+    const logical=overviewLogicalSlot(device,entry);
+    if(logical.slot===slot)return entry.serial;
+  }
+  return "";
+}
+
+function clampSoc(value){
+  const number=Number(value);
+  if(!Number.isFinite(number))return null;
+  return Math.max(0,Math.min(100,number));
+}
+
 function renderOverviewBatteries(){
   const host=document.getElementById("overview-battery-cards");host.replaceChildren();
-  const devices=(batteryState&&Array.isArray(batteryState.devices))?batteryState.devices:[];
+  const inventory=(batteryState&&Array.isArray(batteryState.inventory))?batteryState.inventory:[];
+  const positionDevices=(batteryState&&Array.isArray(batteryState.devices))?batteryState.devices:[];
+  const noahDevices=inventory.filter(item=>String(item.family||"").toLowerCase()==="noah");
   let count=0;
-  for(const device of devices){
-    const detected=Array.isArray(device.detected)?device.detected:[];
-    for(const entry of detected){
+
+  for(const item of noahDevices){
+    const positionDevice=positionDevices.find(device=>device.device_id===item.device_id)||{
+      device_id:item.device_id,detected:[],automatic:{},manual:{}
+    };
+    const liveBatteries=Array.isArray(item.batteries)?item.batteries:[];
+    for(const battery of liveBatteries){
+      const slot=Number(battery.slot);
+      if(!Number.isInteger(slot)||slot<1||slot>4)continue;
       count++;
-      const logical=overviewLogicalSlot(device,entry);
+
+      const soc=clampSoc(battery.soc);
+      const serial=overviewSerialForSlot(positionDevice,slot);
       const card=document.createElement("div");card.className="battery-card";
+
       const icon=document.createElement("div");icon.className="battery-icon";
+      const fill=document.createElement("span");fill.className="battery-fill";
+      fill.style.height=(soc===null?8:soc)+"%";icon.appendChild(fill);
+
       const body=document.createElement("div");
       const title=document.createElement("strong");
-      title.textContent=(logical.slot?"Bat"+logical.slot:"Battery")+" · "+device.device_id;
-      const serial=document.createElement("div");serial.className="muted";serial.textContent=entry.serial;
+      title.textContent=slot===1
+        ? "Bat1 · "+l({de:"NOAH Master",en:"NOAH master",fr:"NOAH maître",es:"NOAH maestro",nl:"NOAH master"})
+        : "Bat"+slot;
+
+      const serialLine=document.createElement("div");serialLine.className="muted";
+      serialLine.textContent=serial||item.device_id;
+
       const assignment=document.createElement("div");assignment.className="battery-assignment";
-      assignment.textContent=logical.kind==="manual"
-        ? l({de:"Manuell zugeordnet",en:"Manually assigned",fr:"Affectation manuelle",es:"Asignación manual",nl:"Handmatig toegewezen"})
-        : logical.kind==="auto"
-          ? l({de:"Stabil automatisch zugeordnet",en:"Stable automatic assignment",fr:"Affectation automatique stable",es:"Asignación automática estable",nl:"Stabiele automatische toewijzing"})
-          : l({de:"Physisch erkannt",en:"Detected physically",fr:"Détectée physiquement",es:"Detectada físicamente",nl:"Fysiek gedetecteerd"});
-      body.append(title,serial,assignment);card.append(icon,body);host.appendChild(card);
+      if(slot===1){
+        assignment.textContent=l({de:"Master-Batterie",en:"Master battery",fr:"Batterie maître",es:"Batería maestra",nl:"Masterbatterij"});
+      }else{
+        const detected=(positionDevice.detected||[]).find(entry=>entry.serial===serial);
+        const logical=detected?overviewLogicalSlot(positionDevice,detected):{kind:"physical"};
+        assignment.textContent=logical.kind==="manual"
+          ? l({de:"Manuell zugeordnet",en:"Manually assigned",fr:"Affectation manuelle",es:"Asignación manual",nl:"Handmatig toegewezen"})
+          : logical.kind==="auto"
+            ? l({de:"Stabil automatisch zugeordnet",en:"Stable automatic assignment",fr:"Affectation automatique stable",es:"Asignación automática estable",nl:"Stabiele automatische toewijzing"})
+            : l({de:"Live erkannt",en:"Detected live",fr:"Détectée en direct",es:"Detectada en vivo",nl:"Live gedetecteerd"});
+      }
+
+      const meter=document.createElement("div");meter.className="battery-meter";
+      const meterFill=document.createElement("span");meterFill.style.width=(soc===null?0:soc)+"%";meter.appendChild(meterFill);
+      body.append(title,serialLine,assignment,meter);
+
+      const value=document.createElement("div");value.className="battery-value";
+      value.textContent=soc===null?"–":Math.round(soc)+"%";
+      const detail=document.createElement("small");
+      detail.textContent=battery.temperature===undefined||battery.temperature===null
+        ? l({de:"Live SoC",en:"Live SoC",fr:"SoC en direct",es:"SoC en vivo",nl:"Live SoC"})
+        : Number(battery.temperature).toFixed(1)+" °C";
+      value.appendChild(detail);
+
+      card.append(icon,body,value);host.appendChild(card);
     }
   }
+
   if(!count){
     const empty=document.createElement("div");empty.className="overview-empty";
-    empty.textContent=l({de:"Noch keine Batterie erkannt.",en:"No battery detected yet.",fr:"Aucune batterie détectée.",es:"Aún no se detectó ninguna batería.",nl:"Nog geen batterij gedetecteerd."});
+    empty.textContent=l({
+      de:"Noch keine NOAH-Batteriedaten empfangen. Bat1 ist der NOAH Master; Bat2 bis Bat4 erscheinen automatisch, sobald sie vorhanden sind.",
+      en:"No NOAH battery telemetry received yet. Bat1 is the NOAH master; Bat2 to Bat4 appear automatically when present.",
+      fr:"Aucune télémétrie de batterie NOAH reçue. Bat1 est le maître NOAH ; Bat2 à Bat4 apparaissent automatiquement lorsqu'elles sont présentes.",
+      es:"Aún no se recibió telemetría de batería NOAH. Bat1 es el maestro NOAH; Bat2 a Bat4 aparecen automáticamente cuando están presentes.",
+      nl:"Nog geen NOAH-batterijtelemetrie ontvangen. Bat1 is de NOAH-master; Bat2 tot Bat4 verschijnen automatisch zodra ze aanwezig zijn."
+    });
     host.appendChild(empty);
   }
 }
@@ -954,6 +1024,13 @@ async function loadLogs(){
 document.getElementById("log-refresh").addEventListener("click",()=>loadLogs().catch(showError));
 function showError(error){showMessage("config-message",error.message||String(error),"error");}
 loadConfig().then(loadBatteries).then(loadOverviewLogs).catch(showError);
+setInterval(()=>{
+  const overview=document.getElementById("tab-overview");
+  if(overview&&overview.classList.contains("active")){
+    loadBatteries().catch(()=>{});
+    loadOverviewLogs().catch(()=>{});
+  }
+},5000);
 </script>
 </body>
 </html>
