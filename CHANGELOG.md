@@ -1,15 +1,3 @@
-# Better GroBro 3.2.1 — User interface update
-
-## User-relevant changes
-
-- Reworked the built-in Ingress overview to match the compact Better GroBro dashboard layout.
-- Added live Bat1–Bat4 state of charge and battery temperature display for NOAH systems.
-- Added live Wi-Fi signal strength display for detected devices, including NEO gateway-to-inverter propagation.
-- Improved device icon proportions, text readability and consistent card alignment.
-- Existing configuration, battery assignment, MQTT, diagnostics and log functions remain available.
-
----
-
 # Better GroBro 3.2.0 — Differences from robertzaage/GroBro
 
 Comparison baseline: `robertzaage/GroBro` main at `e4d59b20ba472853ae6ec0b7a17cf15cd774cb23` (2026-09-18).
