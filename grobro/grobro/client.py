@@ -635,6 +635,14 @@ class Client:
                         )
                         try:
                             self.on_config(cfg["device_id"], metadata_config)
+                            if metadata_field == "wifi_signal":
+                                mapped_neo = self._ptq_for_raq.get(cfg["device_id"])
+                                if mapped_neo:
+                                    neo_wifi_config = model.DeviceConfig(
+                                        serial_number=mapped_neo,
+                                        wifi_signal=str(value),
+                                    )
+                                    self.on_config(mapped_neo, neo_wifi_config)
                         except Exception as exc:
                             LOG.warning("Could not update device metadata for %s register %s (%s)", cfg["device_id"], register_no, type(exc).__name__)
 
