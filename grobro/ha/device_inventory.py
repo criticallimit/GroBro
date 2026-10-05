@@ -47,6 +47,7 @@ def observe_wifi_signal(device_id: str, value) -> None:
                 "display_name": family.display_name if family else "UNKNOWN",
             }
         item["wifi_signal_strength"] = signal
+        item["wifi_signal"] = signal
 
 
 def observe_telemetry(device_id: str, payload: dict, max_bat: int = 1) -> None:
