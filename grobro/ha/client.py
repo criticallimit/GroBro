@@ -276,51 +276,6 @@ class Client:
 
     # ------------------- Config Handling -------------------
 
-    def __request_wifi_signal_if_missing(self, device_id: str) -> None:
-        """Request Wi-Fi RSSI generically for any family that exposes register 76."""
-        registers = get_known_registers(device_id)
-        if not registers:
-            return
-        wifi_register = registers.config_registers.get("wifi_signal_strength")
-        if not wifi_register or not getattr(wifi_register, "growatt", None):
-            return
-
-        config = self._config_cache.get(device_id)
-        value = getattr(config, "wifi_signal", None) if config else None
-        try:
-            signal = int(str(value).strip())
-        except (TypeError, ValueError):
-            signal = None
-        if signal is not None and -120 <= signal < 0:
-            return
-
-        if not callable(getattr(self, "on_config_read", None)):
-            return
-
-        probes = getattr(self, "_wifi_signal_probe_times", None)
-        if probes is None:
-            probes = {}
-            self._wifi_signal_probe_times = probes
-
-        now = time.monotonic()
-        if now - probes.get(device_id, 0.0) < 10.0:
-            return
-
-        try:
-            result = self.on_config_read(
-                device_id,
-                wifi_register.growatt.register_no,
-            )
-        except Exception as exc:
-            LOG.debug(
-                "Could not request Wi-Fi signal for %s (%s)",
-                device_id,
-                type(exc).__name__,
-            )
-            return
-        if publish_succeeded(result):
-            probes[device_id] = now
-
     @guard_runtime
     def set_config(self, device_id: str, config: model.DeviceConfig):
         from grobro.ha.config_runtime import _merge_config, persisted_runtime_data, discovery_config_data, load_persisted_config, persist_device_config
@@ -359,8 +314,6 @@ class Client:
             LOG.debug("Device metadata unchanged for %s; skipping config save", device_id)
 
         self._config_cache[device_id] = effective_config
-        self.__request_wifi_signal_if_missing(device_id)
-
         if not discovery_changed and device_id in self._discovery_cache:
             LOG.debug("No discovery-relevant config change for %s", device_id)
             return
@@ -501,8 +454,6 @@ class Client:
         live_config = self._config_cache.get(device_id)
         if live_config is not None:
             observe_wifi_signal(device_id, getattr(live_config, "wifi_signal", None))
-        self.__request_wifi_signal_if_missing(device_id)
-
         if _supports_combined_firmware(device_id):
             config = self._config_cache.get(device_id)
             datalogger_version = getattr(config, "sw_version", None) if config else None
@@ -653,6 +604,36 @@ class Client:
             cache[device_id] = payload
         return result
 
+    def __queue_all_config_reads(self, device_id: str, *, delay: float = 0.0) -> bool:
+        """Queue the device's full config-register set using the standard read sequence."""
+        known_registers = get_known_registers(device_id)
+        if not self.on_config_read or not known_registers or not known_registers.config_registers:
+            return False
+
+        with self._config_read_lock:
+            active = getattr(self, "_read_all_active", None)
+            if active is None:
+                active = set()
+                self._read_all_active = active
+            if device_id in active or device_id in self._config_read_inflight:
+                return False
+
+            queue = self._config_read_queues.setdefault(device_id, deque())
+            if queue:
+                return False
+
+            active.add(device_id)
+            for cfg in known_registers.config_registers.values():
+                queue.append(cfg.growatt.register_no)
+
+        self.__start_config_read_timer(
+            delay,
+            self.__kickoff_next_config_read,
+            self._read_all_start_timers,
+            device_id,
+        )
+        return True
+
     def __reset_config_read_state(self) -> None:
         """Cancel an interrupted Read All/config-read cycle.
 
@@ -691,11 +672,11 @@ class Client:
         # stale values looking current. Fresh device traffic sets them online.
         self.__publish_offline_devices()
 
-        # Request missing Wi-Fi RSSI for every known device through the
-        # same generic config-register path. This avoids waiting for the first
-        # telemetry packet of a particular family.
+        # Refresh all config registers for every known device through the
+        # same generic queue used by Read All. This includes Wi-Fi RSSI (R76)
+        # without introducing any device-family-specific request.
         for known_device_id in tuple(self._config_cache):
-            self.__request_wifi_signal_if_missing(known_device_id)
+            self.__queue_all_config_reads(known_device_id, delay=0.0)
 
         from grobro.ha.neo_power_runtime import schedule_known_neo_state_probe
         schedule_known_neo_state_probe(self, delay=0.5)
@@ -815,19 +796,10 @@ class Client:
                             )
                         )
 
-                    # Queue config reads
-                    if self.on_config_read and known_registers.config_registers:
-                        with self._config_read_lock:
-                            q = self._config_read_queues.setdefault(device_id, deque())
-                            for cfg in known_registers.config_registers.values():
-                                q.append(cfg.growatt.register_no)
-
-                        # give the datalogger time to answer modbus reads
-                        self.__start_config_read_timer(
-                            3.0, self.__kickoff_next_config_read,
-                            self._read_all_start_timers, device_id,
-                        )
-                    else:
+                    # Queue all config reads through the same generic path.
+                    with self._config_read_lock:
+                        self._read_all_active.discard(device_id)
+                    if not self.__queue_all_config_reads(device_id, delay=3.0):
                         with self._config_read_lock:
                             self._read_all_active.discard(device_id)
                 except Exception:
