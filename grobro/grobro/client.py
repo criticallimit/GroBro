@@ -645,6 +645,18 @@ class Client:
                                         wifi_signal=str(value),
                                     )
                                     self.on_config(mapped_neo, neo_wifi_config)
+                                # A zero/positive R76 response is not a valid dBm
+                                # reading. Allow the next live packet to retry the
+                                # probe instead of treating the placeholder as final.
+                                try:
+                                    numeric_signal = int(value)
+                                except (TypeError, ValueError):
+                                    numeric_signal = 0
+                                if numeric_signal >= 0:
+                                    requested = getattr(self, "_wifi_signal_probe_requested", set())
+                                    requested.discard(cfg["device_id"])
+                                    if mapped_neo:
+                                        requested.discard(mapped_neo)
                         except Exception as exc:
                             LOG.warning("Could not update device metadata for %s register %s (%s)", cfg["device_id"], register_no, type(exc).__name__)
 
