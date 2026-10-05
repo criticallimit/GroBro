@@ -174,6 +174,92 @@ _INDEX_HTML = r"""<!doctype html>
     #summary-state { color:var(--ok); }
     #summary-devices { margin-top:9px; }
 
+    .overview-hero {
+      display:flex; align-items:flex-start; justify-content:space-between; gap:20px;
+      padding:22px 24px; margin-bottom:14px;
+      border:1px solid var(--border-soft); border-radius:14px;
+      background:
+        radial-gradient(circle at 85% 0%,rgba(24,183,255,.14),transparent 32%),
+        linear-gradient(135deg,#11283b 0%,#0c1d2c 56%,#0a1825 100%);
+      box-shadow:0 14px 36px rgba(0,0,0,.20);
+    }
+    .overview-hero h2 { margin:4px 0 5px; font-size:24px; }
+    .eyebrow { color:#6fd8ff; font-size:10px; font-weight:800; letter-spacing:.16em; }
+    .overview-status {
+      display:flex; align-items:center; gap:8px; flex:0 0 auto;
+      min-height:34px; padding:6px 11px;
+      border:1px solid #27506a; border-radius:999px; background:#0a1c2a;
+      color:#d8e9f5; font-size:12px; font-weight:700;
+    }
+    .status-dot { width:8px; height:8px; border-radius:50%; background:#6c7b86; box-shadow:0 0 0 3px rgba(108,123,134,.12); }
+    .status-dot.ok { background:var(--ok); box-shadow:0 0 0 3px rgba(69,212,131,.12); }
+    .overview-summary { margin-bottom:14px; }
+    .overview-section {
+      position:relative; overflow:hidden;
+      margin-top:14px; padding:18px;
+      border:1px solid var(--border-soft); border-radius:14px;
+      background:linear-gradient(180deg,rgba(17,34,50,.96),rgba(12,27,41,.96));
+      box-shadow:0 12px 30px rgba(0,0,0,.16);
+    }
+    .overview-section.compact { padding:12px; }
+    .overview-section-head {
+      display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:14px;
+    }
+    .overview-section-head h2 { margin-bottom:2px; }
+    .overview-section-head p { font-size:12px; }
+    .device-cards {
+      display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px;
+    }
+    .device-card {
+      min-width:0; display:grid; grid-template-columns:46px minmax(0,1fr); gap:12px;
+      align-items:center; min-height:92px; padding:13px;
+      border:1px solid #1f4058; border-radius:12px;
+      background:linear-gradient(180deg,#10263a,#0c1e2e);
+    }
+    .device-icon {
+      width:46px; height:58px; display:grid; place-items:center;
+      border-radius:8px; border:1px solid #b7c7d3;
+      background:linear-gradient(145deg,#f4f7f8,#cbd4da);
+      color:#263743; font-weight:900; font-size:11px;
+      box-shadow:0 7px 16px rgba(0,0,0,.22);
+    }
+    .device-card strong { display:block; font-size:14px; }
+    .device-serial {
+      margin-top:3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+      color:#91a8ba; font:11px/1.35 ui-monospace,SFMono-Regular,Consolas,monospace;
+    }
+    .online-line { display:flex; align-items:center; gap:6px; margin-top:7px; color:#a8dabc; font-size:11px; }
+    .online-line::before { content:""; width:7px; height:7px; border-radius:50%; background:var(--ok); box-shadow:0 0 0 3px rgba(69,212,131,.10); }
+    .overview-grid { display:grid; grid-template-columns:minmax(0,1.15fr) minmax(340px,.85fr); gap:14px; }
+    .battery-cards { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+    .battery-card {
+      display:grid; grid-template-columns:34px minmax(0,1fr); gap:10px; align-items:center;
+      min-height:70px; padding:11px 12px;
+      border:1px solid #1e3e55; border-radius:11px; background:#0d2031;
+    }
+    .battery-icon {
+      position:relative; width:22px; height:38px; margin:auto;
+      border:2px solid #7e97a9; border-radius:4px; background:#08131c;
+    }
+    .battery-icon::before { content:""; position:absolute; width:8px; height:3px; left:5px; top:-5px; border-radius:2px 2px 0 0; background:#7e97a9; }
+    .battery-icon::after { content:""; position:absolute; inset:4px; border-radius:2px; background:linear-gradient(180deg,#6ae294,#2dbc6a); }
+    .battery-card strong { display:block; font-size:12px; }
+    .battery-card .muted { font-size:10px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .battery-assignment { margin-top:4px; color:#73dca0; font-size:10px; }
+    .overview-log {
+      margin:0; height:198px; min-height:198px; max-height:198px; overflow:auto;
+      white-space:pre; background:#050d14; border:1px solid #1d3a50; border-radius:10px;
+      padding:12px; color:#bfd9e9;
+      font:11px/1.48 ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace;
+    }
+    .overview-empty {
+      grid-column:1/-1; padding:22px; border:1px dashed #27475e; border-radius:11px;
+      color:var(--muted); text-align:center; background:rgba(5,13,20,.24);
+    }
+    .overview-link { min-height:34px; padding:6px 10px; font-size:11px; }
+    .quick-actions { display:flex; gap:8px; flex-wrap:wrap; }
+    .quick-actions button { min-height:34px; padding:6px 11px; font-size:11px; }
+
     .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px 18px; }
     .field { min-width:0; }
     .field.full { grid-column:1/-1; }
@@ -256,6 +342,8 @@ _INDEX_HTML = r"""<!doctype html>
       main { grid-template-columns:180px minmax(0,1fr); gap:14px; padding:14px; }
       .summary { grid-template-columns:1fr; }
       .metric { min-height:auto; }
+      .device-cards { grid-template-columns:repeat(2,minmax(0,1fr)); }
+      .overview-grid { grid-template-columns:1fr; }
     }
     @media (max-width:700px) {
       main { display:block; padding:10px; }
@@ -268,7 +356,12 @@ _INDEX_HTML = r"""<!doctype html>
       }
       .tabs::-webkit-scrollbar { display:none; }
       .tabs button { width:auto; flex:0 0 auto; padding-left:36px; }
-      .grid,.battery-row { grid-template-columns:1fr; }
+      .grid,.battery-row,.device-cards,.battery-cards { grid-template-columns:1fr; }
+      .overview-hero { flex-direction:column; padding:17px; }
+      .overview-hero h2 { font-size:20px; }
+      .overview-status { align-self:flex-start; }
+      .overview-section-head { flex-direction:column; }
+      .overview-link { width:100%; }
       .actions button,.header button { width:100%; }
       .header { align-items:stretch; }
       .header > div:first-child { align-self:center; }
@@ -297,14 +390,69 @@ _INDEX_HTML = r"""<!doctype html>
   </nav>
 
   <section id="tab-overview" class="tab active">
-    <div class="summary">
+    <div class="overview-hero">
+      <div>
+        <div class="eyebrow">BETTER GROBRO</div>
+        <h2>GroBro, optimized for Home Assistant.</h2>
+        <p class="muted">Lokale Growatt-Anbindung, stabile Batterie-Zuordnung und Home-Assistant-Integration auf einen Blick.</p>
+      </div>
+      <div class="overview-status">
+        <span id="overview-status-dot" class="status-dot"></span>
+        <span id="overview-status-text">–</span>
+      </div>
+    </div>
+
+    <div class="summary overview-summary">
       <div class="metric"><span class="muted">Version</span><strong id="summary-version">–</strong></div>
       <div class="metric"><span class="muted">Add-on Status</span><strong id="summary-state">–</strong></div>
-      <div class="metric"><span class="muted">Erkannte Geräte</span><div id="summary-devices" class="serials"><span class="muted">–</span></div></div>
+      <div class="metric"><span class="muted">Erkannte Geräte</span><strong id="summary-device-count">0</strong></div>
     </div>
-    <div class="card">
-      <h2>Empfohlene Konfiguration</h2>
-      <p>Verwende bevorzugt diese Better-GroBro-Oberfläche. Sie bearbeitet direkt die offiziellen Home-Assistant-Add-on-Optionen; der native Konfiguration-Tab bleibt als Fallback verfügbar und verwendet dieselben Werte.</p>
+
+    <div class="overview-section">
+      <div class="overview-section-head">
+        <div>
+          <h2>Erkannte Geräte</h2>
+          <p class="muted">Live erkannte Growatt-Geräte dieser Sitzung.</p>
+        </div>
+      </div>
+      <div id="overview-device-cards" class="device-cards">
+        <div class="overview-empty">Noch keine Live-Telemetrie.</div>
+      </div>
+      <div id="summary-devices" class="serials" hidden></div>
+    </div>
+
+    <div class="overview-grid">
+      <div class="overview-section">
+        <div class="overview-section-head">
+          <div>
+            <h2>Batterien</h2>
+            <p class="muted">Aktuelle Zuordnung der erkannten Batterieseriennummern.</p>
+          </div>
+          <button type="button" class="secondary overview-link" data-go-tab="batteries">Batterien öffnen</button>
+        </div>
+        <div id="overview-battery-cards" class="battery-cards">
+          <div class="overview-empty">Noch keine Batterie erkannt.</div>
+        </div>
+      </div>
+
+      <div class="overview-section">
+        <div class="overview-section-head">
+          <div>
+            <h2>Protokoll</h2>
+            <p class="muted">Letzte Einträge des aktuell laufenden Better-GroBro-Prozesses.</p>
+          </div>
+          <button type="button" class="secondary overview-link" data-go-tab="logs">Protokoll öffnen</button>
+        </div>
+        <pre id="overview-log-output" class="overview-log">Protokoll wird geladen…</pre>
+      </div>
+    </div>
+
+    <div class="overview-section compact">
+      <div class="quick-actions">
+        <button type="button" class="secondary" data-go-tab="mqtt">MQTT</button>
+        <button type="button" class="secondary" data-go-tab="ha">Home Assistant</button>
+        <button type="button" class="secondary" data-go-tab="diagnostics">Diagnose</button>
+      </div>
     </div>
   </section>
 
@@ -607,6 +755,88 @@ function visibleAssignmentSlots(device){
   const maxBat=configuredBatteryCount(device);
   return [2,3,4].filter(slot=>slot<=maxBat);
 }
+
+function renderOverviewDevices(){
+  const host=document.getElementById("overview-device-cards");
+  const inventory=(batteryState&&Array.isArray(batteryState.inventory))?batteryState.inventory:[];
+  host.replaceChildren();
+  document.getElementById("summary-device-count").textContent=String(inventory.length);
+  if(!inventory.length){
+    const empty=document.createElement("div");empty.className="overview-empty";
+    empty.textContent=l({de:"Noch keine Live-Telemetrie.",en:"No live telemetry yet.",fr:"Pas encore de télémétrie en direct.",es:"Aún no hay telemetría en vivo.",nl:"Nog geen live-telemetrie."});
+    host.appendChild(empty);return;
+  }
+  for(const item of inventory){
+    const card=document.createElement("div");card.className="device-card";
+    const icon=document.createElement("div");icon.className="device-icon";
+    icon.textContent=(item.display_name||"?").slice(0,5);
+    const body=document.createElement("div");
+    const name=document.createElement("strong");name.textContent=item.display_name||"UNKNOWN";
+    const serial=document.createElement("div");serial.className="device-serial";serial.textContent=item.device_id||"";
+    const online=document.createElement("div");online.className="online-line";
+    online.textContent=l({de:"Live erkannt",en:"Detected live",fr:"Détecté en direct",es:"Detectado en vivo",nl:"Live gedetecteerd"});
+    body.append(name,serial,online);card.append(icon,body);host.appendChild(card);
+  }
+}
+
+function overviewLogicalSlot(device,entry){
+  const serial=entry.serial;
+  for(const slot of [2,3,4]){
+    if(device.manual&&device.manual[String(slot)]===serial)return {slot,kind:"manual"};
+  }
+  for(const slot of [2,3,4]){
+    if(device.automatic&&device.automatic[String(slot)]===serial)return {slot,kind:"auto"};
+  }
+  return {slot:Number(entry.physical_slot)||null,kind:"physical"};
+}
+
+function renderOverviewBatteries(){
+  const host=document.getElementById("overview-battery-cards");host.replaceChildren();
+  const devices=(batteryState&&Array.isArray(batteryState.devices))?batteryState.devices:[];
+  let count=0;
+  for(const device of devices){
+    const detected=Array.isArray(device.detected)?device.detected:[];
+    for(const entry of detected){
+      count++;
+      const logical=overviewLogicalSlot(device,entry);
+      const card=document.createElement("div");card.className="battery-card";
+      const icon=document.createElement("div");icon.className="battery-icon";
+      const body=document.createElement("div");
+      const title=document.createElement("strong");
+      title.textContent=(logical.slot?"Bat"+logical.slot:"Battery")+" · "+device.device_id;
+      const serial=document.createElement("div");serial.className="muted";serial.textContent=entry.serial;
+      const assignment=document.createElement("div");assignment.className="battery-assignment";
+      assignment.textContent=logical.kind==="manual"
+        ? l({de:"Manuell zugeordnet",en:"Manually assigned",fr:"Affectation manuelle",es:"Asignación manual",nl:"Handmatig toegewezen"})
+        : logical.kind==="auto"
+          ? l({de:"Stabil automatisch zugeordnet",en:"Stable automatic assignment",fr:"Affectation automatique stable",es:"Asignación automática estable",nl:"Stabiele automatische toewijzing"})
+          : l({de:"Physisch erkannt",en:"Detected physically",fr:"Détectée physiquement",es:"Detectada físicamente",nl:"Fysiek gedetecteerd"});
+      body.append(title,serial,assignment);card.append(icon,body);host.appendChild(card);
+    }
+  }
+  if(!count){
+    const empty=document.createElement("div");empty.className="overview-empty";
+    empty.textContent=l({de:"Noch keine Batterie erkannt.",en:"No battery detected yet.",fr:"Aucune batterie détectée.",es:"Aún no se detectó ninguna batería.",nl:"Nog geen batterij gedetecteerd."});
+    host.appendChild(empty);
+  }
+}
+
+async function loadOverviewLogs(){
+  const output=document.getElementById("overview-log-output");
+  try{
+    const r=await fetch(apiUrl("api/logs"),{cache:"no-store"});const out=await r.json();
+    if(!r.ok)throw new Error(out.error||"Log");
+    const text=out.logs||"";
+    const lines=text.split(/\r?\n/).filter(Boolean).slice(-9);
+    output.textContent=lines.length?lines.join("\n"):l({de:"Noch keine Protokolleinträge seit dem Start.",en:"No log entries since startup.",fr:"Aucune entrée de journal depuis le démarrage.",es:"No hay entradas de registro desde el inicio.",nl:"Nog geen logboekvermeldingen sinds het starten."});
+    output.scrollTop=output.scrollHeight;
+  }catch(error){
+    output.textContent=l({de:"Protokoll konnte nicht geladen werden.",en:"Could not load log.",fr:"Impossible de charger le journal.",es:"No se pudo cargar el registro.",nl:"Logboek kon niet worden geladen."});
+  }
+}
+
+document.querySelectorAll("[data-go-tab]").forEach(button=>button.addEventListener("click",()=>activateTab(button.dataset.goTab)));
+
 function renderBatteries(){
   const d=currentDevice(), detected=document.getElementById("detected");detected.replaceChildren();
   document.getElementById("battery-save").disabled=!d;
@@ -645,6 +875,8 @@ async function loadBatteries(){
   if(!batteryState.devices.length){select.appendChild(option("",t("Noch keine Batterie erkannt"),true));select.disabled=true;}
   else{select.disabled=false;for(const d of batteryState.devices)select.appendChild(option(d.device_id,d.device_id,d.device_id===previous));if(!select.value)select.selectedIndex=0;}
   renderBatteries();
+  renderOverviewDevices();
+  renderOverviewBatteries();
 }
 document.getElementById("device").addEventListener("change",renderBatteries);
 document.getElementById("battery-save").addEventListener("click",async()=>{
@@ -679,6 +911,10 @@ async function loadConfig(){
   configBaseline=collectConfig();
   document.getElementById("summary-version").textContent=out.version||"–";
   document.getElementById("summary-state").textContent=localizedAddonState(out.state);
+  const overviewState=localizedAddonState(out.state);
+  document.getElementById("overview-status-text").textContent=overviewState;
+  const stateDot=document.getElementById("overview-status-dot");
+  stateDot.classList.toggle("ok",String(out.state||"").toLowerCase().includes("started")||String(out.state||"").toLowerCase().includes("running"));
 }
 async function saveConfig(){
   const r=await fetch(apiUrl("api/config"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({options:collectConfigChanges()})});
@@ -717,7 +953,7 @@ async function loadLogs(){
 }
 document.getElementById("log-refresh").addEventListener("click",()=>loadLogs().catch(showError));
 function showError(error){showMessage("config-message",error.message||String(error),"error");}
-loadConfig().then(loadBatteries).catch(showError);
+loadConfig().then(loadBatteries).then(loadOverviewLogs).catch(showError);
 </script>
 </body>
 </html>
