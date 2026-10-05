@@ -54,7 +54,14 @@ def observe_telemetry(device_id: str, payload: dict, max_bat: int = 1) -> None:
                 "display_name": family.display_name if family else "UNKNOWN",
             }
         item["batteries"] = batteries
-        for key in ("bat_sysstate", "charging_discharging", "out_power", "pv_tot_power", "tot_bat_soc_pct"):
+        for key in (
+            "bat_sysstate",
+            "charging_discharging",
+            "out_power",
+            "pv_tot_power",
+            "tot_bat_soc_pct",
+            "wifi_signal_strength",
+        ):
             value = payload.get(key)
             if value is not None:
                 item[key] = value
