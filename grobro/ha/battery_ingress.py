@@ -174,100 +174,123 @@ _INDEX_HTML = r"""<!doctype html>
     #summary-state { color:var(--ok); }
     #summary-devices { margin-top:9px; }
 
-    .overview-hero {
-      display:flex; align-items:flex-start; justify-content:space-between; gap:20px;
-      padding:22px 24px; margin-bottom:14px;
-      border:1px solid var(--border-soft); border-radius:14px;
-      background:
-        radial-gradient(circle at 85% 0%,rgba(24,183,255,.14),transparent 32%),
-        linear-gradient(135deg,#11283b 0%,#0c1d2c 56%,#0a1825 100%);
-      box-shadow:0 14px 36px rgba(0,0,0,.20);
+    .dashboard-head {
+      display:flex; align-items:center; justify-content:space-between; gap:18px;
+      padding:4px 2px 16px;
+      border-bottom:1px solid rgba(74,113,141,.25);
     }
-    .overview-hero h2 { margin:4px 0 5px; font-size:24px; }
-    .eyebrow { color:#6fd8ff; font-size:10px; font-weight:800; letter-spacing:.16em; }
-    .overview-status {
-      display:flex; align-items:center; gap:8px; flex:0 0 auto;
-      min-height:34px; padding:6px 11px;
-      border:1px solid #27506a; border-radius:999px; background:#0a1c2a;
-      color:#d8e9f5; font-size:12px; font-weight:700;
+    .dashboard-title-row { display:flex; align-items:center; gap:10px; }
+    .dashboard-title-row h2 { margin:0; font-size:22px; }
+    .version-pill,.count-pill {
+      display:inline-flex; align-items:center; justify-content:center;
+      min-height:24px; padding:3px 8px;
+      border:1px solid #294b63; border-radius:999px;
+      background:#0c1d2b; color:#b9cfde; font-size:10px; font-weight:750;
     }
-    .status-dot { width:8px; height:8px; border-radius:50%; background:#6c7b86; box-shadow:0 0 0 3px rgba(108,123,134,.12); }
+    .dashboard-state {
+      display:flex; align-items:center; gap:8px;
+      min-height:32px; padding:5px 10px;
+      border:1px solid #294b63; border-radius:999px;
+      background:#0c1d2b; color:#d9e7f1; font-size:11px; font-weight:700;
+    }
+    .status-dot { width:8px; height:8px; border-radius:50%; background:#687986; box-shadow:0 0 0 3px rgba(104,121,134,.12); }
     .status-dot.ok { background:var(--ok); box-shadow:0 0 0 3px rgba(69,212,131,.12); }
-    .overview-summary { margin-bottom:14px; }
-    .overview-section {
-      position:relative; overflow:hidden;
-      margin-top:14px; padding:18px;
-      border:1px solid var(--border-soft); border-radius:14px;
-      background:linear-gradient(180deg,rgba(17,34,50,.96),rgba(12,27,41,.96));
-      box-shadow:0 12px 30px rgba(0,0,0,.16);
+
+    .dashboard-panel {
+      margin-top:14px; padding:16px;
+      border:1px solid #19384f; border-radius:12px;
+      background:linear-gradient(180deg,#0e1d2b 0%,#0b1825 100%);
+      box-shadow:0 12px 28px rgba(0,0,0,.16);
     }
-    .overview-section.compact { padding:12px; }
-    .overview-section-head {
-      display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:14px;
+    .dashboard-section-title {
+      display:flex; align-items:flex-start; justify-content:space-between; gap:12px;
+      margin-bottom:12px;
     }
-    .overview-section-head h2 { margin-bottom:2px; }
-    .overview-section-head p { font-size:12px; }
+    .dashboard-section-title h3 { margin:0 0 2px; font-size:14px; }
+    .dashboard-section-title p { font-size:11px; }
+
     .device-cards {
-      display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px;
+      display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px;
     }
     .device-card {
-      min-width:0; display:grid; grid-template-columns:46px minmax(0,1fr); gap:12px;
-      align-items:center; min-height:92px; padding:13px;
-      border:1px solid #1f4058; border-radius:12px;
-      background:linear-gradient(180deg,#10263a,#0c1e2e);
+      min-width:0; display:grid;
+      grid-template-columns:44px minmax(0,1fr) auto;
+      gap:11px; align-items:center;
+      min-height:82px; padding:11px 12px;
+      border:1px solid #1e4058; border-radius:10px;
+      background:linear-gradient(180deg,#112537,#0d1d2b);
     }
     .device-icon {
-      width:46px; height:58px; display:grid; place-items:center;
-      border-radius:8px; border:1px solid #b7c7d3;
-      background:linear-gradient(145deg,#f4f7f8,#cbd4da);
-      color:#263743; font-weight:900; font-size:11px;
-      box-shadow:0 7px 16px rgba(0,0,0,.22);
+      width:44px; height:52px; display:grid; place-items:center;
+      border-radius:7px; border:1px solid #bdc9d1;
+      background:linear-gradient(145deg,#f7f9fa,#cbd3d8);
+      color:#263943; font-weight:900; font-size:10px;
+      box-shadow:0 7px 14px rgba(0,0,0,.22);
     }
-    .device-card strong { display:block; font-size:14px; }
+    .device-card strong { display:block; font-size:13px; }
     .device-serial {
-      margin-top:3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
-      color:#91a8ba; font:11px/1.35 ui-monospace,SFMono-Regular,Consolas,monospace;
+      margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+      color:#8099aa; font:10px/1.3 ui-monospace,SFMono-Regular,Consolas,monospace;
     }
-    .online-line { display:flex; align-items:center; gap:6px; margin-top:7px; color:#a8dabc; font-size:11px; }
-    .online-line::before { content:""; width:7px; height:7px; border-radius:50%; background:var(--ok); box-shadow:0 0 0 3px rgba(69,212,131,.10); }
-    .overview-grid { display:grid; grid-template-columns:minmax(0,1.15fr) minmax(340px,.85fr); gap:14px; }
-    .battery-cards { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+    .online-line { display:flex; align-items:center; gap:6px; margin-top:6px; color:#9ed3b1; font-size:10px; }
+    .online-line::before { content:""; width:6px; height:6px; border-radius:50%; background:var(--ok); }
+    .wifi-box {
+      min-width:58px; text-align:right; color:#9fb6c7; font-size:9px;
+    }
+    .wifi-bars {
+      height:20px; display:flex; justify-content:flex-end; align-items:flex-end; gap:2px; margin-bottom:2px;
+    }
+    .wifi-bars span {
+      display:block; width:3px; border-radius:2px 2px 0 0; background:#385366;
+    }
+    .wifi-bars span:nth-child(1){height:5px}.wifi-bars span:nth-child(2){height:9px}
+    .wifi-bars span:nth-child(3){height:13px}.wifi-bars span:nth-child(4){height:17px}
+    .wifi-bars span.on { background:#58d897; box-shadow:0 0 6px rgba(88,216,151,.20); }
+    .wifi-value { white-space:nowrap; }
+
+    .battery-cards { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
     .battery-card {
-      display:grid; grid-template-columns:42px minmax(0,1fr) auto; gap:12px; align-items:center;
-      min-height:88px; padding:13px 14px;
-      border:1px solid #1e3e55; border-radius:12px;
-      background:linear-gradient(180deg,#10263a,#0c1e2e);
+      display:grid; grid-template-columns:34px minmax(0,1fr) auto;
+      gap:10px; align-items:center;
+      min-height:82px; padding:11px 12px;
+      border:1px solid #1d3e55; border-radius:10px;
+      background:linear-gradient(180deg,#102437,#0c1c2a);
     }
     .battery-icon {
-      position:relative; width:25px; height:43px; margin:auto;
-      border:2px solid #7e97a9; border-radius:5px; background:#08131c; overflow:hidden;
+      position:relative; width:22px; height:39px; margin:auto;
+      border:2px solid #6f8b9e; border-radius:4px; background:#07121b; overflow:hidden;
     }
-    .battery-icon::before { content:""; position:absolute; width:9px; height:4px; left:6px; top:-6px; border-radius:2px 2px 0 0; background:#7e97a9; }
+    .battery-icon::before { content:""; position:absolute; width:8px; height:3px; left:5px; top:-5px; border-radius:2px 2px 0 0; background:#6f8b9e; }
     .battery-fill {
       position:absolute; left:3px; right:3px; bottom:3px; min-height:2px;
-      border-radius:2px; background:linear-gradient(180deg,#72e7a0,#2fbe6d);
+      border-radius:2px; background:linear-gradient(180deg,#77e49e,#33bd70);
       transition:height .25s ease;
     }
-    .battery-card strong { display:block; font-size:13px; }
-    .battery-card .muted { font-size:10px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .battery-assignment { margin-top:4px; color:#73dca0; font-size:10px; }
-    .battery-meter { margin-top:8px; height:6px; overflow:hidden; border-radius:999px; background:#07131d; border:1px solid #1a394f; }
-    .battery-meter > span { display:block; height:100%; border-radius:999px; background:linear-gradient(90deg,#2fbd70,#74e39d); transition:width .25s ease; }
-    .battery-value { min-width:54px; text-align:right; font-size:20px; font-weight:800; letter-spacing:-.03em; color:#eaf8ef; }
-    .battery-value small { display:block; margin-top:2px; font-size:9px; font-weight:650; letter-spacing:.04em; color:var(--muted); text-transform:uppercase; }
+    .battery-card strong { display:block; font-size:12px; }
+    .battery-card .muted { font-size:9px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .battery-assignment { margin-top:3px; color:#68cf91; font-size:9px; }
+    .battery-meter {
+      margin-top:6px; height:5px; overflow:hidden; border-radius:999px;
+      background:#06111a; border:1px solid #17364a;
+    }
+    .battery-meter > span {
+      display:block; height:100%; border-radius:999px;
+      background:linear-gradient(90deg,#35bd70,#78e19d); transition:width .25s ease;
+    }
+    .battery-value { min-width:44px; text-align:right; font-size:17px; font-weight:800; color:#e8f7ed; }
+    .battery-value small { display:block; margin-top:1px; font-size:8px; color:#819aaa; font-weight:650; }
+
     .overview-log {
-      margin:0; height:198px; min-height:198px; max-height:198px; overflow:auto;
-      white-space:pre; background:#050d14; border:1px solid #1d3a50; border-radius:10px;
-      padding:12px; color:#bfd9e9;
-      font:11px/1.48 ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace;
+      margin:0; height:190px; min-height:190px; max-height:190px; overflow:auto;
+      white-space:pre; background:#050c12; border:1px solid #17364c; border-radius:9px;
+      padding:11px 12px; color:#b8d2e2;
+      font:10px/1.45 ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace;
     }
     .overview-empty {
-      grid-column:1/-1; padding:22px; border:1px dashed #27475e; border-radius:11px;
-      color:var(--muted); text-align:center; background:rgba(5,13,20,.24);
+      grid-column:1/-1; padding:18px; border:1px dashed #28485d; border-radius:9px;
+      color:var(--muted); text-align:center; background:#091722;
     }
-    .overview-link { min-height:34px; padding:6px 10px; font-size:11px; }
-    .quick-actions { display:flex; gap:8px; flex-wrap:wrap; }
-    .quick-actions button { min-height:34px; padding:6px 11px; font-size:11px; }
+    .overview-link { min-height:30px; padding:5px 9px; font-size:10px; }
 
     .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px 18px; }
     .field { min-width:0; }
@@ -352,7 +375,7 @@ _INDEX_HTML = r"""<!doctype html>
       .summary { grid-template-columns:1fr; }
       .metric { min-height:auto; }
       .device-cards { grid-template-columns:repeat(2,minmax(0,1fr)); }
-      .overview-grid { grid-template-columns:1fr; }
+      .battery-cards { grid-template-columns:repeat(2,minmax(0,1fr)); }
     }
     @media (max-width:700px) {
       main { display:block; padding:10px; }
@@ -366,10 +389,8 @@ _INDEX_HTML = r"""<!doctype html>
       .tabs::-webkit-scrollbar { display:none; }
       .tabs button { width:auto; flex:0 0 auto; padding-left:36px; }
       .grid,.battery-row,.device-cards,.battery-cards { grid-template-columns:1fr; }
-      .overview-hero { flex-direction:column; padding:17px; }
-      .overview-hero h2 { font-size:20px; }
-      .overview-status { align-self:flex-start; }
-      .overview-section-head { flex-direction:column; }
+      .dashboard-head,.dashboard-section-title { flex-direction:column; align-items:stretch; }
+      .dashboard-state { align-self:flex-start; }
       .overview-link { width:100%; }
       .actions button,.header button { width:100%; }
       .header { align-items:stretch; }
@@ -399,69 +420,58 @@ _INDEX_HTML = r"""<!doctype html>
   </nav>
 
   <section id="tab-overview" class="tab active">
-    <div class="overview-hero">
+    <div class="dashboard-head">
       <div>
-        <div class="eyebrow">BETTER GROBRO</div>
-        <h2>GroBro, optimized for Home Assistant.</h2>
-        <p class="muted">Lokale Growatt-Anbindung, stabile Batterie-Zuordnung und Home-Assistant-Integration auf einen Blick.</p>
+        <div class="dashboard-title-row">
+          <h2>Better GroBro</h2>
+          <span id="dashboard-version" class="version-pill">–</span>
+        </div>
+        <p class="muted">GroBro, optimized for Home Assistant.</p>
       </div>
-      <div class="overview-status">
+      <div class="dashboard-state">
         <span id="overview-status-dot" class="status-dot"></span>
         <span id="overview-status-text">–</span>
       </div>
     </div>
 
-    <div class="summary overview-summary">
-      <div class="metric"><span class="muted">Version</span><strong id="summary-version">–</strong></div>
-      <div class="metric"><span class="muted">Add-on Status</span><strong id="summary-state">–</strong></div>
-      <div class="metric"><span class="muted">Erkannte Geräte</span><strong id="summary-device-count">0</strong></div>
-    </div>
-
-    <div class="overview-section">
-      <div class="overview-section-head">
+    <div class="dashboard-panel">
+      <div class="dashboard-section-title">
         <div>
-          <h2>Erkannte Geräte</h2>
-          <p class="muted">Live erkannte Growatt-Geräte dieser Sitzung.</p>
+          <h3>Geräte</h3>
+          <p class="muted">Live erkannte Growatt-Geräte</p>
         </div>
+        <span id="summary-device-count" class="count-pill">0</span>
       </div>
       <div id="overview-device-cards" class="device-cards">
         <div class="overview-empty">Noch keine Live-Telemetrie.</div>
       </div>
       <div id="summary-devices" class="serials" hidden></div>
+      <strong id="summary-version" hidden>–</strong>
+      <strong id="summary-state" hidden>–</strong>
     </div>
 
-    <div class="overview-grid">
-      <div class="overview-section">
-        <div class="overview-section-head">
-          <div>
-            <h2>Batterien</h2>
-            <p class="muted">Aktuelle Zuordnung der erkannten Batterieseriennummern.</p>
-          </div>
-          <button type="button" class="secondary overview-link" data-go-tab="batteries">Batterien öffnen</button>
+    <div class="dashboard-panel">
+      <div class="dashboard-section-title">
+        <div>
+          <h3>Batterien</h3>
+          <p class="muted">Bat1 ist der NOAH Master, Bat2–Bat4 erscheinen je nach vorhandener Batterie.</p>
         </div>
-        <div id="overview-battery-cards" class="battery-cards">
-          <div class="overview-empty">Noch keine Batterie erkannt.</div>
-        </div>
+        <button type="button" class="secondary overview-link" data-go-tab="batteries">Batterien öffnen</button>
       </div>
-
-      <div class="overview-section">
-        <div class="overview-section-head">
-          <div>
-            <h2>Protokoll</h2>
-            <p class="muted">Letzte Einträge des aktuell laufenden Better-GroBro-Prozesses.</p>
-          </div>
-          <button type="button" class="secondary overview-link" data-go-tab="logs">Protokoll öffnen</button>
-        </div>
-        <pre id="overview-log-output" class="overview-log">Protokoll wird geladen…</pre>
+      <div id="overview-battery-cards" class="battery-cards">
+        <div class="overview-empty">Noch keine Batterie erkannt.</div>
       </div>
     </div>
 
-    <div class="overview-section compact">
-      <div class="quick-actions">
-        <button type="button" class="secondary" data-go-tab="mqtt">MQTT</button>
-        <button type="button" class="secondary" data-go-tab="ha">Home Assistant</button>
-        <button type="button" class="secondary" data-go-tab="diagnostics">Diagnose</button>
+    <div class="dashboard-panel">
+      <div class="dashboard-section-title">
+        <div>
+          <h3>Aktuelle Sitzung</h3>
+          <p class="muted">Letzte Better-GroBro-Protokolleinträge</p>
+        </div>
+        <button type="button" class="secondary overview-link" data-go-tab="logs">Protokoll öffnen</button>
       </div>
+      <pre id="overview-log-output" class="overview-log">Protokoll wird geladen…</pre>
     </div>
   </section>
 
@@ -784,7 +794,23 @@ function renderOverviewDevices(){
     const serial=document.createElement("div");serial.className="device-serial";serial.textContent=item.device_id||"";
     const online=document.createElement("div");online.className="online-line";
     online.textContent=l({de:"Live erkannt",en:"Detected live",fr:"Détecté en direct",es:"Detectado en vivo",nl:"Live gedetecteerd"});
-    body.append(name,serial,online);card.append(icon,body);host.appendChild(card);
+    body.append(name,serial,online);
+
+    const wifi=document.createElement("div");wifi.className="wifi-box";
+    const bars=document.createElement("div");bars.className="wifi-bars";
+    const dbm=Number(item.wifi_signal_strength);
+    let level=0;
+    if(Number.isFinite(dbm)){
+      level=dbm>=-55?4:dbm>=-65?3:dbm>=-75?2:1;
+    }
+    for(let i=1;i<=4;i++){
+      const bar=document.createElement("span");if(i<=level)bar.className="on";bars.appendChild(bar);
+    }
+    const wifiValue=document.createElement("div");wifiValue.className="wifi-value";
+    wifiValue.textContent=Number.isFinite(dbm)?Math.round(dbm)+" dBm":"– dBm";
+    wifi.append(bars,wifiValue);
+
+    card.append(icon,body,wifi);host.appendChild(card);
   }
 }
 
@@ -980,6 +1006,7 @@ async function loadConfig(){
   fillConfig(out.options||{});
   configBaseline=collectConfig();
   document.getElementById("summary-version").textContent=out.version||"–";
+  document.getElementById("dashboard-version").textContent=out.version||"–";
   document.getElementById("summary-state").textContent=localizedAddonState(out.state);
   const overviewState=localizedAddonState(out.state);
   document.getElementById("overview-status-text").textContent=overviewState;
