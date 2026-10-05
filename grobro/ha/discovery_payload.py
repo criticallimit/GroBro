@@ -3,6 +3,22 @@ from grobro import model
 from grobro.ha.register_helpers import _get_bat_number, iter_command_registers
 
 
+_REDUNDANT_DEFAULT_ICONS = {
+    ("battery", "mdi:battery"),
+    ("temperature", "mdi:thermometer"),
+    ("current", "mdi:current-ac"),
+    ("frequency", "mdi:sine-wave"),
+    ("signal_strength", "mdi:wifi"),
+    ("voltage", "mdi:flash"),
+    ("voltage", "mdi:sine-wave"),
+    ("power", "mdi:flash"),
+}
+
+
+def _uses_redundant_default_icon(device_class, icon):
+    return (device_class, icon) in _REDUNDANT_DEFAULT_ICONS
+
+
 def build_discovery_payload(
     device_id, known_registers, device_info, *, base_topic, bridge_topic,
     effective_max_bat, pv_count, max_slots, device_timeout, availability_sensor,
@@ -37,6 +53,8 @@ def build_discovery_payload(
         platform = ha.type
 
         ha_data = ha.model_dump(exclude_none=True)
+        if _uses_redundant_default_icon(ha.device_class, ha.icon):
+            ha_data.pop("icon", None)
 
         # Home Assistant erwartet bei Select eine Liste, kein Dict
         if platform == "select":
@@ -118,11 +136,12 @@ def build_discovery_payload(
                 else {}
             ),
         }
-        # Let Home Assistant select the state-dependent battery icon from the
-        # battery device class instead of forcing the static mdi:battery icon.
-        if not (
-            state.homeassistant.device_class == "battery"
-            and state.homeassistant.icon == "mdi:battery"
+        # Prefer Home Assistant's device-class icon where our configured icon
+        # only duplicates the native default. Keep semantic icons such as
+        # solar-power, power-plug, battery-sync and other explicit UI hints.
+        if not _uses_redundant_default_icon(
+            state.homeassistant.device_class,
+            state.homeassistant.icon,
         ):
             component["icon"] = state.homeassistant.icon
         payload["cmps"][unique_id] = component
