@@ -187,23 +187,24 @@ _INDEX_HTML = r"""<!doctype html>
 
     .device-cards {
       display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; align-items:stretch;
+      grid-auto-rows:78px;
     }
     .device-card {
       min-width:0; display:grid;
       grid-template-columns:48px minmax(0,1fr) 72px;
       gap:12px; align-items:center;
-      min-height:88px; height:100%; padding:12px 14px;
+      min-height:78px; height:78px; padding:10px 12px;
       border:1px solid #1e4058; border-radius:10px;
       background:linear-gradient(180deg,#112537,#0d1d2b);
     }
     .device-icon {
-      width:48px; height:48px; display:grid; place-items:center;
+      width:44px; height:44px; display:grid; place-items:center;
       border-radius:7px; border:1px solid #bdc9d1;
       background:linear-gradient(145deg,#f7f9fa,#cbd3d8);
-      color:#142832; font-weight:950; font-size:13px; line-height:1; letter-spacing:-.03em; white-space:nowrap;
+      color:#142832; font-weight:950; font-size:12px; line-height:1; letter-spacing:-.02em; white-space:nowrap; overflow:hidden;
       box-shadow:0 7px 14px rgba(0,0,0,.22);
     }
-    .device-card strong { display:block; font-size:19px; line-height:1.05; }
+    .device-card strong { display:block; font-size:17px; line-height:1.05; }
     .device-serial {
       margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
       color:#9ab0c0; font:12px/1.35 ui-monospace,SFMono-Regular,Consolas,monospace;
@@ -224,11 +225,11 @@ _INDEX_HTML = r"""<!doctype html>
     .wifi-bars span.on { background:#58d897; box-shadow:0 0 6px rgba(88,216,151,.20); }
     .wifi-value { white-space:nowrap; }
 
-    .battery-cards { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; align-items:stretch; }
+    .battery-cards { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; align-items:stretch; grid-auto-rows:78px; }
     .battery-card {
       display:grid; grid-template-columns:48px minmax(0,1fr) 72px;
       gap:10px; align-items:center;
-      min-height:88px; height:100%; padding:12px 14px;
+      min-height:78px; height:78px; padding:10px 12px;
       border:1px solid #1d3e55; border-radius:10px;
       background:linear-gradient(180deg,#102437,#0c1c2a);
     }
@@ -773,10 +774,7 @@ function renderOverviewDevices(){
     const bars=document.createElement("div");bars.className="wifi-bars";
     const rawSignalValue=item.wifi_signal_strength ?? item.wifi_signal ?? null;
     const rawSignal=Number(rawSignalValue);
-    let dbm=rawSignal;
-    if(Number.isFinite(rawSignal) && rawSignal>=0 && rawSignal<=100){
-      dbm=Math.round(-100+(rawSignal*0.6));
-    }
+    const dbm=(Number.isFinite(rawSignal) && rawSignal<0 && rawSignal>=-120)?rawSignal:NaN;
     let level=0;
     if(Number.isFinite(dbm)){
       level=dbm>=-55?4:dbm>=-65?3:dbm>=-75?2:1;
