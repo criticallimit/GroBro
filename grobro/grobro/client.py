@@ -652,7 +652,15 @@ class Client:
                                     numeric_signal = int(value)
                                 except (TypeError, ValueError):
                                     numeric_signal = 0
-                                if numeric_signal >= 0:
+                                known = getattr(self, "_wifi_signal_known", None)
+                                if known is None:
+                                    known = set()
+                                    self._wifi_signal_known = known
+                                if numeric_signal < 0:
+                                    known.add(cfg["device_id"])
+                                    if mapped_neo:
+                                        known.add(mapped_neo)
+                                else:
                                     requested = getattr(self, "_wifi_signal_probe_requested", set())
                                     requested.discard(cfg["device_id"])
                                     if mapped_neo:
@@ -841,21 +849,25 @@ class Client:
                     if state.payload:
                         self.on_input_register(state)
                         if model.is_family(modbus_device_id, "neo"):
-                            requested = getattr(self, "_wifi_signal_probe_requested", None)
-                            if requested is None:
-                                requested = set()
-                                self._wifi_signal_probe_requested = requested
-                            if modbus_device_id not in requested:
-                                requested.add(modbus_device_id)
-                                try:
-                                    self.send_config_read_message(modbus_device_id, 76)
-                                except Exception as exc:
-                                    requested.discard(modbus_device_id)
-                                    LOG.debug(
-                                        "Could not request Wi-Fi signal for %s (%s)",
-                                        modbus_device_id,
-                                        type(exc).__name__,
-                                    )
+                            known = getattr(self, "_wifi_signal_known", set())
+                            if modbus_device_id not in known:
+                                probes = getattr(self, "_wifi_signal_probe_times", None)
+                                if probes is None:
+                                    probes = {}
+                                    self._wifi_signal_probe_times = probes
+                                now = time.monotonic()
+                                if now - probes.get(modbus_device_id, 0.0) >= 10.0:
+                                    try:
+                                        result = self.send_config_read_message(modbus_device_id, 76)
+                                    except Exception as exc:
+                                        LOG.debug(
+                                            "Could not request Wi-Fi signal for %s (%s)",
+                                            modbus_device_id,
+                                            type(exc).__name__,
+                                        )
+                                    else:
+                                        if publish_succeeded(result):
+                                            probes[modbus_device_id] = now
                     return
 
                 return
