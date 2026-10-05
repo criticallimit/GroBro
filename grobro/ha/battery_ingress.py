@@ -186,32 +186,32 @@ _INDEX_HTML = r"""<!doctype html>
     .dashboard-section-title p { font-size:11px; }
 
     .device-cards {
-      display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px;
+      display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; align-items:stretch;
     }
     .device-card {
       min-width:0; display:grid;
-      grid-template-columns:38px minmax(0,1fr) auto;
-      gap:11px; align-items:center;
-      min-height:72px; padding:9px 10px;
+      grid-template-columns:34px minmax(0,1fr) 64px;
+      gap:12px; align-items:center;
+      min-height:78px; height:100%; padding:10px 12px;
       border:1px solid #1e4058; border-radius:10px;
       background:linear-gradient(180deg,#112537,#0d1d2b);
     }
     .device-icon {
-      width:38px; height:52px; display:grid; place-items:center;
+      width:34px; height:54px; display:grid; place-items:center;
       border-radius:7px; border:1px solid #bdc9d1;
       background:linear-gradient(145deg,#f7f9fa,#cbd3d8);
-      color:#1d313d; font-weight:950; font-size:12px; letter-spacing:-.03em;
+      color:#1d313d; font-weight:950; font-size:14px; line-height:1; letter-spacing:-.04em;
       box-shadow:0 7px 14px rgba(0,0,0,.22);
     }
-    .device-card strong { display:block; font-size:13px; }
+    .device-card strong { display:block; font-size:15px; line-height:1.1; }
     .device-serial {
       margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
-      color:#8099aa; font:10px/1.3 ui-monospace,SFMono-Regular,Consolas,monospace;
+      color:#8099aa; font:11px/1.3 ui-monospace,SFMono-Regular,Consolas,monospace;
     }
-    .online-line { display:flex; align-items:center; gap:6px; margin-top:6px; color:#9ed3b1; font-size:10px; }
+    .online-line { display:flex; align-items:center; gap:6px; margin-top:7px; color:#9ed3b1; font-size:11px; }
     .online-line::before { content:""; width:6px; height:6px; border-radius:50%; background:var(--ok); }
     .wifi-box {
-      min-width:58px; text-align:right; color:#9fb6c7; font-size:9px;
+      min-width:64px; width:64px; text-align:right; color:#9fb6c7; font-size:10px;
     }
     .wifi-bars {
       height:20px; display:flex; justify-content:flex-end; align-items:flex-end; gap:2px; margin-bottom:2px;
@@ -224,11 +224,11 @@ _INDEX_HTML = r"""<!doctype html>
     .wifi-bars span.on { background:#58d897; box-shadow:0 0 6px rgba(88,216,151,.20); }
     .wifi-value { white-space:nowrap; }
 
-    .battery-cards { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
+    .battery-cards { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; align-items:stretch; }
     .battery-card {
       display:grid; grid-template-columns:34px minmax(0,1fr) auto;
       gap:10px; align-items:center;
-      min-height:72px; padding:9px 10px;
+      min-height:78px; height:100%; padding:10px 12px;
       border:1px solid #1d3e55; border-radius:10px;
       background:linear-gradient(180deg,#102437,#0c1c2a);
     }
