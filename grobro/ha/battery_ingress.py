@@ -190,28 +190,28 @@ _INDEX_HTML = r"""<!doctype html>
     }
     .device-card {
       min-width:0; display:grid;
-      grid-template-columns:34px minmax(0,1fr) 64px;
+      grid-template-columns:48px minmax(0,1fr) 72px;
       gap:12px; align-items:center;
-      min-height:84px; height:100%; padding:11px 12px;
+      min-height:88px; height:100%; padding:12px 14px;
       border:1px solid #1e4058; border-radius:10px;
       background:linear-gradient(180deg,#112537,#0d1d2b);
     }
     .device-icon {
-      width:34px; height:54px; display:grid; place-items:center;
+      width:48px; height:48px; display:grid; place-items:center;
       border-radius:7px; border:1px solid #bdc9d1;
       background:linear-gradient(145deg,#f7f9fa,#cbd3d8);
-      color:#142832; font-weight:950; font-size:16px; line-height:1; letter-spacing:-.05em;
+      color:#142832; font-weight:950; font-size:13px; line-height:1; letter-spacing:-.03em; white-space:nowrap;
       box-shadow:0 7px 14px rgba(0,0,0,.22);
     }
-    .device-card strong { display:block; font-size:17px; line-height:1.05; }
+    .device-card strong { display:block; font-size:19px; line-height:1.05; }
     .device-serial {
       margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
-      color:#8fa6b7; font:12px/1.3 ui-monospace,SFMono-Regular,Consolas,monospace;
+      color:#9ab0c0; font:12px/1.35 ui-monospace,SFMono-Regular,Consolas,monospace;
     }
-    .online-line { display:flex; align-items:center; gap:6px; margin-top:7px; color:#9ed3b1; font-size:12px; }
+    .online-line { display:flex; align-items:center; gap:6px; margin-top:8px; color:#9ed3b1; font-size:12px; }
     .online-line::before { content:""; width:6px; height:6px; border-radius:50%; background:var(--ok); }
     .wifi-box {
-      min-width:64px; width:64px; text-align:right; color:#afc2cf; font-size:11px;
+      min-width:72px; width:72px; text-align:right; color:#afc2cf; font-size:11px;
     }
     .wifi-bars {
       height:20px; display:flex; justify-content:flex-end; align-items:flex-end; gap:2px; margin-bottom:2px;
@@ -226,9 +226,9 @@ _INDEX_HTML = r"""<!doctype html>
 
     .battery-cards { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; align-items:stretch; }
     .battery-card {
-      display:grid; grid-template-columns:34px minmax(0,1fr) auto;
+      display:grid; grid-template-columns:48px minmax(0,1fr) 72px;
       gap:10px; align-items:center;
-      min-height:84px; height:100%; padding:11px 12px;
+      min-height:88px; height:100%; padding:12px 14px;
       border:1px solid #1d3e55; border-radius:10px;
       background:linear-gradient(180deg,#102437,#0c1c2a);
     }
@@ -253,7 +253,7 @@ _INDEX_HTML = r"""<!doctype html>
       display:block; height:100%; border-radius:999px;
       background:linear-gradient(90deg,#35bd70,#78e19d); transition:width .25s ease;
     }
-    .battery-value { min-width:64px; text-align:right; font-size:18px; font-weight:800; color:#e8f7ed; }
+    .battery-value { min-width:72px; text-align:right; font-size:18px; font-weight:800; color:#e8f7ed; }
     .battery-value small { display:block; margin-top:1px; font-size:8px; color:#819aaa; font-weight:650; }
 
     .overview-log {
@@ -771,7 +771,8 @@ function renderOverviewDevices(){
 
     const wifi=document.createElement("div");wifi.className="wifi-box";
     const bars=document.createElement("div");bars.className="wifi-bars";
-    const rawSignal=Number(item.wifi_signal_strength);
+    const rawSignalValue=item.wifi_signal_strength ?? item.wifi_signal ?? null;
+    const rawSignal=Number(rawSignalValue);
     let dbm=rawSignal;
     if(Number.isFinite(rawSignal) && rawSignal>=0 && rawSignal<=100){
       dbm=Math.round(-100+(rawSignal*0.6));
@@ -784,7 +785,7 @@ function renderOverviewDevices(){
       const bar=document.createElement("span");if(i<=level)bar.className="on";bars.appendChild(bar);
     }
     const wifiValue=document.createElement("div");wifiValue.className="wifi-value";
-    wifiValue.textContent=Number.isFinite(dbm)?Math.round(dbm)+" dBm":"– dBm";
+    wifiValue.textContent=Number.isFinite(dbm)?Math.round(dbm)+" dBm":"–";
     wifi.append(bars,wifiValue);
 
     card.append(icon,body,wifi);host.appendChild(card);
