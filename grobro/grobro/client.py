@@ -626,6 +626,7 @@ class Client:
                         "hardware_version": "hw_version",
                         "data_interval": "data_interval",
                         "local_ip": "local_ip",
+                        "wifi_signal_strength": "wifi_signal",
                     }.get(config_name)
                     if metadata_field:
                         metadata_config = model.DeviceConfig(
