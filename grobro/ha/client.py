@@ -691,6 +691,12 @@ class Client:
         # stale values looking current. Fresh device traffic sets them online.
         self.__publish_offline_devices()
 
+        # Request missing Wi-Fi RSSI for every known device through the
+        # same generic config-register path. This avoids waiting for the first
+        # telemetry packet of a particular family.
+        for known_device_id in tuple(self._config_cache):
+            self.__request_wifi_signal_if_missing(known_device_id)
+
         from grobro.ha.neo_power_runtime import schedule_known_neo_state_probe
         schedule_known_neo_state_probe(self, delay=0.5)
 
