@@ -27,6 +27,28 @@ def observe_device(device_id: str) -> None:
         }
 
 
+def observe_wifi_signal(device_id: str, value) -> None:
+    """Store the latest Wi-Fi signal value from device configuration."""
+    device_id = str(device_id).strip()
+    if not device_id or value is None:
+        return
+    try:
+        signal = int(str(value).strip())
+    except (TypeError, ValueError):
+        return
+
+    with _LOCK:
+        item = _DEVICES.get(device_id)
+        if item is None:
+            family = get_device_family(device_id)
+            item = _DEVICES[device_id] = {
+                "device_id": device_id,
+                "family": family.key if family else "unknown",
+                "display_name": family.display_name if family else "UNKNOWN",
+            }
+        item["wifi_signal_strength"] = signal
+
+
 def observe_telemetry(device_id: str, payload: dict, max_bat: int = 1) -> None:
     """Store the small live snapshot used by the Ingress overview."""
     device_id = str(device_id).strip()
