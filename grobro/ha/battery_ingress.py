@@ -192,7 +192,7 @@ _INDEX_HTML = r"""<!doctype html>
       min-width:0; display:grid;
       grid-template-columns:34px minmax(0,1fr) 64px;
       gap:12px; align-items:center;
-      min-height:78px; height:100%; padding:10px 12px;
+      min-height:84px; height:100%; padding:11px 12px;
       border:1px solid #1e4058; border-radius:10px;
       background:linear-gradient(180deg,#112537,#0d1d2b);
     }
@@ -200,18 +200,18 @@ _INDEX_HTML = r"""<!doctype html>
       width:34px; height:54px; display:grid; place-items:center;
       border-radius:7px; border:1px solid #bdc9d1;
       background:linear-gradient(145deg,#f7f9fa,#cbd3d8);
-      color:#1d313d; font-weight:950; font-size:14px; line-height:1; letter-spacing:-.04em;
+      color:#142832; font-weight:950; font-size:16px; line-height:1; letter-spacing:-.05em;
       box-shadow:0 7px 14px rgba(0,0,0,.22);
     }
-    .device-card strong { display:block; font-size:15px; line-height:1.1; }
+    .device-card strong { display:block; font-size:17px; line-height:1.05; }
     .device-serial {
       margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
-      color:#8099aa; font:11px/1.3 ui-monospace,SFMono-Regular,Consolas,monospace;
+      color:#8fa6b7; font:12px/1.3 ui-monospace,SFMono-Regular,Consolas,monospace;
     }
-    .online-line { display:flex; align-items:center; gap:6px; margin-top:7px; color:#9ed3b1; font-size:11px; }
+    .online-line { display:flex; align-items:center; gap:6px; margin-top:7px; color:#9ed3b1; font-size:12px; }
     .online-line::before { content:""; width:6px; height:6px; border-radius:50%; background:var(--ok); }
     .wifi-box {
-      min-width:64px; width:64px; text-align:right; color:#9fb6c7; font-size:10px;
+      min-width:64px; width:64px; text-align:right; color:#afc2cf; font-size:11px;
     }
     .wifi-bars {
       height:20px; display:flex; justify-content:flex-end; align-items:flex-end; gap:2px; margin-bottom:2px;
@@ -228,7 +228,7 @@ _INDEX_HTML = r"""<!doctype html>
     .battery-card {
       display:grid; grid-template-columns:34px minmax(0,1fr) auto;
       gap:10px; align-items:center;
-      min-height:78px; height:100%; padding:10px 12px;
+      min-height:84px; height:100%; padding:11px 12px;
       border:1px solid #1d3e55; border-radius:10px;
       background:linear-gradient(180deg,#102437,#0c1c2a);
     }
@@ -242,7 +242,7 @@ _INDEX_HTML = r"""<!doctype html>
       border-radius:2px; background:linear-gradient(180deg,#77e49e,#33bd70);
       transition:height .25s ease;
     }
-    .battery-card strong { display:block; font-size:12px; }
+    .battery-card strong { display:block; font-size:13px; }
     .battery-card .muted { font-size:9px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .battery-assignment { margin-top:3px; color:#68cf91; font-size:9px; }
     .battery-meter {
@@ -253,7 +253,7 @@ _INDEX_HTML = r"""<!doctype html>
       display:block; height:100%; border-radius:999px;
       background:linear-gradient(90deg,#35bd70,#78e19d); transition:width .25s ease;
     }
-    .battery-value { min-width:44px; text-align:right; font-size:17px; font-weight:800; color:#e8f7ed; }
+    .battery-value { min-width:64px; text-align:right; font-size:18px; font-weight:800; color:#e8f7ed; }
     .battery-value small { display:block; margin-top:1px; font-size:8px; color:#819aaa; font-weight:650; }
 
     .overview-log {
