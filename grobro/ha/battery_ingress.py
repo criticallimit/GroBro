@@ -198,17 +198,17 @@ _INDEX_HTML = r"""<!doctype html>
     }
     .device-card {
       min-width:0; display:grid;
-      grid-template-columns:44px minmax(0,1fr) auto;
+      grid-template-columns:38px minmax(0,1fr) auto;
       gap:11px; align-items:center;
       min-height:72px; padding:9px 10px;
       border:1px solid #1e4058; border-radius:10px;
       background:linear-gradient(180deg,#112537,#0d1d2b);
     }
     .device-icon {
-      width:44px; height:52px; display:grid; place-items:center;
+      width:38px; height:52px; display:grid; place-items:center;
       border-radius:7px; border:1px solid #bdc9d1;
       background:linear-gradient(145deg,#f7f9fa,#cbd3d8);
-      color:#263943; font-weight:900; font-size:10px;
+      color:#1d313d; font-weight:950; font-size:12px; letter-spacing:-.03em;
       box-shadow:0 7px 14px rgba(0,0,0,.22);
     }
     .device-card strong { display:block; font-size:13px; }
@@ -779,7 +779,11 @@ function renderOverviewDevices(){
 
     const wifi=document.createElement("div");wifi.className="wifi-box";
     const bars=document.createElement("div");bars.className="wifi-bars";
-    const dbm=Number(item.wifi_signal_strength);
+    const rawSignal=Number(item.wifi_signal_strength);
+    let dbm=rawSignal;
+    if(Number.isFinite(rawSignal) && rawSignal>=0 && rawSignal<=100){
+      dbm=Math.round(-100+(rawSignal*0.6));
+    }
     let level=0;
     if(Number.isFinite(dbm)){
       level=dbm>=-55?4:dbm>=-65?3:dbm>=-75?2:1;
