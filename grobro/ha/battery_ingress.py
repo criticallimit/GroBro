@@ -187,13 +187,13 @@ _INDEX_HTML = r"""<!doctype html>
 
     .device-cards {
       display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; align-items:stretch;
-      grid-auto-rows:78px;
+      grid-auto-rows:88px;
     }
     .device-card {
       min-width:0; display:grid;
       grid-template-columns:48px minmax(0,1fr) 72px;
       gap:12px; align-items:center;
-      min-height:78px; height:78px; padding:10px 12px;
+      min-height:88px; height:88px; padding:10px 12px;
       border:1px solid #1e4058; border-radius:10px;
       background:linear-gradient(180deg,#112537,#0d1d2b);
     }
@@ -225,11 +225,11 @@ _INDEX_HTML = r"""<!doctype html>
     .wifi-bars span.on { background:#58d897; box-shadow:0 0 6px rgba(88,216,151,.20); }
     .wifi-value { white-space:nowrap; }
 
-    .battery-cards { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; align-items:stretch; grid-auto-rows:78px; }
+    .battery-cards { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; align-items:stretch; grid-auto-rows:88px; }
     .battery-card {
       display:grid; grid-template-columns:48px minmax(0,1fr) 72px;
       gap:10px; align-items:center;
-      min-height:78px; height:78px; padding:10px 12px;
+      min-height:88px; height:88px; padding:10px 12px;
       border:1px solid #1d3e55; border-radius:10px;
       background:linear-gradient(180deg,#102437,#0c1c2a);
     }
@@ -245,9 +245,9 @@ _INDEX_HTML = r"""<!doctype html>
     }
     .battery-card strong { display:block; font-size:17px; line-height:1.05; }
     .battery-card .muted { font-size:12px; line-height:1.35; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .battery-assignment { margin-top:5px; color:#68cf91; font-size:12px; }
+    .battery-assignment { margin-top:3px; color:#68cf91; font-size:12px; line-height:1.2; }
     .battery-meter {
-      margin-top:6px; height:5px; overflow:hidden; border-radius:999px;
+      margin-top:4px; height:5px; overflow:hidden; border-radius:999px;
       background:#06111a; border:1px solid #17364a;
     }
     .battery-meter > span {
@@ -844,9 +844,7 @@ function renderOverviewBatteries(){
 
       const body=document.createElement("div");
       const title=document.createElement("strong");
-      title.textContent=slot===1
-        ? "Bat1 · "+l({de:"NOAH Master",en:"NOAH master",fr:"NOAH maître",es:"NOAH maestro",nl:"NOAH master"})
-        : "Bat"+slot;
+      title.textContent="Bat "+slot;
 
       const serialLine=document.createElement("div");serialLine.className="muted";
       serialLine.textContent=serial||item.device_id;
