@@ -558,6 +558,8 @@ class Client:
                                 ptq_config.model_id = config.model_id
                             if getattr(config, "sw_version", None):
                                 ptq_config.sw_version = config.sw_version
+                            if getattr(config, "wifi_signal", None) is not None:
+                                ptq_config.wifi_signal = config.wifi_signal
                             self.on_config(ptq_serial, ptq_config)
                             LOG.info(
                                 "Detected NEO inverter %s behind ShineWeLink %s",
@@ -826,6 +828,22 @@ class Client:
                         state.payload["heater"] = heater_state
                     if state.payload:
                         self.on_input_register(state)
+                        if model.is_family(modbus_device_id, "neo"):
+                            requested = getattr(self, "_wifi_signal_probe_requested", None)
+                            if requested is None:
+                                requested = set()
+                                self._wifi_signal_probe_requested = requested
+                            if modbus_device_id not in requested:
+                                requested.add(modbus_device_id)
+                                try:
+                                    self.send_config_read_message(modbus_device_id, 76)
+                                except Exception as exc:
+                                    requested.discard(modbus_device_id)
+                                    LOG.debug(
+                                        "Could not request Wi-Fi signal for %s (%s)",
+                                        modbus_device_id,
+                                        type(exc).__name__,
+                                    )
                     return
 
                 return
