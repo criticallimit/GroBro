@@ -234,18 +234,18 @@ _INDEX_HTML = r"""<!doctype html>
       background:linear-gradient(180deg,#102437,#0c1c2a);
     }
     .battery-icon {
-      position:relative; width:22px; height:39px; margin:auto;
+      position:relative; width:26px; height:44px; margin:auto;
       border:2px solid #6f8b9e; border-radius:4px; background:#07121b; overflow:hidden;
     }
-    .battery-icon::before { content:""; position:absolute; width:8px; height:3px; left:5px; top:-5px; border-radius:2px 2px 0 0; background:#6f8b9e; }
+    .battery-icon::before { content:""; position:absolute; width:10px; height:4px; left:6px; top:-6px; border-radius:2px 2px 0 0; background:#6f8b9e; }
     .battery-fill {
       position:absolute; left:3px; right:3px; bottom:3px; min-height:2px;
       border-radius:2px; background:linear-gradient(180deg,#77e49e,#33bd70);
       transition:height .25s ease;
     }
-    .battery-card strong { display:block; font-size:13px; }
-    .battery-card .muted { font-size:9px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .battery-assignment { margin-top:3px; color:#68cf91; font-size:9px; }
+    .battery-card strong { display:block; font-size:17px; line-height:1.05; }
+    .battery-card .muted { font-size:12px; line-height:1.35; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .battery-assignment { margin-top:5px; color:#68cf91; font-size:12px; }
     .battery-meter {
       margin-top:6px; height:5px; overflow:hidden; border-radius:999px;
       background:#06111a; border:1px solid #17364a;
@@ -254,8 +254,8 @@ _INDEX_HTML = r"""<!doctype html>
       display:block; height:100%; border-radius:999px;
       background:linear-gradient(90deg,#35bd70,#78e19d); transition:width .25s ease;
     }
-    .battery-value { min-width:72px; text-align:right; font-size:18px; font-weight:800; color:#e8f7ed; }
-    .battery-value small { display:block; margin-top:1px; font-size:8px; color:#819aaa; font-weight:650; }
+    .battery-value { min-width:72px; text-align:right; font-size:19px; line-height:1.05; font-weight:800; color:#e8f7ed; }
+    .battery-value small { display:block; margin-top:4px; font-size:11px; line-height:1.2; color:#9ab0c0; font-weight:650; }
 
     .overview-log {
       margin:0; height:150px; min-height:150px; max-height:150px; overflow:auto;
