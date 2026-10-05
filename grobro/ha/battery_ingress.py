@@ -247,14 +247,6 @@ _INDEX_HTML = r"""<!doctype html>
     .battery-card strong { display:block; font-size:17px; line-height:1.05; }
     .battery-card .muted { font-size:12px; line-height:1.35; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .battery-assignment { margin-top:3px; color:#68cf91; font-size:12px; line-height:1.2; }
-    .battery-meter {
-      margin-top:4px; height:5px; overflow:hidden; border-radius:999px;
-      background:#06111a; border:1px solid #17364a;
-    }
-    .battery-meter > span {
-      display:block; height:100%; border-radius:999px;
-      background:linear-gradient(90deg,#35bd70,#78e19d); transition:width .25s ease;
-    }
     .battery-value { min-width:72px; text-align:right; font-size:19px; line-height:1.05; font-weight:800; color:#e8f7ed; }
     .battery-value small { display:block; margin-top:4px; font-size:11px; line-height:1.2; color:#9ab0c0; font-weight:650; }
 
@@ -863,9 +855,7 @@ function renderOverviewBatteries(){
             : l({de:"Live erkannt",en:"Detected live",fr:"Détectée en direct",es:"Detectada en vivo",nl:"Live gedetecteerd"});
       }
 
-      const meter=document.createElement("div");meter.className="battery-meter";
-      const meterFill=document.createElement("span");meterFill.style.width=(soc===null?0:soc)+"%";meter.appendChild(meterFill);
-      body.append(title,serialLine,assignment,meter);
+      body.append(title,serialLine,assignment);
 
       const value=document.createElement("div");value.className="battery-value";
       value.textContent=soc===null?"–":Math.round(soc)+"%";
