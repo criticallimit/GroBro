@@ -93,15 +93,7 @@ _INDEX_HTML = r"""<!doctype html>
       border:0; border-bottom:1px solid #19374d;
       border-radius:0; box-shadow:none;
     }
-    .header > div:first-child { position:relative; padding-left:34px; }
-    .header > div:first-child::before {
-      content:"⚡";
-      position:absolute; left:0; top:50%; transform:translateY(-50%);
-      width:24px; height:24px; display:grid; place-items:center;
-      color:#062033; background:linear-gradient(180deg,#35d4ff,#12aeea);
-      border-radius:7px; box-shadow:0 0 0 1px rgba(255,255,255,.14) inset;
-      font-size:15px; font-weight:900;
-    }
+    .header > div:first-child { position:relative; padding-left:0; }
     .header .muted { margin-top:1px; font-size:9px; }
 
     .tabs {
