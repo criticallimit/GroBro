@@ -423,7 +423,6 @@ _INDEX_HTML = r"""<!doctype html>
           <h3>Batterien</h3>
           <p class="muted">Bat1 ist der NOAH Master, Bat2–Bat4 erscheinen je nach vorhandener Batterie.</p>
         </div>
-        <button type="button" class="secondary overview-link" data-go-tab="batteries">Batterien öffnen</button>
       </div>
       <div id="overview-battery-cards" class="battery-cards">
         <div class="overview-empty">Noch keine Batterie erkannt.</div>
@@ -436,7 +435,6 @@ _INDEX_HTML = r"""<!doctype html>
           <h3>Aktuelle Sitzung</h3>
           <p class="muted">Letzte Better-GroBro-Protokolleinträge</p>
         </div>
-        <button type="button" class="secondary overview-link" data-go-tab="logs">Protokoll öffnen</button>
       </div>
       <pre id="overview-log-output" class="overview-log">Protokoll wird geladen…</pre>
     </div>
