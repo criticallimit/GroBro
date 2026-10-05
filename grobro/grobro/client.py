@@ -648,23 +648,6 @@ class Client:
                                 # A zero/positive R76 response is not a valid dBm
                                 # reading. Allow the next live packet to retry the
                                 # probe instead of treating the placeholder as final.
-                                try:
-                                    numeric_signal = int(value)
-                                except (TypeError, ValueError):
-                                    numeric_signal = 0
-                                known = getattr(self, "_wifi_signal_known", None)
-                                if known is None:
-                                    known = set()
-                                    self._wifi_signal_known = known
-                                if numeric_signal < 0:
-                                    known.add(cfg["device_id"])
-                                    if mapped_neo:
-                                        known.add(mapped_neo)
-                                else:
-                                    requested = getattr(self, "_wifi_signal_probe_requested", set())
-                                    requested.discard(cfg["device_id"])
-                                    if mapped_neo:
-                                        requested.discard(mapped_neo)
                         except Exception as exc:
                             LOG.warning("Could not update device metadata for %s register %s (%s)", cfg["device_id"], register_no, type(exc).__name__)
 
@@ -848,26 +831,6 @@ class Client:
                         state.payload["heater"] = heater_state
                     if state.payload:
                         self.on_input_register(state)
-                        if model.is_family(modbus_device_id, "neo"):
-                            known = getattr(self, "_wifi_signal_known", set())
-                            if modbus_device_id not in known:
-                                probes = getattr(self, "_wifi_signal_probe_times", None)
-                                if probes is None:
-                                    probes = {}
-                                    self._wifi_signal_probe_times = probes
-                                now = time.monotonic()
-                                if now - probes.get(modbus_device_id, 0.0) >= 10.0:
-                                    try:
-                                        result = self.send_config_read_message(modbus_device_id, 76)
-                                    except Exception as exc:
-                                        LOG.debug(
-                                            "Could not request Wi-Fi signal for %s (%s)",
-                                            modbus_device_id,
-                                            type(exc).__name__,
-                                        )
-                                    else:
-                                        if publish_succeeded(result):
-                                            probes[modbus_device_id] = now
                     return
 
                 return
