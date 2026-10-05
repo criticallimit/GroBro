@@ -50,11 +50,11 @@ _INDEX_HTML = r"""<!doctype html>
     * { box-sizing:border-box; }
     html,body { min-height:100%; }
     body {
-      margin:0;
-      font:14px/1.45 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      margin:0; padding:12px;
+      font:13px/1.4 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
       background:
-        radial-gradient(circle at 85% 8%, rgba(24,183,255,.10), transparent 30%),
-        linear-gradient(180deg,#08131e 0%,#07111b 100%);
+        radial-gradient(circle at 88% 10%,rgba(24,183,255,.08),transparent 30%),
+        linear-gradient(180deg,#06101a 0%,#07121c 100%);
       color:var(--text);
     }
     body::before {
@@ -64,59 +64,62 @@ _INDEX_HTML = r"""<!doctype html>
         linear-gradient(120deg,transparent 0 42%,rgba(24,183,255,.025) 42% 43%,transparent 43% 100%);
     }
     main {
-      width:min(1400px,100%);
-      min-height:100vh;
+      width:min(1180px,100%);
+      min-height:640px;
       margin:0 auto;
-      padding:18px;
+      padding:0;
       display:grid;
-      grid-template-columns:220px minmax(0,1fr);
-      grid-template-rows:auto 1fr;
-      gap:16px 20px;
+      grid-template-columns:180px minmax(0,1fr);
+      grid-template-rows:52px minmax(0,1fr);
+      gap:0;
+      overflow:hidden;
+      border:1px solid #24455e;
+      border-radius:13px;
+      background:#07131e;
+      box-shadow:0 20px 55px rgba(0,0,0,.28);
     }
-    h1 { margin:0; font-size:22px; letter-spacing:-.02em; }
+    h1 { margin:0; font-size:15px; letter-spacing:-.01em; }
     h2 { margin:0 0 16px; font-size:18px; letter-spacing:-.01em; }
     h3 { margin:18px 0 10px; font-size:15px; }
     p { margin:0; }
     .muted { color:var(--muted); }
 
     .header {
-      grid-column:1/-1;
-      display:flex; justify-content:space-between; align-items:center; gap:14px;
-      min-height:62px;
-      padding:10px 14px 10px 16px;
-      background:linear-gradient(180deg,rgba(17,35,51,.92),rgba(11,25,38,.92));
-      border:1px solid var(--border-soft);
-      border-radius:14px;
-      box-shadow:var(--shadow);
-      backdrop-filter:blur(12px);
+      grid-column:1/-1; grid-row:1;
+      display:flex; justify-content:space-between; align-items:center; gap:12px;
+      min-height:52px;
+      padding:7px 10px 7px 12px;
+      background:linear-gradient(180deg,#102234,#0c1b29);
+      border:0; border-bottom:1px solid #19374d;
+      border-radius:0; box-shadow:none;
     }
-    .header > div:first-child { position:relative; padding-left:38px; }
+    .header > div:first-child { position:relative; padding-left:34px; }
     .header > div:first-child::before {
       content:"⚡";
       position:absolute; left:0; top:50%; transform:translateY(-50%);
-      width:27px; height:27px; display:grid; place-items:center;
+      width:24px; height:24px; display:grid; place-items:center;
       color:#062033; background:linear-gradient(180deg,#35d4ff,#12aeea);
       border-radius:7px; box-shadow:0 0 0 1px rgba(255,255,255,.14) inset;
       font-size:15px; font-weight:900;
     }
-    .header .muted { margin-top:2px; font-size:12px; }
+    .header .muted { margin-top:1px; font-size:9px; }
 
     .tabs {
-      align-self:start;
-      position:sticky; top:18px;
-      display:flex; flex-direction:column; gap:6px;
-      margin:0; padding:10px;
-      background:linear-gradient(180deg,rgba(15,30,44,.95),rgba(10,23,35,.95));
-      border:1px solid var(--border-soft);
-      border-radius:14px;
-      box-shadow:var(--shadow);
-      min-height:fit-content;
+      grid-column:1; grid-row:2;
+      align-self:stretch;
+      position:static;
+      display:flex; flex-direction:column; gap:5px;
+      margin:0; padding:9px 8px;
+      background:linear-gradient(180deg,#0d1c2a,#091722);
+      border:0; border-right:1px solid #19374d;
+      border-radius:0; box-shadow:none;
+      min-height:100%;
     }
     .tabs button {
       position:relative;
-      width:100%; min-width:0; min-height:40px;
-      text-align:left; padding:9px 12px 9px 40px;
-      border-radius:9px; border:1px solid transparent;
+      width:100%; min-width:0; min-height:34px;
+      text-align:left; padding:7px 9px 7px 34px;
+      border-radius:7px; border:1px solid transparent;
       background:transparent; color:#bdd0df;
       font-weight:600; cursor:pointer;
       transition:background .15s ease,border-color .15s ease,color .15s ease,transform .15s ease;
@@ -130,7 +133,7 @@ _INDEX_HTML = r"""<!doctype html>
     }
     .tabs button::before {
       position:absolute; left:13px; top:50%; transform:translateY(-50%);
-      width:18px; text-align:center; color:#7fb4d6; font-size:15px;
+      width:16px; text-align:center; color:#7fb4d6; font-size:12px;
     }
     .tabs button.active::before { color:#29c3ff; }
     .tabs button[data-tab="overview"]::before { content:"⌂"; }
@@ -141,7 +144,7 @@ _INDEX_HTML = r"""<!doctype html>
     .tabs button[data-tab="diagnostics"]::before { content:"⚙"; }
     .tabs button[data-tab="logs"]::before { content:"≡"; }
 
-    .tab, #config-message { grid-column:2; min-width:0; }
+    .tab, #config-message { grid-column:2; grid-row:2; min-width:0; padding:10px 12px 12px; }
     .tab { display:none; align-self:start; }
     .tab.active { display:block; }
 
@@ -174,37 +177,18 @@ _INDEX_HTML = r"""<!doctype html>
     #summary-state { color:var(--ok); }
     #summary-devices { margin-top:9px; }
 
-    .dashboard-head {
-      display:flex; align-items:center; justify-content:space-between; gap:18px;
-      padding:4px 2px 16px;
-      border-bottom:1px solid rgba(74,113,141,.25);
-    }
-    .dashboard-title-row { display:flex; align-items:center; gap:10px; }
-    .dashboard-title-row h2 { margin:0; font-size:22px; }
-    .version-pill,.count-pill {
-      display:inline-flex; align-items:center; justify-content:center;
-      min-height:24px; padding:3px 8px;
-      border:1px solid #294b63; border-radius:999px;
-      background:#0c1d2b; color:#b9cfde; font-size:10px; font-weight:750;
-    }
-    .dashboard-state {
-      display:flex; align-items:center; gap:8px;
-      min-height:32px; padding:5px 10px;
-      border:1px solid #294b63; border-radius:999px;
-      background:#0c1d2b; color:#d9e7f1; font-size:11px; font-weight:700;
-    }
-    .status-dot { width:8px; height:8px; border-radius:50%; background:#687986; box-shadow:0 0 0 3px rgba(104,121,134,.12); }
-    .status-dot.ok { background:var(--ok); box-shadow:0 0 0 3px rgba(69,212,131,.12); }
-
+    .header-title-row { display:flex; align-items:center; gap:8px; }
+    .header-right { display:flex; align-items:center; gap:8px; }
+    .compact-back { width:32px; min-width:32px; min-height:30px; padding:4px; font-size:15px; }
     .dashboard-panel {
-      margin-top:14px; padding:16px;
+      margin-top:10px; padding:12px;
       border:1px solid #19384f; border-radius:12px;
       background:linear-gradient(180deg,#0e1d2b 0%,#0b1825 100%);
       box-shadow:0 12px 28px rgba(0,0,0,.16);
     }
     .dashboard-section-title {
       display:flex; align-items:flex-start; justify-content:space-between; gap:12px;
-      margin-bottom:12px;
+      margin-bottom:9px;
     }
     .dashboard-section-title h3 { margin:0 0 2px; font-size:14px; }
     .dashboard-section-title p { font-size:11px; }
@@ -216,7 +200,7 @@ _INDEX_HTML = r"""<!doctype html>
       min-width:0; display:grid;
       grid-template-columns:44px minmax(0,1fr) auto;
       gap:11px; align-items:center;
-      min-height:82px; padding:11px 12px;
+      min-height:72px; padding:9px 10px;
       border:1px solid #1e4058; border-radius:10px;
       background:linear-gradient(180deg,#112537,#0d1d2b);
     }
@@ -252,7 +236,7 @@ _INDEX_HTML = r"""<!doctype html>
     .battery-card {
       display:grid; grid-template-columns:34px minmax(0,1fr) auto;
       gap:10px; align-items:center;
-      min-height:82px; padding:11px 12px;
+      min-height:72px; padding:9px 10px;
       border:1px solid #1d3e55; border-radius:10px;
       background:linear-gradient(180deg,#102437,#0c1c2a);
     }
@@ -281,7 +265,7 @@ _INDEX_HTML = r"""<!doctype html>
     .battery-value small { display:block; margin-top:1px; font-size:8px; color:#819aaa; font-weight:650; }
 
     .overview-log {
-      margin:0; height:190px; min-height:190px; max-height:190px; overflow:auto;
+      margin:0; height:150px; min-height:150px; max-height:150px; overflow:auto;
       white-space:pre; background:#050c12; border:1px solid #17364c; border-radius:9px;
       padding:11px 12px; color:#b8d2e2;
       font:10px/1.45 ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace;
@@ -378,12 +362,14 @@ _INDEX_HTML = r"""<!doctype html>
       .battery-cards { grid-template-columns:repeat(2,minmax(0,1fr)); }
     }
     @media (max-width:700px) {
-      main { display:block; padding:10px; }
-      .header { position:sticky; top:0; z-index:5; margin-bottom:10px; border-radius:12px; }
+      body { padding:0; }
+      main { display:block; min-height:100vh; border:0; border-radius:0; }
+      .header { position:sticky; top:0; z-index:5; margin-bottom:0; border-radius:0; }
       .header #back-top { min-width:44px; }
       .tabs {
-        position:sticky; top:82px; z-index:4;
-        flex-direction:row; overflow-x:auto; gap:6px; padding:8px; margin-bottom:10px;
+        position:sticky; top:52px; z-index:4;
+        flex-direction:row; overflow-x:auto; gap:6px; padding:7px; margin-bottom:0;
+        border-right:0; border-bottom:1px solid #19374d;
         scrollbar-width:none;
       }
       .tabs::-webkit-scrollbar { display:none; }
@@ -403,10 +389,19 @@ _INDEX_HTML = r"""<!doctype html>
 <main>
   <div class="header">
     <div>
-      <h1>Better GroBro</h1>
+      <div class="header-title-row">
+        <h1>Better GroBro</h1>
+        <span id="dashboard-version" class="version-pill">–</span>
+      </div>
       <p class="muted">Konfiguration und Batterie-Zuordnung</p>
     </div>
-    <button id="back-top" type="button" class="secondary">Zurück zum Add-on</button>
+    <div class="header-right">
+      <div class="dashboard-state">
+        <span id="overview-status-dot" class="status-dot"></span>
+        <span id="overview-status-text">–</span>
+      </div>
+      <button id="back-top" type="button" class="secondary compact-back" aria-label="Zurück zum Add-on" title="Zurück zum Add-on">↩</button>
+    </div>
   </div>
 
   <nav class="tabs">
@@ -420,20 +415,6 @@ _INDEX_HTML = r"""<!doctype html>
   </nav>
 
   <section id="tab-overview" class="tab active">
-    <div class="dashboard-head">
-      <div>
-        <div class="dashboard-title-row">
-          <h2>Better GroBro</h2>
-          <span id="dashboard-version" class="version-pill">–</span>
-        </div>
-        <p class="muted">GroBro, optimized for Home Assistant.</p>
-      </div>
-      <div class="dashboard-state">
-        <span id="overview-status-dot" class="status-dot"></span>
-        <span id="overview-status-text">–</span>
-      </div>
-    </div>
-
     <div class="dashboard-panel">
       <div class="dashboard-section-title">
         <div>
