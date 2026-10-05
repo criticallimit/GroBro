@@ -430,7 +430,7 @@ class Client:
         from grobro.ha.battery_position import (
             prepare_battery_payload,
         )
-        from grobro.ha.device_inventory import observe_device, observe_telemetry
+        from grobro.ha.device_inventory import observe_device, observe_telemetry, observe_wifi_signal
         from grobro.ha.firmware_runtime import (
             _firmware_part_names_for_device,
             _invalidate_discovery_for_firmware_change,
@@ -452,6 +452,9 @@ class Client:
         retry_pending_device_config(self, device_id)
         state_payload = state.payload
         observe_device(device_id)
+        live_config = self._config_cache.get(device_id)
+        if live_config is not None:
+            observe_wifi_signal(device_id, getattr(live_config, "wifi_signal", None))
 
         if _supports_combined_firmware(device_id):
             config = self._config_cache.get(device_id)
