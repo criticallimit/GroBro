@@ -1,3 +1,15 @@
+# Better GroBro 3.2.1 — Ingress overview update
+
+## User-relevant changes
+
+- Reworked the Better GroBro Ingress overview into the compact dashboard layout.
+- Added live Bat1–Bat4 SoC and temperature display for NOAH systems.
+- Added live Wi-Fi signal strength display for detected devices, including mapped NEO devices behind ShineWeLink.
+- Improved device icon proportions, text readability and card alignment.
+- Existing configuration, battery assignment, MQTT, diagnostics and log functions remain unchanged.
+
+---
+
 # Better GroBro 3.2.0 — Differences from robertzaage/GroBro
 
 Comparison baseline: `robertzaage/GroBro` main at `e4d59b20ba472853ae6ec0b7a17cf15cd774cb23` (2026-09-18).
