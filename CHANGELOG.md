@@ -1,4 +1,4 @@
-# Better GroBro 3.2.1 — Ingress overview update
+# Better GroBro 3.2.1 — Differences from robertzaage/GroBro
 
 ## User-relevant changes
 
