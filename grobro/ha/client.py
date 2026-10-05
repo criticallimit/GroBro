@@ -279,9 +279,10 @@ class Client:
     @guard_runtime
     def set_config(self, device_id: str, config: model.DeviceConfig):
         from grobro.ha.config_runtime import _merge_config, persisted_runtime_data, discovery_config_data, load_persisted_config, persist_device_config
-        from grobro.ha.device_inventory import observe_device
+        from grobro.ha.device_inventory import observe_device, observe_wifi_signal
 
         observe_device(device_id)
+        observe_wifi_signal(device_id, getattr(config, "wifi_signal", None))
         if hasattr(self, "_client") and hasattr(self, "_device_last_seen"):
             self.__refresh_device_activity(device_id)
 
