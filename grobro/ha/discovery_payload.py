@@ -100,7 +100,7 @@ def build_discovery_payload(
         if "_ser_part_" in state_name and state_name.startswith("bat"):
             continue
         unique_id = f"grobro_{device_id}_{state_name}"
-        payload["cmps"][unique_id] = {
+        component = {
             "platform": "sensor",
             "name": state.homeassistant.name,
             "state_topic": f"{base_topic}/grobro/{device_id}/state",
@@ -109,7 +109,6 @@ def build_discovery_payload(
             "device_class": state.homeassistant.device_class,
             "state_class": state.homeassistant.state_class,
             "unit_of_measurement": state.homeassistant.unit_of_measurement,
-            "icon": state.homeassistant.icon,
             **(
                 {
                     "suggested_display_precision":
@@ -119,6 +118,14 @@ def build_discovery_payload(
                 else {}
             ),
         }
+        # Let Home Assistant select the state-dependent battery icon from the
+        # battery device class instead of forcing the static mdi:battery icon.
+        if not (
+            state.homeassistant.device_class == "battery"
+            and state.homeassistant.icon == "mdi:battery"
+        ):
+            component["icon"] = state.homeassistant.icon
+        payload["cmps"][unique_id] = component
 
     # Combined battery serial entities remain a NOAH-only UI feature.
     # NEXA serial fragments are decoded internally for stable slot mapping.
