@@ -36,6 +36,10 @@ def observe_wifi_signal(device_id: str, value) -> None:
         signal = int(str(value).strip())
     except (TypeError, ValueError):
         return
+    # Register 76 is defined as dBm. Zero/positive values are placeholders or
+    # invalid readbacks, not usable Wi-Fi signal measurements.
+    if signal >= 0 or signal < -120:
+        return
 
     with _LOCK:
         item = _DEVICES.get(device_id)
