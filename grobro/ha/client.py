@@ -279,7 +279,7 @@ class Client:
     @guard_runtime
     def set_config(self, device_id: str, config: model.DeviceConfig):
         from grobro.ha.config_runtime import _merge_config, persisted_runtime_data, discovery_config_data, load_persisted_config, persist_device_config
-        from grobro.ha.device_inventory import observe_device, observe_telemetry
+        from grobro.ha.device_inventory import observe_device
 
         observe_device(device_id)
         if hasattr(self, "_client") and hasattr(self, "_device_last_seen"):
@@ -429,7 +429,7 @@ class Client:
         from grobro.ha.battery_position import (
             prepare_battery_payload,
         )
-        from grobro.ha.device_inventory import observe_device
+        from grobro.ha.device_inventory import observe_device, observe_telemetry
         from grobro.ha.firmware_runtime import (
             _firmware_part_names_for_device,
             _invalidate_discovery_for_firmware_change,
