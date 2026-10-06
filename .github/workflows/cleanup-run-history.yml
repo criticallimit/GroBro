@@ -1,0 +1,65 @@
+name: Cleanup old workflow runs
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [.github/workflows/cleanup-run-history.yml]
+
+permissions:
+  actions: write
+
+concurrency:
+  group: cleanup-run-history
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Delete old completed runs, retaining the newest per workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          CURRENT_RUN: ${{ github.run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          deleted=0
+          # Snapshot before deleting: deleting while paginating would skip runs.
+          # A second sweep covers CI/build runs completed during the first sweep.
+          for sweep in 1 2; do
+            gh api --paginate "repos/$REPOSITORY/actions/runs?per_page=100" |
+              jq -s '[.[].workflow_runs[]]' > "$RUNNER_TEMP/runs.json"
+            jq -r --argjson current "$CURRENT_RUN" '
+              group_by(.workflow_id)[] |
+              sort_by(.id) | reverse | .[1:][] |
+              select(.status == "completed" and .id != $current) | .id
+            ' "$RUNNER_TEMP/runs.json" > "$RUNNER_TEMP/delete-runs.txt"
+            echo "Sweep $sweep: $(wc -l < "$RUNNER_TEMP/delete-runs.txt") old completed runs"
+            while read -r run_id; do
+              success=false
+              for attempt in 1 2 3 4; do
+                if gh api --method DELETE "repos/$REPOSITORY/actions/runs/$run_id" 2> "$RUNNER_TEMP/delete-error.txt"; then
+                  success=true
+                  deleted=$((deleted + 1))
+                  break
+                fi
+                if grep -q 'HTTP 404' "$RUNNER_TEMP/delete-error.txt"; then
+                  success=true
+                  break
+                fi
+                cat "$RUNNER_TEMP/delete-error.txt" >&2
+                sleep $((attempt * 60))
+              done
+              if [ "$success" != true ]; then
+                echo "Failed to delete run $run_id" >&2
+                exit 1
+              fi
+              if (( deleted % 50 == 0 )); then echo "Deleted $deleted runs"; fi
+              # Stay below GitHub's secondary content-mutation rate limit.
+              sleep 1
+            done < "$RUNNER_TEMP/delete-runs.txt"
+          done
+          echo "Deleted $deleted old workflow runs; retained newest and active runs." | tee -a "$GITHUB_STEP_SUMMARY"
