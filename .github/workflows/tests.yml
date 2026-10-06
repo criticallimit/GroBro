@@ -3,8 +3,36 @@ name: CI
 on:
   push:
     branches: [main, criticallimit, "criticallimit/**"]
+    paths:
+      - "grobro/**"
+      - "tests/**"
+      - "translations/**"
+      - "config.yaml"
+      - "repository.yaml"
+      - "Dockerfile"
+      - "run.sh"
+      - "requirements.txt"
+      - "requirements-dev.txt"
+      - "pyproject.toml"
+      - "icon.png"
+      - "logo.png"
+      - ".github/workflows/tests.yml"
   pull_request:
     branches: [main]
+    paths:
+      - "grobro/**"
+      - "tests/**"
+      - "translations/**"
+      - "config.yaml"
+      - "repository.yaml"
+      - "Dockerfile"
+      - "run.sh"
+      - "requirements.txt"
+      - "requirements-dev.txt"
+      - "pyproject.toml"
+      - "icon.png"
+      - "logo.png"
+      - ".github/workflows/tests.yml"
   workflow_dispatch:
 
 concurrency:
