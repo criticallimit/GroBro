@@ -251,10 +251,10 @@ _INDEX_HTML = r"""<!doctype html>
     .battery-value small { display:block; margin-top:4px; font-size:11px; line-height:1.2; color:#9ab0c0; font-weight:650; }
 
     .overview-log {
-      margin:0; height:150px; min-height:150px; max-height:150px; overflow:auto;
+      margin:0; height:150px; min-height:150px; max-height:150px; overflow:hidden;
       white-space:pre; background:#050c12; border:1px solid #17364c; border-radius:9px;
       padding:11px 12px; color:#b8d2e2;
-      font:10px/1.45 ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace;
+      font:10px/1.4 ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace;
     }
     .overview-empty {
       grid-column:1/-1; padding:18px; border:1px dashed #28485d; border-radius:9px;
@@ -868,7 +868,6 @@ async function loadOverviewLogs(){
     const text=out.logs||"";
     const lines=text.split(/\r?\n/).filter(Boolean).slice(-9);
     output.textContent=lines.length?lines.join("\n"):l({de:"Noch keine Protokolleinträge seit dem Start.",en:"No log entries since startup.",fr:"Aucune entrée de journal depuis le démarrage.",es:"No hay entradas de registro desde el inicio.",nl:"Nog geen logboekvermeldingen sinds het starten."});
-    output.scrollTop=output.scrollHeight;
   }catch(error){
     output.textContent=l({de:"Protokoll konnte nicht geladen werden.",en:"Could not load log.",fr:"Impossible de charger le journal.",es:"No se pudo cargar el registro.",nl:"Logboek kon niet worden geladen."});
   }
