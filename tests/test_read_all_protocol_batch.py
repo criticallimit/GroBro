@@ -10,6 +10,32 @@ from grobro import ha, model
 from grobro.grobro import parser
 
 
+@pytest.mark.parametrize("result", [(4, None), (15, None), SimpleNamespace(rc=4)])
+@pytest.mark.parametrize("accepted_before_failure", [0, 1])
+def test_read_all_aborts_rejected_holding_reads_and_can_retry(tmp_path, monkeypatch, result, accepted_before_failure):
+    monkeypatch.chdir(tmp_path)
+    with patch("paho.mqtt.client.Client"):
+        target = ha.Client(model.MQTTConfig(host="localhost", port=1883))
+    target.on_command = MagicMock(side_effect=[(0, None)] * accepted_before_failure + [result])
+    target.on_config_read = MagicMock()
+    message = SimpleNamespace(topic="homeassistant/button/grobro/QMNTEST/read_all/set", payload=b"1")
+    try:
+        with patch("grobro.ha.client.Timer") as timer:
+            target._Client__on_message(target._client, None, message)
+            assert target.on_command.call_count == accepted_before_failure + 1
+            assert not target._read_all_active
+            assert not target._config_read_queues
+            timer.assert_not_called()
+            target.on_command.side_effect = None
+            target.on_command.return_value = (0, None)
+            target._Client__on_message(target._client, None, message)
+            assert "QMNTEST" in target._read_all_active
+            assert target._config_read_queues["QMNTEST"]
+            timer.assert_called_once()
+    finally:
+        target.stop()
+
+
 @pytest.mark.parametrize("result", [(4, None), (15, None), SimpleNamespace(rc=4)],
                          ids=["no-connection", "queue-full", "paho-result"])
 def test_rejected_read_all_publish_releases_sequence_and_allows_retry(tmp_path, monkeypatch, result):

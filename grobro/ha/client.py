@@ -487,7 +487,6 @@ class Client:
         if stable_logical_max > effective_max_bat:
             effective_max_bat = stable_logical_max
 
-        observe_telemetry(device_id, state_payload, effective_max_bat)
         self.__detect_neo_pv_count(device_id, state_payload)
         try:
             self.__publish_device_discovery(device_id, effective_max_bat)
@@ -509,6 +508,8 @@ class Client:
             known_registers,
             rules,
         )
+        # Share HA's validated values before serial fragments are combined below.
+        observe_telemetry(device_id, payload, effective_max_bat)
 
         if rules[3]:
             expose_combined_battery_serials = model.is_family(device_id, "noah")
@@ -813,13 +814,21 @@ class Client:
                                 continue
 
                         pos = register.growatt.position
-                        self.on_command(
+                        result = self.on_command(
                             make_modbus_command(
                                 device_id,
                                 GrowattModbusFunction.READ_SINGLE_REGISTER,
                                 pos.register_no,
                             )
                         )
+                        if not publish_succeeded(result):
+                            with self._config_read_lock:
+                                self.__cancel_config_read_sequence(device_id)
+                            LOG.warning(
+                                "%s: MQTT rejected a holding-register read; Read All can be retried",
+                                _device_label(device_id),
+                            )
+                            return
 
                     # Queue all config reads through the same generic path.
                     with self._config_read_lock:

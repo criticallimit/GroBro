@@ -8,6 +8,9 @@ from grobro.ha.device_inventory import (
 from grobro.ha.battery_position import prepare_battery_payload, save_manual_assignments
 from types import SimpleNamespace
 import pytest
+import json
+from unittest.mock import patch
+from grobro import ha, model
 
 
 def setup_function():
@@ -86,3 +89,22 @@ def test_overview_serial_and_measurements_follow_same_manual_mapping(tmp_path, m
     batteries = get_device_inventory()[0]["batteries"]
     assert batteries[1] == {"slot": 2, "serial": "SERIAL_B", "soc": 80, "temperature": 24}
     assert batteries[2] == {"slot": 3, "serial": "SERIAL_A", "soc": 20, "temperature": 12}
+
+
+@pytest.mark.parametrize("temperature", [-273.1, 0, 21.5])
+def test_overview_uses_the_same_temperature_validation_as_ha(tmp_path, monkeypatch, temperature):
+    monkeypatch.chdir(tmp_path)
+    with patch("paho.mqtt.client.Client"):
+        target = ha.Client(model.MQTTConfig(host="localhost", port=1883))
+    target._client.publish.return_value = (0, None)
+    try:
+        target.publish_input_register(SimpleNamespace(
+            device_id="0PVPTEST", payload={"bat1_temp": temperature, "bat_1_soc_pct": 50},
+        ))
+        published = [call.args[1] for call in target._client.publish.call_args_list
+                     if call.args[0] == "homeassistant/grobro/0PVPTEST/state"]
+        expected = None if temperature == -273.1 else temperature
+        assert json.loads(published[-1])["bat1_temp"] == expected
+        assert get_device_inventory()[0]["batteries"][0].get("temperature") == expected
+    finally:
+        target.stop()
