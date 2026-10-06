@@ -28,7 +28,6 @@ from grobro.grobro.builder import (
     scramble,
 )
 from grobro.grobro.cloud_policy import CloudForwardingPolicy
-from grobro.grobro.noah_heater import heater_state_from_unscrambled
 from grobro.grobro.diagnostic_io import DiagnosticWriter, diagnostic_scope
 from grobro.grobro.raw_dump import dump_message_jsonl
 from grobro.grobro.register_debug import (
@@ -541,7 +540,6 @@ class Client:
             # Read msg_type from both possible offsets
             msg_type_4 = struct.unpack_from(">H", unscrambled, 4)[0]
             msg_type = struct.unpack_from(">H", unscrambled, 6)[0]
-            heater_state = heater_state_from_unscrambled(unscrambled, device_id)
 
             # Config TLV: NEO=340,341 / NOAH=387 at offset 4; ShineWeLink=0x0129 at offset 6
             if msg_type_4 in (340, 341, 387) or msg_type == 0x0129:
@@ -840,8 +838,6 @@ class Client:
                             LOG.debug("Dropping bad payload: %s", device_id)
                             return
                         state.payload[name] = value
-                    if heater_state is not None:
-                        state.payload["heater"] = heater_state
                     if state.payload:
                         self.on_input_register(state)
                     return

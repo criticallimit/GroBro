@@ -28,7 +28,6 @@ Persistent runtime files are stored in `/data/GroBro`.
 - `grobro/grobro/builder.py` — packet construction, scrambling and CRC
 - `grobro/grobro/cloud_policy.py` — cloud-forwarding policy
 - `grobro/grobro/noah_0103.py` — NOAH/NEO 0x0103 handling
-- `grobro/grobro/noah_heater.py` — supported NOAH heater behavior
 - `grobro/grobro/raw_dump.py` — optional raw-message diagnostics
 - `grobro/grobro/register_debug.py` — optional register diagnostics
 - `grobro/grobro/noah_traffic_debug.py` and `noah_protocol_debug.py` — targeted diagnostics

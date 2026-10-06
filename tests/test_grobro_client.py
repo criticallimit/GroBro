@@ -469,19 +469,46 @@ class TestClientOnMessage:
         client._client.on_message(None, None, msg)
         client.on_input_register.assert_called_once()
 
-    def test_noah_heater_is_added_directly_to_input_state(self, client):
-        data = (Path(DATA_DIR) / "NoahReadInputRegisters_0-124.bin").read_bytes()
-        msg = _msg("c/33/0PVP0000TEST0001", data)
+    @pytest.mark.parametrize("raw_state, expected", list(enumerate([
+        "Off", "1 On", "2 On", "1&2 On", "3 On", "1&3 On", "2&3 On",
+        "1&2&3 On", "4 On", "1&4 On", "2&4 On", "1&2&4 On", "3&4 On",
+        "1&3&4 On", "2&3&4 On", "All On",
+    ])))
+    def test_noah_heater_from_generic_input_register(self, client, raw_state, expected):
+        from grobro.grobro import parser
+        from grobro.model.growatt_registers import KNOWN_NOAH_REGISTERS
+        from grobro.model.modbus_message import (
+            HEADER_SIZE, METADATA_SIZE, GrowattModbusFunction, GrowattModbusMessage,
+        )
 
-        with patch(
-            "grobro.grobro.client.heater_state_from_unscrambled",
-            return_value="1&2 On",
-        ) as heater_decoder:
-            client._client.on_message(None, None, msg)
+        data = (DATA_DIR / "NoahReadInputRegisters_0-124.bin").read_bytes()
+        plain = bytearray(parser.unscramble(data))
+        message = GrowattModbusMessage.parse_grobro(plain)
+        assert message.function == GrowattModbusFunction.READ_INPUT_REGISTER
+        register = KNOWN_NOAH_REGISTERS.input_registers["heater"]
+        assert register.growatt.position.register_no == 17
+        assert register.growatt.position.offset == 0
+        assert register.growatt.position.size == 2
+        assert register.growatt.data.data_type == "ENUM"
+        block = next(block for block in message.register_blocks if block.start <= 17 <= block.end)
+        values = bytearray(block.values)
+        offset = (17 - block.start) * 2
+        values[offset:offset + 2] = raw_state.to_bytes(2, "big")
+        block.values = bytes(values)
+        assert register.growatt.data.parse(message.get_data(register.growatt.position)) == expected
 
-        heater_decoder.assert_called_once()
+        block_offset = HEADER_SIZE + METADATA_SIZE
+        for preceding in message.register_blocks:
+            if preceding is block:
+                break
+            block_offset += preceding.size()
+        plain[block_offset:block_offset + block.size()] = block.build_grobro()
+        msg = _msg("c/33/0PVP0000TEST0001", parser.unscramble(bytes(plain)))
+        client._client.on_message(None, None, msg)
+
+        client.on_input_register.assert_called_once()
         state = client.on_input_register.call_args.args[0]
-        assert state.payload["heater"] == "1&2 On"
+        assert state.payload["heater"] == expected
 
     @patch("grobro.grobro.client._cloud_lower", "true")
     @patch("grobro.grobro.client.GROWATT_CLOUD", "true")
