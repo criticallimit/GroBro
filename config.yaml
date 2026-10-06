@@ -12,18 +12,12 @@ panel_icon: mdi:battery-sync-outline
 panel_title: Better GroBro
 panel_admin: true
 arch:
-  - armhf
-  - armv7
   - aarch64
   - amd64
-  - i386
 
 build_from:
   amd64: "ghcr.io/home-assistant/amd64-python"
-  armhf: "ghcr.io/home-assistant/armhf-python"
-  armv7: "ghcr.io/home-assistant/armv7-python"
   aarch64: "ghcr.io/home-assistant/aarch64-python"
-  i386: "ghcr.io/home-assistant/i386-python"
 map:
   - share:rw
 options:
