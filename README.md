@@ -4,6 +4,16 @@
 
 Better GroBro builds on [Robert Zaage's GroBro](https://github.com/robertzaage/GroBro) and adds a built-in Home Assistant interface, persistent battery assignments and practical tools for everyday operation.
 
+## Your devices and batteries at a glance
+
+![Better GroBro overview showing live NEO and NOAH devices, battery charge levels, temperatures, assignments and the current-session log](https://raw.githubusercontent.com/criticallimit/GroBro/039119aee7d8e1090f82a137a2e86dc1399c0140/docs/images/better-grobro-overview.png)
+
+*Built-in Home Assistant interface · Example overview in German*
+
+- **See connected devices:** detected Growatt devices and their Wi-Fi signal strength in one overview.
+- **Keep track of your batteries:** charge level, temperature and battery assignment together on one page.
+- **Troubleshoot in place:** view the current-session log and access MQTT, Growatt Cloud and diagnostic settings from the sidebar.
+
 ---
 
 ## Better GroBro 3.2.2
