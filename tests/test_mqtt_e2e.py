@@ -386,8 +386,8 @@ def test_bridge_last_will_on_abrupt_process_exit(tmp_path):
 
 
 @pytest.mark.skipif(not os.getenv("E2E_MQTT_HOST"), reason="requires real MQTT brokers")
-def test_real_cloud_async_forwarding_and_reconnect(tmp_path, monkeypatch):
-    """Cloud transport preserves queued bytes/order across a real lost socket."""
+def test_real_cloud_direct_forwarding_and_reconnect(tmp_path, monkeypatch):
+    """Cloud transport forwards live bytes and resumes without an application backlog."""
     import socket
     host = os.environ["E2E_MQTT_HOST"]
     port = int(os.getenv("E2E_MQTT_PORT", "1883"))
@@ -416,15 +416,17 @@ def test_real_cloud_async_forwarding_and_reconnect(tmp_path, monkeypatch):
         disconnected = threading.Event()
         original = forward.on_disconnect
         def on_disconnect(*args):
-            original(*args)
+            if callable(original):
+                original(*args)
             disconnected.set()
         forward.on_disconnect = on_disconnect
         forward.socket().shutdown(socket.SHUT_RDWR)
         assert disconnected.wait(5)
+        assert _wait_until(forward.is_connected)
         source._Client__publish_to_growatt_server(device, topic, b"second", 0, False)
         source._Client__publish_to_growatt_server(device, topic, b"third", 0, False)
         assert _wait_until(lambda: received == [b"first", b"second", b"third"])
-        assert not source._forward_pending
+        assert not hasattr(source, "_forward_pending")
     finally:
         if source is not None:
             source.stop()

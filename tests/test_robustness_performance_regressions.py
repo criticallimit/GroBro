@@ -1,6 +1,5 @@
 """Persistence recovery and callback interleaving regressions."""
 import json
-from collections import deque
 from threading import Event, Thread
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -56,24 +55,6 @@ def clients(tmp_path, monkeypatch):
     target.stop()
 
 
-@pytest.mark.parametrize("status", [0, 4])
-def test_queue_overflow_during_publish_keeps_unsent_successor(clients, status):
-    source, _ = clients
-    key = "forward_client_0PVPTEST"
-    source._forward_pending[key] = deque(("topic", str(i).encode(), 0, False) for i in range(100))
-    sent = []
-    def publish(topic, payload, **kwargs):
-        sent.append(int(payload))
-        if len(sent) == 1:
-            source._Client__queue_growatt_forward("0PVPTEST", "topic", b"100", 0, False)
-            return (status, None)
-        return (0, None)
-    mqtt = SimpleNamespace(publish=publish)
-    source._Client__flush_growatt_forward_queue("0PVPTEST", mqtt)
-    if status:
-        assert source._forward_pending[key][0][1] == b"1"
-        source._Client__flush_growatt_forward_queue("0PVPTEST", mqtt)
-    assert sent == list(range(101))
 
 
 def test_timeout_serializes_offline_with_new_telemetry(clients, monkeypatch):

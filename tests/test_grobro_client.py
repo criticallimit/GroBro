@@ -122,86 +122,42 @@ class TestClientLifecycle:
         assert client._smart_meter_state_cache == {}
 
 
-    def test_forward_client_waits_for_connack_before_use(self, client):
+    def test_forward_client_uses_upstream_connection_sequence(self, client):
         forward = MagicMock()
-
-        def complete_connect():
-            reason = MagicMock()
-            reason.is_failure = False
-            forward.on_connect(forward, None, None, reason, None)
-
-        forward.loop_start.side_effect = complete_connect
-
-        with patch("grobro.grobro.client.mqtt.Client", return_value=forward):
-            connected = client._Client__connect_to_growatt_server(
-                "QMN000ABC1D2E3FG"
-            )
-
+        with patch("grobro.grobro.client.mqtt.Client", return_value=forward) as factory:
+            connected = client._Client__connect_to_growatt_server("QMNTEST")
         assert connected is forward
-        forward.connect_async.assert_called_once_with("forward.com", 7006, 60)
-        forward.connect.assert_not_called()
-        forward.subscribe.assert_called_once_with("+/QMN000ABC1D2E3FG")
-        assert client._forward_ready[
-            "forward_client_QMN000ABC1D2E3FG"
-        ].is_set()
+        factory.assert_called_once_with(client_id="QMNTEST", callback_api_version=grobro_client.mqtt.CallbackAPIVersion.VERSION2)
+        assert [call[0] for call in forward.mock_calls] == [
+            "tls_set", "tls_insecure_set", "connect", "subscribe", "loop_start",
+        ]
+        forward.connect.assert_called_once_with("forward.com", 7006, 60)
+        forward.subscribe.assert_called_once_with("+/QMNTEST")
+        forward.tls_set.assert_called_once_with(cert_reqs=grobro_client.ssl.CERT_NONE)
+        forward.tls_insecure_set.assert_called_once_with(True)
+        forward.connect_async.assert_not_called()
+        forward.reconnect_delay_set.assert_not_called()
+        assert forward.on_message == client._Client__on_message_forward_client
 
-    def test_forward_client_queues_until_connack(self, client):
+
+    def test_forward_client_publishes_live_packet_directly(self, client):
         forward = MagicMock()
-        forward.publish.return_value = (0, MagicMock())
-
         with patch("grobro.grobro.client.mqtt.Client", return_value=forward):
-            connected = client._Client__connect_to_growatt_server(
-                "QMN000ABC1D2E3FG"
-            )
-            client._Client__publish_to_growatt_server(
-                "QMN000ABC1D2E3FG",
-                "c/33/QMN000ABC1D2E3FG",
-                b"payload",
-                0,
-                False,
-            )
+            client._Client__publish_to_growatt_server("QMNTEST", "c/33/QMNTEST", b"payload", 2, True)
+        forward.publish.assert_called_once_with("c/33/QMNTEST", payload=b"payload", qos=2, retain=True)
+        assert not hasattr(client, "_forward_pending")
 
-        assert connected is forward
-        forward.publish.assert_not_called()
-        key = "forward_client_QMN000ABC1D2E3FG"
-        assert len(client._forward_pending[key]) == 1
 
-        reason = MagicMock()
-        reason.is_failure = False
-        forward.on_connect(forward, None, None, reason, None)
-
-        forward.subscribe.assert_called_once_with("+/QMN000ABC1D2E3FG")
-        forward.publish.assert_called_once()
-        assert key not in client._forward_pending
-
-    def test_forward_publish_no_conn_is_queued_and_flushed_after_reconnect(self, client):
+    @pytest.mark.parametrize("qos", [0, 1, 2])
+    def test_forward_publish_no_conn_does_not_replay_old_packet(self, client, qos):
         forward = MagicMock()
         forward.publish.side_effect = [(grobro_client.mqtt.MQTT_ERR_NO_CONN, None), (0, None)]
-
         with patch("grobro.grobro.client.mqtt.Client", return_value=forward):
-            client._Client__connect_to_growatt_server("QMN000ABC1D2E3FG")
+            client._Client__publish_to_growatt_server("QMNTEST", "topic", b"old", qos, False)
+            client._Client__publish_to_growatt_server("QMNTEST", "topic", b"new", qos, False)
+        assert [call.kwargs["payload"] for call in forward.publish.call_args_list] == [b"old", b"new"]
+        assert not hasattr(client, "_forward_pending")
 
-        reason = MagicMock()
-        reason.is_failure = False
-        forward.on_connect(forward, None, None, reason, None)
-
-        client._Client__publish_to_growatt_server(
-            "QMN000ABC1D2E3FG",
-            "c/33/QMN000ABC1D2E3FG",
-            b"payload",
-            0,
-            False,
-        )
-
-        key = "forward_client_QMN000ABC1D2E3FG"
-        assert not client._forward_ready[key].is_set()
-        assert len(client._forward_pending[key]) == 1
-
-        forward.on_connect(forward, None, None, reason, None)
-
-        assert client._forward_ready[key].is_set()
-        assert key not in client._forward_pending
-        assert forward.publish.call_count == 2
 
 
 class TestClientSend:
@@ -783,16 +739,9 @@ class TestClientForward:
             fc = MagicMock()
             mc.return_value = fc
 
-            def complete_connect():
-                reason = MagicMock()
-                reason.is_failure = False
-                fc.on_connect(fc, None, None, reason, None)
-
-            fc.loop_start.side_effect = complete_connect
-
             result = client._Client__connect_to_growatt_server("test-dev")
             assert result is fc
-            fc.connect_async.assert_called_once()
+            fc.connect.assert_called_once_with("forward.com", 7006, 60)
             fc.subscribe.assert_called_once_with("+/test-dev")
             fc.loop_start.assert_called_once()
 
@@ -840,27 +789,6 @@ class TestClientForward:
             )
 
 
-    def test_forward_queue_overflow_drops_oldest_once_with_warning(self, client, caplog):
-        caplog.set_level("WARNING", logger=grobro_client.LOG.name)
-        key = "forward_client_QMN000ABC1D2E3FG"
-        for index in range(101):
-            client._Client__queue_growatt_forward(
-                "QMN000ABC1D2E3FG",
-                "c/33/QMN000ABC1D2E3FG",
-                str(index).encode(),
-                0,
-                False,
-            )
-
-        queue = client._forward_pending[key]
-        assert len(queue) == 100
-        assert queue[0][1] == b"1"
-        assert queue[-1][1] == b"100"
-        assert key in client._forward_overflow_warned
-        assert sum(
-            "Growatt Cloud connection is delayed" in record.message
-            for record in caplog.records
-        ) == 1
 
 
 

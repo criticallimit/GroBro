@@ -83,22 +83,16 @@ def test_identical_telemetry_retries_failed_initial_neo_read(clients, monkeypatc
 
 
 @pytest.mark.parametrize("error", [RuntimeError, OSError])
-def test_cloud_publish_exception_keeps_queue_retryable(clients, error):
+def test_cloud_publish_exception_does_not_replay_old_packet(clients, error):
     source, _ = clients
-    source._Client__queue_growatt_forward("QMNTEST", "topic", b"one", 0, False)
-    source._Client__queue_growatt_forward("QMNTEST", "topic", b"two", 0, False)
     forward = MagicMock()
-    forward.publish.side_effect = error("network unavailable")
-    source._Client__flush_growatt_forward_queue("QMNTEST", forward)
-    assert list(source._forward_pending["forward_client_QMNTEST"]) == [
-        ("topic", b"one", 0, False), ("topic", b"two", 0, False),
-    ]
-    forward.publish.side_effect = None
-    forward.publish.return_value = (0, None)
-    forward.publish.reset_mock()
-    source._Client__flush_growatt_forward_queue("QMNTEST", forward)
-    assert [call.kwargs["payload"] for call in forward.publish.call_args_list] == [b"one", b"two"]
-    assert "forward_client_QMNTEST" not in source._forward_pending
+    forward.publish.side_effect = [error("unavailable"), (0, None)]
+    with patch("paho.mqtt.client.Client", return_value=forward):
+        with pytest.raises(error):
+            source._Client__publish_to_growatt_server("QMNTEST", "topic", b"old", 0, False)
+        source._Client__publish_to_growatt_server("QMNTEST", "topic", b"new", 0, False)
+    assert [call.kwargs["payload"] for call in forward.publish.call_args_list] == [b"old", b"new"]
+
 
 
 @pytest.mark.parametrize("failure", [(4, None), SimpleNamespace(rc=4)])
@@ -140,20 +134,3 @@ def test_failed_bridge_online_publish_is_retried_on_live_device(clients, failure
         assert len(online) == 2
         assert all(call.args[1] == "online" and call.kwargs == {"qos": 1, "retain": True} for call in online)
         assert target._last_availability["QMNTEST"] is True
-
-
-@pytest.mark.parametrize("error", [RuntimeError, OSError])
-def test_cloud_connect_callback_survives_publish_error_and_next_packet_retries(clients, error):
-    source, _ = clients
-    forward = MagicMock()
-    forward.publish.side_effect = error("socket unavailable")
-    with patch("grobro.grobro.client.mqtt.Client", return_value=forward):
-        source._Client__publish_to_growatt_server("QMNTEST", "topic", b"one", 0, False)
-    forward.on_connect(forward, None, None, SimpleNamespace(is_failure=False), None)
-    assert source._forward_ready["forward_client_QMNTEST"].is_set()
-    assert source._forward_pending["forward_client_QMNTEST"][0][1] == b"one"
-    forward.publish.side_effect = None
-    forward.publish.return_value = (0, None)
-    forward.publish.reset_mock()
-    source._Client__publish_to_growatt_server("QMNTEST", "topic", b"two", 0, False)
-    assert [call.kwargs["payload"] for call in forward.publish.call_args_list] == [b"one", b"two"]
