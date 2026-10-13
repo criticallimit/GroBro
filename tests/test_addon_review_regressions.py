@@ -85,8 +85,6 @@ def test_source_stop_cleans_every_connection_after_failure(tmp_path, monkeypatch
         client = grobro.Client(config, config)
     first, second = MagicMock(), MagicMock()
     client._forward_clients = {"one": first, "two": second}
-    client._forward_ready = {"one": object()}
-    client._forward_pending = {"one": deque([("topic", b"data", 0, False)])}
     client._pending_config_writes = {"dev": deque([4])}
     getattr(client._client, failure).side_effect = RuntimeError("source failure")
     getattr(first, failure).side_effect = RuntimeError("cloud failure")
@@ -95,8 +93,6 @@ def test_source_stop_cleans_every_connection_after_failure(tmp_path, monkeypatch
         connection.disconnect.assert_called_once()
         connection.loop_stop.assert_called_once()
     assert not client._forward_clients
-    assert not client._forward_ready
-    assert not client._forward_pending
     assert not client._pending_config_writes
 
 

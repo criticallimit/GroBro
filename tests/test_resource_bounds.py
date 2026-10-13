@@ -23,16 +23,17 @@ def source(tmp_path, monkeypatch):
     client.stop()
 
 
-def test_cloud_initial_connection_is_async_and_reused(source):
+def test_cloud_initial_connection_is_synchronous_and_reused(source):
     forward = MagicMock()
-    forward.connect.side_effect = AssertionError("Blocking connect must not run")
     with patch("paho.mqtt.client.Client", return_value=forward) as factory:
-        for _ in range(10):
-            source._Client__publish_to_growatt_server("QMNTEST", "c/QMNTEST", b"data", 0, False)
+        for index in range(10):
+            source._Client__publish_to_growatt_server("QMNTEST", "c/QMNTEST", str(index).encode(), 0, False)
     assert factory.call_count == 1
-    forward.connect_async.assert_called_once_with("localhost", 1883, 60)
-    forward.reconnect_delay_set.assert_called_once_with(min_delay=1, max_delay=60)
-    assert len(source._forward_pending["forward_client_QMNTEST"]) == 10
+    forward.connect.assert_called_once_with("localhost", 1883, 60)
+    forward.connect_async.assert_not_called()
+    forward.reconnect_delay_set.assert_not_called()
+    assert [call.kwargs["payload"] for call in forward.publish.call_args_list] == [str(i).encode() for i in range(10)]
+
 
 
 def test_cloud_concurrent_creation_has_single_loop(source):
@@ -44,52 +45,32 @@ def test_cloud_concurrent_creation_has_single_loop(source):
     clients[0].loop_start.assert_called_once()
 
 
-def test_cloud_failed_loop_start_keeps_packet_and_retries(source):
+@pytest.mark.parametrize("stage", ["connect", "subscribe", "loop_start"])
+def test_cloud_failed_setup_discards_packet_and_retries(source, stage):
     forward = MagicMock()
-    forward.loop_start.side_effect = [RuntimeError("thread unavailable"), None]
-    forward.publish.return_value = (0, None)
+    getattr(forward, stage).side_effect = [RuntimeError("unavailable"), None]
     with patch("paho.mqtt.client.Client", return_value=forward):
         with pytest.raises(RuntimeError):
-            source._Client__publish_to_growatt_server("QMNTEST", "c/QMNTEST", b"one", 0, False)
+            source._Client__publish_to_growatt_server("QMNTEST", "topic", b"old", 0, False)
         assert not source._forward_clients
-        source._Client__publish_to_growatt_server("QMNTEST", "c/QMNTEST", b"two", 0, False)
-    forward.on_connect(forward, None, None, SimpleNamespace(is_failure=False), None)
-    assert [call.kwargs["payload"] for call in forward.publish.call_args_list] == [b"one", b"two"]
+        forward.disconnect.assert_called_once()
+        source._Client__publish_to_growatt_server("QMNTEST", "topic", b"new", 0, False)
+    forward.publish.assert_called_once_with("topic", payload=b"new", qos=0, retain=False)
 
 
-def test_cloud_late_connack_after_stop_does_not_reactivate(source):
+
+def test_cloud_packets_after_stop_do_not_reactivate(source):
     with patch("paho.mqtt.client.Client") as factory:
         forward = source._Client__connect_to_growatt_server("QMNTEST")
     source.stop()
-    forward.on_connect(forward, None, None, SimpleNamespace(is_failure=False), None)
-    forward.subscribe.assert_not_called()
-    source._Client__publish_to_growatt_server("QMNTEST", "c/QMNTEST", b"late", 0, False)
-    assert not source._forward_pending
+    source._Client__publish_to_growatt_server("QMNTEST", "topic", b"late", 0, False)
+    forward.publish.assert_not_called()
     assert not source._forward_clients
     assert source._Client__connect_to_growatt_server("QMNTEST") is None
     assert factory.call_count == 1
 
 
-def test_cloud_flush_does_not_serialize_unrelated_devices(source):
-    entered, release, second = threading.Event(), threading.Event(), threading.Event()
-    def slow(*args, **kwargs):
-        entered.set()
-        assert release.wait(3)
-        return (0, None)
-    for device in ("QMNONE", "QMNTWO"):
-        source._Client__queue_growatt_forward(device, "topic", b"data", 0, False)
-    worker = threading.Thread(target=source._Client__flush_growatt_forward_queue, args=("QMNONE", SimpleNamespace(publish=slow)))
-    worker.start()
-    try:
-        assert entered.wait(3)
-        def fast(*args, **kwargs):
-            second.set()
-            return (0, None)
-        source._Client__flush_growatt_forward_queue("QMNTWO", SimpleNamespace(publish=fast))
-        assert second.is_set()
-    finally:
-        release.set()
-        worker.join(3)
+
 
 
 def test_gateway_failed_save_retries_without_losing_live_routing(source):
@@ -247,7 +228,6 @@ def test_cloud_slow_network_stop_has_shared_deadline(source, monkeypatch):
         assert entered.is_set()
         assert not finished.is_set()
         assert not source._forward_clients
-        assert not source._forward_pending
         forward.disconnect.assert_called_once()
     finally:
         release.set()

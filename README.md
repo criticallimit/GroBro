@@ -16,7 +16,7 @@ Better GroBro builds on [Robert Zaage's GroBro](https://github.com/robertzaage/G
 
 ---
 
-## Better GroBro 3.2.2
+## Better GroBro 3.2.3
 
 ### What Better GroBro offers
 
@@ -42,6 +42,8 @@ Better GroBro builds on [Robert Zaage's GroBro](https://github.com/robertzaage/G
 - Firmware changes refresh the Home Assistant device information automatically
 
 #### More reliable everyday operation
+
+- Growatt Cloud forwarding uses Robert Zaage's synchronous connection setup and direct MQTT forwarding, without an additional Better GroBro backlog
 
 - Improved recovery of MQTT connections and Home Assistant discovery after restarts
 - More reliable “Read All” handling when replies are missing or a connection is interrupted

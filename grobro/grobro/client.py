@@ -236,14 +236,9 @@ class Client:
         self._config_read_ready = threading.Event()
         self._forward_mqtt_config = forward_mqtt
         self._forward_clients: dict[str, mqtt.Client] = {}
-        self._forward_ready: dict[str, threading.Event] = {}
-        self._forward_pending: dict[str, deque[tuple[str, bytes, int, bool]]] = {}
-        self._forward_pending_lock = threading.Lock()
-        self._forward_flush_locks = {}
         self._forward_lifecycle_lock = threading.RLock()
         self._forward_stopped = False
         self._diagnostic_writer = DiagnosticWriter()
-        self._forward_overflow_warned: set[str] = set()
         self._ptq_for_raq: dict[str, str] = {}
         self._gateway_dirty = set()
         # Dedicated links survive partial gateway config packets and restart.
@@ -311,11 +306,6 @@ class Client:
         finally:
             with self._forward_lifecycle_lock:
                 self._forward_clients.clear()
-                self._forward_ready.clear()
-                self._forward_flush_locks.clear()
-            with self._forward_pending_lock:
-                self._forward_pending.clear()
-                self._forward_overflow_warned.clear()
             with self._pending_config_lock:
                 self._pending_config_writes.clear()
                 self._config_ack_tracking_disabled.clear()
@@ -924,89 +914,6 @@ class Client:
         except Exception as exc:
             LOG.exception("Unexpected error while handling Growatt Cloud data (%s)", exc)
 
-    def __queue_growatt_forward(
-        self,
-        client_id: str,
-        topic: str,
-        payload: bytes,
-        qos: int,
-        retain: bool,
-    ) -> None:
-        key = f"forward_client_{client_id}"
-        with self._forward_pending_lock:
-            if self._forward_stopped:
-                return
-            queue = self._forward_pending.setdefault(key, deque())
-            if len(queue) >= 100:
-                queue.popleft()
-                if key not in self._forward_overflow_warned:
-                    LOG.warning(
-                        "%s: Growatt Cloud connection is delayed; oldest queued message was discarded",
-                        _device_label(client_id),
-                    )
-                    self._forward_overflow_warned.add(key)
-            queue.append((topic, bytes(payload), int(qos), bool(retain)))
-
-    def __flush_growatt_forward_queue(self, client_id: str, client) -> None:
-        # Serialize each device independently; a busy cloud link cannot block others.
-        with self._forward_lifecycle_lock:
-            if self._forward_stopped:
-                return
-            lock = self._forward_flush_locks.setdefault(client_id, threading.Lock())
-        with lock:
-            self.__drain_growatt_forward_queue(client_id, client)
-
-    def __drain_growatt_forward_queue(self, client_id: str, client) -> None:
-        key = f"forward_client_{client_id}"
-        while True:
-            with self._forward_pending_lock:
-                if self._forward_stopped:
-                    return
-                queue = self._forward_pending.get(key)
-                if not queue:
-                    self._forward_pending.pop(key, None)
-                    self._forward_overflow_warned.discard(key)
-                    return
-                pending = queue[0]
-                topic, payload, qos, retain = pending
-
-            try:
-                result = client.publish(
-                    topic,
-                    payload=payload,
-                    qos=qos,
-                    retain=retain,
-                )
-            except Exception:
-                LOG.exception("Could not flush an MQTT message to %s; keeping queued messages for retry", topic)
-                return
-            status = getattr(result, "rc", None)
-            if status is None:
-                try:
-                    status = result[0]
-                except (TypeError, IndexError, KeyError):
-                    status = None
-
-            if status == mqtt.MQTT_ERR_NO_CONN:
-                ready = self._forward_ready.get(key)
-                if ready is not None:
-                    ready.clear()
-                return
-            if status not in (None, mqtt.MQTT_ERR_SUCCESS):
-                LOG.warning(
-                    "Could not send an MQTT message to %s (error code %s)",
-                    topic,
-                    status,
-                )
-                return
-
-            with self._forward_pending_lock:
-                queue = self._forward_pending.get(key)
-                # Overflow may already have removed this in-flight entry.
-                # Never acknowledge its still-unsent successor.
-                if queue and queue[0] is pending:
-                    queue.popleft()
-
     def __publish_to_growatt_server(
         self,
         client_id: str,
@@ -1015,30 +922,20 @@ class Client:
         qos: int,
         retain: bool,
     ) -> None:
-        with self._forward_lifecycle_lock:
-            if self._forward_stopped:
-                return
-            # Preserve packets even when creating/starting the network loop fails.
-            self.__queue_growatt_forward(client_id, topic, payload, qos, retain)
-            client = self.__connect_to_growatt_server(client_id)
-            if client is None:
-                return
-            ready = self._forward_ready[f"forward_client_{client_id}"]
-        if ready.is_set():
-            self.__flush_growatt_forward_queue(client_id, client)
+        # Match upstream GroBro: hand each live packet directly to Paho.
+        # Better GroBro does not keep a backlog or replay failed packets.
+        client = self.__connect_to_growatt_server(client_id)
+        if client is not None:
+            client.publish(topic, payload=payload, qos=qos, retain=retain)
 
-    # Setup Growatt MQTT broker for forwarding messages
+    # Setup Growatt MQTT broker using Robert Zaage's synchronous sequence.
     def __connect_to_growatt_server(self, client_id):
         with self._forward_lifecycle_lock:
             if self._forward_stopped:
                 return None
             key = f"forward_client_{client_id}"
-
             if key not in self._forward_clients:
-                LOG.info(
-                    "%s: connecting to Growatt Cloud",
-                    _device_label(client_id),
-                )
+                LOG.info("%s: connecting to Growatt Cloud", _device_label(client_id))
                 client = mqtt.Client(
                     client_id=client_id,
                     callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
@@ -1046,57 +943,25 @@ class Client:
                 client.tls_set(cert_reqs=ssl.CERT_NONE)
                 client.tls_insecure_set(True)
                 client.on_message = self.__on_message_forward_client
-
-                ready = threading.Event()
-
-                def on_connect(forward_client, _userdata, _flags, reason_code, _properties):
-                    if self._forward_stopped:
-                        forward_client.disconnect()
-                        return
-                    if getattr(reason_code, "is_failure", False):
-                        LOG.warning(
-                            "%s: could not connect to Growatt Cloud (%s)",
-                            _device_label(client_id),
-                            reason_code,
-                        )
-                        return
-                    forward_client.subscribe(f"+/{client_id}")
-                    ready.set()
-                    self.__flush_growatt_forward_queue(client_id, forward_client)
-
-                def on_disconnect(
-                    _forward_client,
-                    _userdata,
-                    _disconnect_flags,
-                    _reason_code,
-                    _properties,
-                ):
-                    ready.clear()
-
-                client.on_connect = on_connect
-                client.on_disconnect = on_disconnect
-                client.reconnect_delay_set(min_delay=1, max_delay=60)
-                client.connect_async(
-                    self._forward_mqtt_config.host,
-                    self._forward_mqtt_config.port,
-                    60,
-                )
-                self._forward_clients[key] = client
-                self._forward_ready[key] = ready
                 try:
+                    client.connect(
+                        self._forward_mqtt_config.host,
+                        self._forward_mqtt_config.port,
+                        60,
+                    )
+                    client.subscribe(f"+/{client_id}")
                     started = client.loop_start()
                     if isinstance(started, int) and started != mqtt.MQTT_ERR_SUCCESS:
                         raise RuntimeError(f"Cloud MQTT loop could not start: {started}")
                 except Exception:
-                    self._forward_clients.pop(key, None)
-                    self._forward_ready.pop(key, None)
                     try:
                         client.disconnect()
                     except Exception:
-                        LOG.exception("Could not clean up a failed cloud loop")
+                        LOG.exception("Could not clean up a failed cloud connection")
                     raise
-
+                self._forward_clients[key] = client
             return self._forward_clients[key]
+
 
 def dump_message_binary(topic, payload):
     """Compatibility entrypoint for the centralized raw MQTT JSONL dump."""

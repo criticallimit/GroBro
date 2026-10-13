@@ -288,23 +288,6 @@ def test_unknown_family_has_consistent_empty_rules():
     assert len(_register_rules(None)) == 4
 
 
-def test_cloud_connection_becoming_ready_during_enqueue_flushes_packet(clients):
-    import threading
-    _, source = clients
-    forward = MagicMock()
-    forward.publish.return_value = (0, None)
-    source._forward_ready["forward_client_0PVPTEST"] = ready = threading.Event()
-    original_queue = source._Client__queue_growatt_forward
-
-    def queue_and_complete_connect(*args):
-        original_queue(*args)
-        ready.set()
-
-    with patch.object(source, "_Client__connect_to_growatt_server", return_value=forward), \
-         patch.object(source, "_Client__queue_growatt_forward", side_effect=queue_and_complete_connect):
-        source._Client__publish_to_growatt_server("0PVPTEST", "c/0PVPTEST", b"packet", 1, False)
-    forward.publish.assert_called_once_with("c/0PVPTEST", payload=b"packet", qos=1, retain=False)
-    assert not source._forward_pending
 
 
 @pytest.mark.parametrize("failure", ["start", "stop"])
