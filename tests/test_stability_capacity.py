@@ -44,7 +44,7 @@ def test_capacity_discovery_has_stable_identifier():
 
 @pytest.fixture
 def gateway():
-    with patch("grobro.grobro.client.mqtt.Client") as mock:
+    with patch("grobro.grobro.client.mqtt.Client"):
         client = GrowattClient(MQTTConfig(host="localhost", port=1883), None)
         client.on_config = MagicMock()
         client.on_input_register = MagicMock()
