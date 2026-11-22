@@ -144,6 +144,19 @@ def build_discovery_payload(
             state.homeassistant.icon,
         ):
             component["icon"] = state.homeassistant.icon
+        if (
+            model.is_family(device_id, "noah") or model.is_family(device_id, "nexa")
+        ) and (
+            state_name.startswith("bat") or "battery" in state_name.lower()
+        ):
+            # Keep the sensor's state unchanged; attributes explicitly say
+            # whether this particular measurement was restored from cache.
+            component["json_attributes_topic"] = f"{base_topic}/grobro/{device_id}/state"
+            component["json_attributes_template"] = (
+                "{{ {'cached': '" + state_name + "' in value_json.get('battery_cached_values', {}), "
+                "'last_live_at': value_json.get('battery_cached_values', {}).get('"
+                + state_name + "', {}).get('observed_at')} | tojson }}"
+            )
         payload["cmps"][unique_id] = component
 
     # Virtual capacity sensor: nominal 2.048 kWh per verified battery pack.
