@@ -169,6 +169,9 @@ def flush(client, *, force: bool = False) -> None:
                 json.dump(_store(client, device_id), stream, separators=(",", ":"))
             os.replace(tmp, path)
         except (OSError, TypeError, ValueError) as exc:
+            # Keep the dirty value for a later retry, but do not try the same
+            # unwritable mount on every incoming device packet.
+            saved[device_id] = now
             LOG.warning("Unable to persist Better GroBro state for %s: %s", device_id, exc)
             continue
         saved[device_id] = now
