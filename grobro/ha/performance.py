@@ -48,7 +48,10 @@ def _register_rules(known_registers):
             and getattr(ha_reg, "unit_of_measurement", None) == "W"
         ):
             whole_watt_power.add(name)
-        if name.startswith("bat") and name.endswith("_temp"):
+        if (name.startswith("bat") and name.endswith("_temp")) or name in (
+            "pv1_temp", "pv2_temp", "system_temp"
+        ):
+            # A raw zero in Kelvin decodes to -273.1 °C (not real telemetry).
             invalid_battery_temps.add(name)
         if name.startswith("bat") and "_ser_part_" in name:
             has_battery_serial_parts = True

@@ -78,8 +78,13 @@ jobs:
           allow_anonymous true
           persistence false
           EOF
-          mosquitto -c /tmp/grobro-mosquitto.conf -d
-          mosquitto -c /tmp/grobro-target-mosquitto.conf -d
+          # Ubuntu's packaged Mosquitto runs under AppArmor; /tmp configs
+          # can be rejected even with mode 0644. Use /etc/mosquitto instead.
+          sudo systemctl stop mosquitto || true
+          sudo install -m 644 /tmp/grobro-mosquitto.conf /etc/mosquitto/ci-source.conf
+          sudo install -m 644 /tmp/grobro-target-mosquitto.conf /etc/mosquitto/ci-target.conf
+          mosquitto -c /etc/mosquitto/ci-source.conf -d
+          mosquitto -c /etc/mosquitto/ci-target.conf -d
           for attempt in {1..20}; do
             if mosquitto_pub -h 127.0.0.1 -p 1883 -t grobro/ci/health -m ready &&
                mosquitto_pub -h 127.0.0.1 -p 1884 -t grobro/ci/health -m ready; then

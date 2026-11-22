@@ -97,6 +97,9 @@ def _resolve_max_bat(device_id: str, payload: dict | None = None) -> int:
         return max(1, min(4, MAX_BAT))
     if payload is not None:
         count = _detect_bat_count(payload)
+        # Auto mode remembers the largest confirmed stack; a short disconnect
+        # must not delete entities assigned to stable battery serial numbers.
+        count = max(count, _MAX_BAT_CACHE.get(device_id, 1))
         _MAX_BAT_CACHE[device_id] = count
         return count
     return _MAX_BAT_CACHE.get(device_id, 1)
@@ -238,6 +241,8 @@ class Client:
         try:
             with runtime_lock(self):
                 self._stopped = True
+                from grobro.ha.sensor_cache import flush
+                flush(self, force=True)
                 with self._config_read_lock, self._device_timer_lock:
                     cancel_runtime_timers(self)
                 self.__publish_offline_devices()
@@ -477,6 +482,12 @@ class Client:
                 state_payload = dict(state_payload)
                 state_payload["fw_version"] = firmware_version
 
+        # Restore the last confirmed battery count before evaluating discovery.
+        # The per-device measurement cache is separate from manual slot mapping.
+        if device_id not in _MAX_BAT_CACHE and not isinstance(MAX_BAT, int):
+            from grobro.ha.sensor_cache import saved_max_bat
+            _MAX_BAT_CACHE[device_id] = saved_max_bat(self, device_id)
+
         stable_logical_max = 1
         if model.uses_noah_protocol(device_id):
             state_payload, stable_logical_max = prepare_battery_payload(
@@ -525,6 +536,19 @@ class Client:
                         payload[combined_key] = combined
                     else:
                         payload.pop(combined_key, None)
+
+        # Backfill only state-like measurements from the last twelve hours;
+        # never publish cached output power/current as if it were live.
+        from grobro.ha.sensor_cache import merge_state
+        payload = merge_state(
+            self, device_id, payload, known_registers,
+            detected_bat_count=_detect_bat_count(state.payload),
+            max_bat=effective_max_bat,
+            preserve_assignment_gaps=(
+                KEEP_BATTERY_POSITION
+                and any(key.startswith("bat") and key.endswith("_serial") for key in payload)
+            ),
+        )
 
         if not _should_serialize_state(self, device_id, payload, commit=False):
             LOG.debug(

@@ -172,6 +172,11 @@ _INDEX_HTML = r"""<!doctype html>
     .header-title-row { display:flex; align-items:center; gap:8px; }
     .header-right { display:flex; align-items:center; gap:8px; }
     .compact-back { width:32px; min-width:32px; min-height:30px; padding:4px; font-size:15px; }
+    .dashboard-panel[hidden] { display:none; }
+    .noah-metrics-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(155px,1fr)); gap:9px; }
+    .noah-metric { padding:10px; border:1px solid #24425a; border-radius:9px; background:#112537; }
+    .noah-metric span { display:block; color:#9ab0c0; font-size:11px; }
+    .noah-metric strong { display:block; margin-top:3px; font-size:18px; }
     .dashboard-panel {
       margin-top:10px; padding:12px;
       border:1px solid #19384f; border-radius:12px;
@@ -413,6 +418,13 @@ _INDEX_HTML = r"""<!doctype html>
       <div id="summary-devices" class="serials" hidden></div>
       <strong id="summary-version" hidden>–</strong>
       <strong id="summary-state" hidden>–</strong>
+    </div>
+
+    <div id="overview-noah-metrics-panel" class="dashboard-panel" hidden>
+      <div class="dashboard-section-title"><div>
+        <h3>NOAH – PV- und Batteriezustand</h3>
+      </div></div>
+      <div id="overview-noah-metrics" class="noah-metrics-grid"></div>
     </div>
 
     <div class="dashboard-panel">
@@ -779,6 +791,34 @@ function renderOverviewDevices(){
   }
 }
 
+function renderOverviewNoahMetrics(){
+  const panel=document.getElementById("overview-noah-metrics-panel");
+  const host=document.getElementById("overview-noah-metrics");
+  const inventory=(batteryState&&Array.isArray(batteryState.inventory))?batteryState.inventory:[];
+  const fields=[
+    ["pv1_temp",l({de:"PV1-Temperatur",en:"PV1 temperature",fr:"Température PV1",es:"Temperatura PV1",nl:"PV1-temperatuur"}),"°C",1],
+    ["pv2_temp",l({de:"PV2-Temperatur",en:"PV2 temperature",fr:"Température PV2",es:"Temperatura PV2",nl:"PV2-temperatuur"}),"°C",1],
+    ["system_temp",l({de:"Systemtemperatur",en:"System temperature",fr:"Température système",es:"Temperatura del sistema",nl:"Systeemtemperatuur"}),"°C",1],
+    ["bat_soh",l({de:"Batteriezustand (SoH)",en:"Battery health (SoH)",fr:"Santé batterie (SoH)",es:"Salud de batería (SoH)",nl:"Batterijgezondheid (SoH)"}),"%",0],
+  ];
+  host.replaceChildren();
+  for(const item of inventory){
+    if(String(item.family||"").toLowerCase()!=="noah")continue;
+    for(const [key,label,unit,digits] of fields){
+      const value=item[key];
+      if(value===null||value===undefined||value==="")continue;
+      const number=Number(value);
+      if(!Number.isFinite(number))continue;
+      const tile=document.createElement("div");tile.className="noah-metric";
+      const name=document.createElement("span");name.textContent=label;
+      const reading=document.createElement("strong");reading.textContent=number.toFixed(digits)+" "+unit;
+      const device=document.createElement("span");device.textContent=item.device_id||"";
+      tile.append(name,reading,device);host.appendChild(tile);
+    }
+  }
+  panel.hidden=host.childElementCount===0;
+}
+
 function clampSoc(value){
   if(value===null||value===undefined||value==="")return null;
   const number=Number(value);
@@ -912,6 +952,7 @@ async function loadBatteries(){
   else{select.disabled=false;for(const d of batteryState.devices)select.appendChild(option(d.device_id,d.device_id,d.device_id===previous));if(!select.value)select.selectedIndex=0;}
   renderBatteries();
   renderOverviewDevices();
+  renderOverviewNoahMetrics();
   renderOverviewBatteries();
 }
 document.getElementById("device").addEventListener("change",renderBatteries);

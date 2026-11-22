@@ -81,3 +81,31 @@ Install and update Better GroBro from the Home Assistant Add-on Store using:
 `https://github.com/criticallimit/GroBro`
 
 Existing supported settings are retained during normal in-place updates.
+
+
+## Experimental 3.3 improvements: NOAH sensors and persistent battery state
+
+The NOAH register map now publishes PV1 temperature (input register 94), PV2
+temperature (97), system temperature (98), and battery state of health (102).
+Temperatures are decoded from 0.1 K with the Growatt offset of -273.1 °C.
+These sensors use additional MQTT Discovery IDs; existing IDs remain unchanged.
+
+Better GroBro persists state-like measurements (battery SoC, temperatures,
+battery-related voltages and SoH) for up to **12 hours** to
+`/share/GroBro/state_cache`. The existing `share:rw` add-on mapping is retained.
+The cache is updated no more than every 300 seconds and flushed during a
+normal shutdown. Set `BETTER_GROBRO_STATE_DIR` to a writable alternative
+directory in plain Docker or tests.
+
+Offline behavior:
+- MQTT availability still reports device presence separately; saved data does
+  not mark an offline device as online.
+- Missing battery values may be backfilled from the last valid snapshot,
+  with their original observation timestamps retained on disk.
+- Live power/current and energy counters are **never** restored from cache.
+- A temporary battery disconnect does not shrink the highest discovered battery
+  count. An explicit numeric `MAX_BAT` override still limits visible slots.
+- Battery serial-to-logical-slot assignments continue to use Better GroBro's
+  existing manual mapping files; the sensor cache never changes them.
+- Register 412 for NOAH charging power remains **unmodified** pending a
+  device-specific validation against existing register 11.
