@@ -84,3 +84,31 @@ def test_neo_holding_block_uses_raw_one_as_full_limit(gateway):
     state = gateway.on_holding_register_input.call_args.args[0]
     assert state.payload[0].name == "output_power_limit"
     assert state.payload[0].value == 100
+
+
+def test_cached_measurements_have_timestamps_and_ha_attributes(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from grobro.ha.sensor_cache import merge_state
+
+    monkeypatch.setenv("BETTER_GROBRO_STATE_DIR", str(tmp_path))
+    device = "0PVP0000TEST0001"
+    registers = get_known_registers(device)
+    client = SimpleNamespace()
+    merge_state(client, device, {"bat2_temp": 23.5}, registers,
+                detected_bat_count=2, max_bat=2)
+    latest = merge_state(client, device, {"bat2_temp": 0}, registers,
+                         detected_bat_count=1, max_bat=2)
+    assert latest["bat2_temp"] == 23.5
+    meta = latest["battery_cached_values"]["bat2_temp"]
+    assert meta["observed_at"] > 0
+    assert meta["age_minutes"] >= 0
+
+    discovery = build_discovery_payload(
+        device, registers, {"identifiers": [device]},
+        base_topic="homeassistant", bridge_topic="homeassistant/grobro/bridge/availability",
+        effective_max_bat=2, pv_count=None, max_slots=1, device_timeout=120,
+        availability_sensor=False,
+    )
+    attributes = discovery["cmps"][f"grobro_{device}_bat2_temp"]["json_attributes_template"]
+    assert "last_live_at" in attributes
+    assert "cached" in attributes
