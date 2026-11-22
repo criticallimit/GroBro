@@ -1,5 +1,4 @@
 """Regression checks for battery capacity and NEO protocol recovery."""
-import json
 import struct
 
 import pytest
