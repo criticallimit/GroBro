@@ -873,7 +873,7 @@ function renderOverviewBatteries(){
       body.append(title,serialLine,assignment);
 
       const value=document.createElement("div");value.className="battery-value";
-      value.textContent=energy.toLocaleString(undefined,{minimumFractionDigits:3,maximumFractionDigits:3});
+      value.textContent=energy.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
       const unit=document.createElement("small");unit.textContent="kWh";
       value.appendChild(unit);
       card.append(icon,body,value);host.appendChild(card);

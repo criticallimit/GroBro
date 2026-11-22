@@ -16,7 +16,7 @@ Better GroBro builds on [Robert Zaage's GroBro](https://github.com/robertzaage/G
 
 ---
 
-## Better GroBro 3.3.3
+## Better GroBro 3.3.4
 
 ### What Better GroBro offers
 
@@ -82,4 +82,4 @@ Existing Better GroBro settings are retained when updating the installed add-on.
 
 Better GroBro is based on [robertzaage/GroBro](https://github.com/robertzaage/GroBro) by Robert Zaage and contributors.
 
-**Neu in 3.3.3:** Stabile Batterie-Entitäten nach Neustarts; aktueller kWh-Inhalt als Batteriekachel direkt neben Bat1–Bat3, ohne zusätzliche NOAH-/PV-Zustandszeile.
+**Neu in 3.3.4:** Der aktuelle Batterieenergieinhalt wird mit zwei Nachkommastellen angezeigt.

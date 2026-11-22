@@ -172,7 +172,7 @@ def build_discovery_payload(
             "device_class": "energy",
             "state_class": "measurement",
             "unit_of_measurement": "kWh",
-            "suggested_display_precision": 3,
+            "suggested_display_precision": 2,
             "icon": "mdi:battery-high",
         }
 
