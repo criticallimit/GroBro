@@ -146,6 +146,23 @@ def build_discovery_payload(
             component["icon"] = state.homeassistant.icon
         payload["cmps"][unique_id] = component
 
+    # Virtual capacity sensor: nominal 2.048 kWh per verified battery pack.
+    # This is capacity, not an energy-consumption counter.
+    if model.is_family(device_id, "noah") or model.is_family(device_id, "nexa"):
+        capacity_uid = f"grobro_{device_id}_battery_total_capacity_kwh"
+        payload["cmps"][capacity_uid] = {
+            "platform": "sensor",
+            "unique_id": capacity_uid,
+            "name": "Total Battery Capacity",
+            "state_topic": f"{base_topic}/grobro/{device_id}/state",
+            "value_template": "{{ value_json.get('battery_total_capacity_kwh', 'unknown') }}",
+            "device_class": "energy",
+            "state_class": "measurement",
+            "unit_of_measurement": "kWh",
+            "suggested_display_precision": 3,
+            "icon": "mdi:battery-high",
+        }
+
     # Combined battery serial entities remain a NOAH-only UI feature.
     # NEXA serial fragments are decoded internally for stable slot mapping.
     has_bat_ser_parts = (
