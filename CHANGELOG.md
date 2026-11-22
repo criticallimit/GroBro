@@ -1,3 +1,13 @@
+# Better GroBro 3.3.2 — Differences from robertzaage/GroBro
+
+## User-relevant differences
+
+- Der in 3.3.1 hinzugefügte Sensor für nominelle Batteriekapazität wird durch den Sensor „Current Battery Energy“ (kWh) ersetzt. Dieser berechnet die aktuell gespeicherte Energie näherungsweise anhand von gemeldeter Akkuanzahl und aktuellem Gesamt-SoC.
+- Bei fehlender oder ungültiger Live-Messung wird kein geschätzter Wert erfunden. Es handelt sich weder um die Nennkapazität noch einen Energiezähler.
+- Kein zusätzlicher Nennkapazitätssensor.
+
+---
+
 # Better GroBro 3.3.1 — Differences from robertzaage/GroBro
 
 ## User-relevant differences
