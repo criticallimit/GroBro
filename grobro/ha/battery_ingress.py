@@ -800,13 +800,13 @@ function renderOverviewNoahMetrics(){
     ["pv2_temp",l({de:"PV2-Temperatur",en:"PV2 temperature",fr:"Température PV2",es:"Temperatura PV2",nl:"PV2-temperatuur"}),"°C",1],
     ["system_temp",l({de:"Systemtemperatur",en:"System temperature",fr:"Température système",es:"Temperatura del sistema",nl:"Systeemtemperatuur"}),"°C",1],
     ["bat_soh",l({de:"Batteriezustand (SoH)",en:"Battery health (SoH)",fr:"Santé batterie (SoH)",es:"Salud de batería (SoH)",nl:"Batterijgezondheid (SoH)"}),"%",0],
-    ["battery_total_capacity_kwh",l({de:"Gesamte Batteriekapazität",en:"Total battery capacity",fr:"Capacité totale batterie",es:"Capacidad total de batería",nl:"Totale batterijcapaciteit"}),"kWh",3],
+    ["battery_stored_energy_kwh",l({de:"Aktueller Batterieenergieinhalt",en:"Current stored battery energy",fr:"Énergie actuellement stockée",es:"Energía almacenada actual",nl:"Actueel opgeslagen batterij-energie"}),"kWh",3],
   ];
   host.replaceChildren();
   for(const item of inventory){
     if(!["noah","nexa"].includes(String(item.family||"").toLowerCase()))continue;
     for(const [key,label,unit,digits] of fields){
-      if(key!=="battery_total_capacity_kwh" && String(item.family||"").toLowerCase()!=="noah")continue;
+      if(key!=="battery_stored_energy_kwh" && String(item.family||"").toLowerCase()!=="noah")continue;
       const value=item[key];
       if(value===null||value===undefined||value==="")continue;
       const number=Number(value);
