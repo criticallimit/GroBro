@@ -64,6 +64,11 @@ def _extract_device_id(topic: str) -> str:
     return _DEVICE_ID_RE.sub("", str(topic).rsplit("/", 1)[-1])
 
 
+def _normalize_neo_output_power_limit(value):
+    """NEO reports raw 1 for a fully open (100%) output limit."""
+    return 100 if value == 1 else value
+
+
 def _known_registers_for_device(device_id: str):
     """Compatibility wrapper around the central device-family registry."""
     return model.get_known_registers(device_id)
@@ -768,10 +773,46 @@ class Client:
             # Keep 0x0103 out of the generic Modbus path; optional diagnostics
             # consume the already-decoded result directly.
             if noah_msg and noah_msg.get("message_type") == 0x0103:
-                if REGISTER_CAPTURE_ENABLED:
-                    capture_noah_0103(unscrambled, noah_msg)
-                LOG.debug("Handled NOAH/NEO 0x0103 message for %s", device_id)
-                return
+                # A NOAH 0x0103 message embeds another valid Growatt serial
+                # at offset 38. A normal function-3 Modbus block starts with
+                # register start/end there instead. This distinction avoids
+                # passing known NOAH frames to the generic decoder at all.
+                embedded_id = noah_msg.get("device_id", "")
+                if model.is_known_device(embedded_id):
+                    if REGISTER_CAPTURE_ENABLED:
+                        capture_noah_0103(unscrambled, noah_msg)
+                    LOG.debug("Handled NOAH/NEO 0x0103 message for %s", device_id)
+                    return
+
+            # NEO function-6 write acknowledgements use register/status/value
+            # rather than a standard register-block response. Only confirmed
+            # (status=0) values may update the Home Assistant state.
+            if device_id.startswith("QMN"):
+                write_message = GrowattModbusMessage.parse_grobro(unscrambled)
+                if (
+                    write_message is not None
+                    and write_message.function == GrowattModbusFunction.PRESET_SINGLE_REGISTER
+                    and write_message.write_ack is not None
+                ):
+                    ack = write_message.write_ack
+                    if ack.status == 0:
+                        registers = _known_registers_for_device(device_id)
+                        if registers:
+                            for name, register in registers.holding_registers.items():
+                                if register.growatt is None or register.growatt.position.register_no != ack.register_no:
+                                    continue
+                                value = register.growatt.data.parse(ack.value.to_bytes(2, "big"))
+                                if name == "output_power_limit":
+                                    value = _normalize_neo_output_power_limit(value)
+                                if value is not None:
+                                    if register.homeassistant.type == "switch":
+                                        value = "ON" if value == 1 else "OFF"
+                                    self.on_holding_register_input(HomeAssistantHoldingRegisterInput(
+                                        device_id=device_id,
+                                        payload=[HomeAssistantHoldingRegisterValue(name=name, value=value, register=register.homeassistant)],
+                                    ))
+                                break
+                    return
 
             # Generic modbus message
             modbus_message = GrowattModbusMessage.parse_grobro(unscrambled)
@@ -790,13 +831,20 @@ class Client:
                     )
                     return
 
-                if modbus_message.function == GrowattModbusFunction.READ_SINGLE_REGISTER:
+                if modbus_message.function in (
+                    GrowattModbusFunction.READ_SINGLE_REGISTER,
+                    GrowattModbusFunction.READ_HOLDING_REGISTER,
+                ):
                     state = HomeAssistantHoldingRegisterInput(device_id=modbus_device_id)
                     for name, register in known_registers.holding_registers.items():
                         if register.growatt is None:
                             continue
                         data_raw = modbus_message.get_data(register.growatt.position)
+                        if data_raw is None:
+                            continue
                         value = register.growatt.data.parse(data_raw)
+                        if modbus_device_id.startswith("QMN") and name == "output_power_limit":
+                            value = _normalize_neo_output_power_limit(value)
                         if value is None:
                             continue
                         if register.homeassistant.type == "switch":

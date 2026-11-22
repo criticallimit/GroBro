@@ -96,10 +96,33 @@ def observe_telemetry(device_id: str, payload: dict, max_bat: int = 1) -> None:
             "pv2_temp",
             "system_temp",
             "bat_soh",
+            "battery_total_capacity_kwh",
         ):
             value = payload.get(key)
             if value is not None:
                 item[key] = value
+
+
+def observe_battery_cache(device_id: str, payload: dict) -> None:
+    """Project cached measurements into ingress without changing the live feed."""
+    cached = payload.get("battery_cached_values") or {}
+    with _LOCK:
+        item = _DEVICES.get(device_id)
+        if not item:
+            return
+        item["cached_values"] = cached
+        batteries = item.get("batteries", [])
+        for battery in batteries:
+            slot = battery.get("slot")
+            for field, inventory_field in (
+                (f"bat_{slot}_soc_pct", "soc"),
+                (f"bat{slot}_temp", "temperature"),
+            ):
+                if field in cached:
+                    battery[inventory_field] = payload.get(field)
+                    battery[inventory_field + "_cached_minutes"] = cached[field]["age_minutes"]
+                else:
+                    battery.pop(inventory_field + "_cached_minutes", None)
 
 
 def get_device_inventory() -> list[dict[str, object]]:

@@ -120,7 +120,8 @@ def test_ingress_page_has_single_back_navigation_and_auto_return():
 def test_ingress_config_api_reads_and_saves_supervisor_options(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     saved = {}
-    restarted = []
+    from threading import Event
+    restarted = Event()
 
     monkeypatch.setattr(
         battery_ingress,
@@ -143,7 +144,7 @@ def test_ingress_config_api_reads_and_saves_supervisor_options(tmp_path, monkeyp
     monkeypatch.setattr(
         battery_ingress,
         "schedule_restart",
-        lambda: restarted.append(True),
+        restarted.set,
     )
 
     server = start_battery_ingress_server(0)
@@ -178,7 +179,9 @@ def test_ingress_config_api_reads_and_saves_supervisor_options(tmp_path, monkeyp
             "SOURCE_MQTT_HOST": "new.local",
             "KEEP_BATTERY_POSITION": True,
         }
-        assert restarted == [True]
+        # Response is sent before the restart callback executes on the server
+        # thread; wait for the callback rather than racing its execution.
+        assert restarted.wait(timeout=2)
     finally:
         server.shutdown()
         server.server_close()

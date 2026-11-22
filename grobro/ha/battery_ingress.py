@@ -800,11 +800,13 @@ function renderOverviewNoahMetrics(){
     ["pv2_temp",l({de:"PV2-Temperatur",en:"PV2 temperature",fr:"Température PV2",es:"Temperatura PV2",nl:"PV2-temperatuur"}),"°C",1],
     ["system_temp",l({de:"Systemtemperatur",en:"System temperature",fr:"Température système",es:"Temperatura del sistema",nl:"Systeemtemperatuur"}),"°C",1],
     ["bat_soh",l({de:"Batteriezustand (SoH)",en:"Battery health (SoH)",fr:"Santé batterie (SoH)",es:"Salud de batería (SoH)",nl:"Batterijgezondheid (SoH)"}),"%",0],
+    ["battery_total_capacity_kwh",l({de:"Gesamte Batteriekapazität",en:"Total battery capacity",fr:"Capacité totale batterie",es:"Capacidad total de batería",nl:"Totale batterijcapaciteit"}),"kWh",3],
   ];
   host.replaceChildren();
   for(const item of inventory){
-    if(String(item.family||"").toLowerCase()!=="noah")continue;
+    if(!["noah","nexa"].includes(String(item.family||"").toLowerCase()))continue;
     for(const [key,label,unit,digits] of fields){
+      if(key!=="battery_total_capacity_kwh" && String(item.family||"").toLowerCase()!=="noah")continue;
       const value=item[key];
       if(value===null||value===undefined||value==="")continue;
       const number=Number(value);
@@ -878,9 +880,12 @@ function renderOverviewBatteries(){
       const value=document.createElement("div");value.className="battery-value";
       value.textContent=soc===null?"–":Math.round(soc)+"%";
       const detail=document.createElement("small");
-      detail.textContent=battery.temperature===undefined||battery.temperature===null
-        ? l({de:"Live SoC",en:"Live SoC",fr:"SoC en direct",es:"SoC en vivo",nl:"Live SoC"})
-        : Number(battery.temperature).toFixed(1)+" °C";
+      const cachedMinutes=battery.soc_cached_minutes ?? battery.temperature_cached_minutes;
+      detail.textContent=cachedMinutes!==undefined&&cachedMinutes!==null
+        ? l({de:"Letzter Wert vor",en:"Last reading",fr:"Dernière mesure",es:"Última lectura",nl:"Laatste meting"})+" "+Math.round(cachedMinutes)+" min"
+        : battery.temperature===undefined||battery.temperature===null
+          ? l({de:"Live SoC",en:"Live SoC",fr:"SoC en direct",es:"SoC en vivo",nl:"Live SoC"})
+          : Number(battery.temperature).toFixed(1)+" °C";
       value.appendChild(detail);
 
       card.append(icon,body,value);host.appendChild(card);
