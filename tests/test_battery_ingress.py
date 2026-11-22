@@ -591,3 +591,21 @@ def test_overview_shows_current_kwh_as_battery_card_without_noah_pv_panel():
     assert 'NOAH – PV- und Batteriezustand' not in _INDEX_HTML
     assert 'overview-noah-metrics-panel' not in _INDEX_HTML
     assert 'renderOverviewNoahMetrics' not in _INDEX_HTML
+
+
+def test_current_energy_card_uses_two_decimal_places():
+    from grobro.ha.battery_ingress import _INDEX_HTML
+    from grobro.ha.discovery_payload import build_discovery_payload
+    from grobro.model.device_family import get_known_registers
+
+    assert "energy.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})" in _INDEX_HTML
+    assert "energy.toLocaleString(undefined,{minimumFractionDigits:3,maximumFractionDigits:3})" not in _INDEX_HTML
+    device_id = "0PVP0000TEST0001"
+    discovery = build_discovery_payload(
+        device_id, get_known_registers(device_id), {"identifiers": [device_id]},
+        base_topic="homeassistant", bridge_topic="homeassistant/grobro/bridge/availability",
+        effective_max_bat=3, pv_count=None, max_slots=1,
+        device_timeout=120, availability_sensor=False,
+    )
+    sensor = discovery["cmps"][f"grobro_{device_id}_battery_stored_energy_kwh"]
+    assert sensor["suggested_display_precision"] == 2
