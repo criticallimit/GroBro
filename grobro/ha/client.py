@@ -521,10 +521,10 @@ class Client:
         )
         # The nameplate capacity is based only on an explicit pack count
         # in the current device frame, never on historical discovery slots.
-        from grobro.ha.battery_capacity import SENSOR_KEY, nominal_battery_capacity
-        capacity = nominal_battery_capacity(device_id, state.payload)
-        if capacity is not None:
-            payload[SENSOR_KEY] = capacity
+        from grobro.ha.battery_capacity import SENSOR_KEY, current_battery_energy
+        energy = current_battery_energy(device_id, state.payload)
+        if energy is not None:
+            payload[SENSOR_KEY] = energy
 
         # Share HA's validated values before serial fragments are combined below.
         observe_telemetry(device_id, payload, effective_max_bat)
