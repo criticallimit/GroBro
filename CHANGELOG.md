@@ -1,3 +1,13 @@
+# Better GroBro 3.3.3 — Differences from robertzaage/GroBro
+
+## User-relevant differences
+
+- Home-Assistant-Entitäten werden bei einer MQTT-Discovery-Aktualisierung nicht mehr durch eine leere Konfiguration zwischenzeitlich gelöscht.
+- Gespeicherte Batterieanzahl wird vor dem ersten Telemetriepaket berücksichtigt, damit Bat2/Bat3 nach Neustarts erhalten bleiben.
+- Regressionstests für Discovery-Aktualisierungen und das Wiederherstellen persistierter Batterie-Slots.
+
+---
+
 # Better GroBro 3.3.2 — Differences from robertzaage/GroBro
 
 ## User-relevant differences
