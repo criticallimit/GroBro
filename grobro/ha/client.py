@@ -1150,6 +1150,12 @@ class Client:
             )
             return
         if effective_max_bat is None:
+            # Configuration can arrive before the first live measurement after
+            # a restart. Restore previously confirmed battery slots before
+            # building discovery, otherwise HA deletes Bat2/Bat3 entities.
+            if not isinstance(MAX_BAT, int) and device_id not in _MAX_BAT_CACHE:
+                from grobro.ha.sensor_cache import saved_max_bat
+                _MAX_BAT_CACHE[device_id] = saved_max_bat(self, device_id)
             effective_max_bat = _resolve_max_bat(device_id)
 
         signature = (
@@ -1190,7 +1196,9 @@ class Client:
             "Home Assistant: updating entities for %s",
             _device_label(device_id),
         )
-        self._publish_discovery_message(topic, "", retain=True)  # force HA to refresh
+        # Updating a retained device discovery payload is sufficient. Sending
+        # an empty payload first removes every component from the HA registry,
+        # breaking existing dashboards even if immediately republished.
         result = self._publish_discovery_message(topic, payload_str, retain=True)
         if not publish_succeeded(result):
             return
