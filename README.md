@@ -82,4 +82,4 @@ Existing Better GroBro settings are retained when updating the installed add-on.
 
 Better GroBro is based on [robertzaage/GroBro](https://github.com/robertzaage/GroBro) by Robert Zaage and contributors.
 
-**Neu in 3.3.3:** Batterie-Entitäten bleiben bei MQTT-Discovery-Aktualisierungen erhalten; Bat2/Bat3 werden beim Start aus der letzten bestätigten Erkennung wiederhergestellt.
+**Neu in 3.3.3:** Stabile Batterie-Entitäten nach Neustarts; aktueller kWh-Inhalt als Batteriekachel direkt neben Bat1–Bat3, ohne zusätzliche NOAH-/PV-Zustandszeile.
