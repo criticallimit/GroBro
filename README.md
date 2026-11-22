@@ -16,7 +16,7 @@ Better GroBro builds on [Robert Zaage's GroBro](https://github.com/robertzaage/G
 
 ---
 
-## Better GroBro 3.3.2
+## Better GroBro 3.3.3
 
 ### What Better GroBro offers
 
@@ -82,4 +82,4 @@ Existing Better GroBro settings are retained when updating the installed add-on.
 
 Better GroBro is based on [robertzaage/GroBro](https://github.com/robertzaage/GroBro) by Robert Zaage and contributors.
 
-**Neu in 3.3.2:** Aktuell gespeicherte Batterieenergie (kWh) aus Live-SoC und Modulanzahl statt nomineller Kapazität; inklusive NEO-Protokollkorrekturen.
+**Neu in 3.3.3:** Batterie-Entitäten bleiben bei MQTT-Discovery-Aktualisierungen erhalten; Bat2/Bat3 werden beim Start aus der letzten bestätigten Erkennung wiederhergestellt.
