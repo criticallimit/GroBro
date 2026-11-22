@@ -96,6 +96,7 @@ def observe_telemetry(device_id: str, payload: dict, max_bat: int = 1) -> None:
             "pv2_temp",
             "system_temp",
             "bat_soh",
+            "battery_total_capacity_kwh",
         ):
             value = payload.get(key)
             if value is not None:
