@@ -81,3 +81,14 @@ Existing Better GroBro settings are retained when updating the installed add-on.
 ## Credits
 
 Better GroBro is based on [robertzaage/GroBro](https://github.com/robertzaage/GroBro) by Robert Zaage and contributors.
+
+
+### Upcoming (development branch only)
+
+- Additional NOAH PV1/PV2/system temperature and battery SoH sensors (upstream PR #242).
+- Persistent, freshness-limited battery state snapshots (12 hours), preserving
+  existing MQTT availability, manual battery mapping, and Home Assistant entity IDs.
+- Conservative battery discovery across temporary disconnects; fixed maximum
+  battery overrides still take priority.
+- NOAH charging-power register 412 is **not** enabled without NOAH 2000
+  verification. No 3.3 release is published from this development branch.
