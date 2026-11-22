@@ -1,3 +1,14 @@
+# Better GroBro 3.3.1 — Differences from robertzaage/GroBro
+
+## User-relevant differences
+
+- Neuer Sensor „Total Battery Capacity“ (kWh) für NOAH 2000 und NEXA 2000, nur bei plausibler vom Gerät gemeldeter Modulanzahl (2,048 kWh je Modul).
+- Ingress zeigt die Gesamtkapazität und das Alter zwischengespeicherter Batteriewerte an. Home-Assistant-Batteriesensoren erhalten Aktualitätsattribute.
+- Holding-Register-Antworten und NEO-Schreibbestätigungen verbessert; 100%-Leistungslimit korrekt normalisiert.
+- Asynchronen Ingress-Test stabilisiert und Regressionstests erweitert.
+
+---
+
 # Better GroBro 3.3.0 — Differences from robertzaage/GroBro
 
 - NOAH: PV1-/PV2- und Systemtemperatur sowie Batterie-SoH als zusätzliche Sensoren und in der Ingress-Übersicht.
