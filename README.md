@@ -16,7 +16,7 @@ Better GroBro builds on [Robert Zaage's GroBro](https://github.com/robertzaage/G
 
 ---
 
-## Better GroBro 3.3.0
+## Better GroBro 3.3.1
 
 ### What Better GroBro offers
 
@@ -82,4 +82,4 @@ Existing Better GroBro settings are retained when updating the installed add-on.
 
 Better GroBro is based on [robertzaage/GroBro](https://github.com/robertzaage/GroBro) by Robert Zaage and contributors.
 
-**Neu in 3.3.0:** NOAH-PV-/Systemtemperaturen und Batterie-SoH sowie ein 12-Stunden-Cache für Batteriezustände mit stabiler Batterie-Discovery.
+**Neu in 3.3.1:** Gesamte NOAH-/NEXA-Batteriekapazität in kWh, zuverlässigere NEO-Schreibbestätigungen und Kennzeichnung älterer Batteriemesswerte.
