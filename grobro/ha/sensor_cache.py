@@ -84,7 +84,7 @@ def _valid(value) -> bool:
     return isinstance(value, (str, bool))
 
 
-def merge_state(client, device_id: str, payload: dict, known_registers, *, detected_bat_count: int, max_bat: int) -> dict:
+def merge_state(client, device_id: str, payload: dict, known_registers, *, detected_bat_count: int, max_bat: int, preserve_assignment_gaps: bool = False) -> dict:
     """Preserve recent stable measurements missing from an incomplete device frame.
 
     A disconnected battery sometimes sends zero placeholders even though its
@@ -109,6 +109,10 @@ def merge_state(client, device_id: str, payload: dict, known_registers, *, detec
                 continue
             slot = _get_bat_number(name)
             if slot is not None and slot > max_bat:
+                continue
+            # A live serial-based reordering can intentionally leave an old
+            # logical slot empty. Never resurrect a value into that slot.
+            if preserve_assignment_gaps and slot is not None and name not in result:
                 continue
             value = result.get(name)
             placeholder = (
