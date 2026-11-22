@@ -78,6 +78,9 @@ jobs:
           allow_anonymous true
           persistence false
           EOF
+          # Ubuntu's runner may create these files with a restrictive umask.
+          # The mosquitto daemon drops privileges before reading them.
+          chmod 644 /tmp/grobro-mosquitto.conf /tmp/grobro-target-mosquitto.conf
           mosquitto -c /tmp/grobro-mosquitto.conf -d
           mosquitto -c /tmp/grobro-target-mosquitto.conf -d
           for attempt in {1..20}; do
