@@ -41,3 +41,21 @@ def test_stale_values_are_not_restored(tmp_path, monkeypatch):
     }), encoding="utf-8")
     result = merge_state(SimpleNamespace(), device, {}, get_known_registers(device), detected_bat_count=1, max_bat=2)
     assert "bat2_temp" not in result
+
+
+def test_explicit_battery_mapping_gap_is_not_repopulated(tmp_path, monkeypatch):
+    """A live serial reassignment has priority over historical slot data."""
+    monkeypatch.setenv("BETTER_GROBRO_STATE_DIR", str(tmp_path))
+    device = "0PVP000000000001"
+    regs = get_known_registers(device)
+    client = SimpleNamespace()
+    merge_state(client, device, {"bat2_temp": 22.0, "bat3_temp": 23.0}, regs, detected_bat_count=3, max_bat=3)
+    moved = merge_state(
+        client, device, {"bat3_temp": 31.0}, regs,
+        detected_bat_count=2, max_bat=3, preserve_assignment_gaps=True,
+    )
+    assert "bat2_temp" not in moved
+    assert moved["bat3_temp"] == 31.0
+    # The missing value is still available to recover from a real data gap.
+    restored = merge_state(client, device, {}, regs, detected_bat_count=1, max_bat=3)
+    assert restored["bat2_temp"] == 22.0
