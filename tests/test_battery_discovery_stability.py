@@ -1,10 +1,18 @@
 """A discovery refresh must never delete existing dashboard battery entities."""
 import json
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
-from grobro.ha.client import _MAX_BAT_CACHE, get_known_registers
+import pytest
+from grobro.ha.client import Client, _MAX_BAT_CACHE, get_known_registers
+from grobro.model.mqtt_config import MQTTConfig
 from grobro.ha.sensor_cache import flush, merge_state
+
+
+@pytest.fixture
+def ha_client():
+    with patch("grobro.ha.client.mqtt.Client"):
+        yield Client(MQTTConfig(host="localhost", port=1883))
 
 
 def test_startup_config_discovery_restores_persisted_bat2_bat3(ha_client, tmp_path, monkeypatch):
