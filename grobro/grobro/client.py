@@ -773,10 +773,19 @@ class Client:
             # Keep 0x0103 out of the generic Modbus path; optional diagnostics
             # consume the already-decoded result directly.
             if noah_msg and noah_msg.get("message_type") == 0x0103:
-                if REGISTER_CAPTURE_ENABLED:
-                    capture_noah_0103(unscrambled, noah_msg)
-                LOG.debug("Handled NOAH/NEO 0x0103 message for %s", device_id)
-                return
+                # Both special 0x0103 packets and standard Modbus holding
+                # reads share header bytes 01 03. Only divert messages that
+                # fail the *complete* regular register-block decoder.
+                holding_message = GrowattModbusMessage.parse_grobro(unscrambled)
+                if not (
+                    holding_message is not None
+                    and holding_message.function == GrowattModbusFunction.READ_HOLDING_REGISTER
+                    and holding_message.register_blocks
+                ):
+                    if REGISTER_CAPTURE_ENABLED:
+                        capture_noah_0103(unscrambled, noah_msg)
+                    LOG.debug("Handled NOAH/NEO 0x0103 message for %s", device_id)
+                    return
 
             # NEO function-6 write acknowledgements use register/status/value
             # rather than a standard register-block response. Only confirmed
