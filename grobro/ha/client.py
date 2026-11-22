@@ -557,6 +557,9 @@ class Client:
             ),
         )
 
+        from grobro.ha.device_inventory import observe_battery_cache
+        observe_battery_cache(device_id, payload)
+
         if not _should_serialize_state(self, device_id, payload, commit=False):
             LOG.debug(
                 "HA state unchanged for %s, skipping serialization and publish",
