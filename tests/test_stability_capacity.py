@@ -55,8 +55,8 @@ def gateway():
 
 
 def _modbus_msg(function, data):
-    device = b"QMN000ABC1D2E3FG".ljust(30, b"\\x00")
-    payload = struct.pack(">HHHBB30s", 1, 7, 30 + len(data), 1, function, device) + data + b"\\x00\\x00"
+    device = b"QMN000ABC1D2E3FG".ljust(30, bytes([0]))
+    payload = struct.pack(">HHHBB30s", 1, 7, 30 + len(data), 1, function, device) + data + bytes([0, 0])
     # msg_len must be length of entire frame minus its 8-byte prefix.
     payload = bytearray(payload)
     struct.pack_into(">H", payload, 4, len(payload) - 8)
