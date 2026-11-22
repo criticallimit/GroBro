@@ -118,7 +118,13 @@ def merge_state(client, device_id: str, payload: dict, known_registers, *, detec
             )
             if _valid(value) and not placeholder:
                 previous = cached.get(name)
-                if not isinstance(previous, dict) or previous.get("value") != value:
+                # Refresh freshness on every valid reading, but persist no more
+                # often than the normal save interval to avoid SD-card wear.
+                if (
+                    not isinstance(previous, dict)
+                    or previous.get("value") != value
+                    or now - previous.get("observed_at", 0) >= SAVE_INTERVAL_SECONDS
+                ):
                     changed = True
                 cached[name] = {"value": value, "observed_at": now}
             else:
