@@ -159,16 +159,16 @@ def build_discovery_payload(
             )
         payload["cmps"][unique_id] = component
 
-    # Virtual capacity sensor: nominal 2.048 kWh per verified battery pack.
-    # This is capacity, not an energy-consumption counter.
+    # Virtual sensor: estimated stored energy from current pack count and SoC.
+    # This is a measurement, not the nameplate capacity or a cumulative counter.
     if model.is_family(device_id, "noah") or model.is_family(device_id, "nexa"):
-        capacity_uid = f"grobro_{device_id}_battery_total_capacity_kwh"
+        capacity_uid = f"grobro_{device_id}_battery_stored_energy_kwh"
         payload["cmps"][capacity_uid] = {
             "platform": "sensor",
             "unique_id": capacity_uid,
-            "name": "Total Battery Capacity",
+            "name": "Current Battery Energy",
             "state_topic": f"{base_topic}/grobro/{device_id}/state",
-            "value_template": "{{ value_json.get('battery_total_capacity_kwh', 'unknown') }}",
+            "value_template": "{{ value_json.get('battery_stored_energy_kwh', 'unknown') }}",
             "device_class": "energy",
             "state_class": "measurement",
             "unit_of_measurement": "kWh",

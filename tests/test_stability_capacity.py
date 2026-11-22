@@ -7,28 +7,32 @@ from unittest.mock import MagicMock, patch
 
 from grobro.grobro.builder import scramble
 from grobro.grobro.client import Client as GrowattClient
-from grobro.ha.battery_capacity import nominal_battery_capacity
+from grobro.ha.battery_capacity import current_battery_energy
 from grobro.ha.discovery_payload import build_discovery_payload
 from grobro.model.device_family import get_known_registers
 from grobro.model.mqtt_config import MQTTConfig
 
 
 @pytest.mark.parametrize("device,payload,expected", [
-    ("0PVP0000TEST0001", {"bat_cnt": 1}, 2.048),
-    ("0PVP0000TEST0001", {"bat_cnt": 3}, 6.144),
-    ("0PVP0000TEST0001", {"bat_cnt": 4}, 8.192),
-    ("0HVR0000TEST0001", {"batteryPackageQuantity": 2}, 4.096),
-    ("QMN000ABC1D2E3FG", {"bat_cnt": 4}, None),
-    ("0PVP0000TEST0001", {}, None),
-    ("0PVP0000TEST0001", {"bat_cnt": 0}, None),
-    ("0PVP0000TEST0001", {"bat_cnt": 5}, None),
-    ("0PVP0000TEST0001", {"bat_cnt": "3"}, None),
+    ("0PVP0000TEST0001", {"bat_cnt": 1, "tot_bat_soc_pct": 100}, 2.048),
+    ("0PVP0000TEST0001", {"bat_cnt": 3, "tot_bat_soc_pct": 50}, 3.072),
+    ("0PVP0000TEST0001", {"bat_cnt": 4, "tot_bat_soc_pct": 75}, 6.144),
+    ("0HVR0000TEST0001", {"batteryPackageQuantity": 2, "totalBatteryPackSoc": 25}, 1.024),
+    ("QMN000ABC1D2E3FG", {"bat_cnt": 4, "tot_bat_soc_pct": 60}, None),
+    ("0PVP0000TEST0001", {"bat_cnt": 2}, None),
+    ("0PVP0000TEST0001", {"tot_bat_soc_pct": 55}, None),
+    ("0PVP0000TEST0001", {"bat_cnt": 0, "tot_bat_soc_pct": 70}, None),
+    ("0PVP0000TEST0001", {"bat_cnt": 5, "tot_bat_soc_pct": 70}, None),
+    ("0PVP0000TEST0001", {"bat_cnt": 3, "tot_bat_soc_pct": 101}, None),
+    ("0PVP0000TEST0001", {"bat_cnt": 2, "tot_bat_soc_pct": -1}, None),
+    ("0PVP0000TEST0001", {"bat_cnt": 2, "tot_bat_soc_pct": 0}, 0.0),
+    ("0PVP0000TEST0001", {"bat_cnt": "3", "tot_bat_soc_pct": 50}, None),
 ])
-def test_nominal_total_capacity_only_when_pack_count_is_confirmed(device, payload, expected):
-    assert nominal_battery_capacity(device, payload) == expected
+def test_current_battery_energy_requires_valid_live_count_and_soc(device, payload, expected):
+    assert current_battery_energy(device, payload) == expected
 
 
-def test_capacity_discovery_has_stable_identifier():
+def test_current_energy_discovery_has_stable_identifier():
     device = "0PVP0000TEST0001"
     payload = build_discovery_payload(
         device, get_known_registers(device), {"identifiers": [device]},
@@ -36,10 +40,10 @@ def test_capacity_discovery_has_stable_identifier():
         effective_max_bat=4, pv_count=None, max_slots=1,
         device_timeout=120, availability_sensor=False,
     )
-    sensor = payload["cmps"][f"grobro_{device}_battery_total_capacity_kwh"]
+    sensor = payload["cmps"][f"grobro_{device}_battery_stored_energy_kwh"]
     assert sensor["unit_of_measurement"] == "kWh"
     assert sensor["state_class"] == "measurement"
-    assert "battery_total_capacity_kwh" in sensor["value_template"]
+    assert "battery_stored_energy_kwh" in sensor["value_template"]
 
 
 @pytest.fixture
