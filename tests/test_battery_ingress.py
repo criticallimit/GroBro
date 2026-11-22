@@ -576,3 +576,18 @@ def test_log_viewer_preserves_manual_scroll_position():
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_overview_shows_current_kwh_as_battery_card_without_noah_pv_panel():
+    """The total kWh uses the same card and icon as Bat1/Bat2/Bat3."""
+    from grobro.ha.battery_ingress import _INDEX_HTML
+
+    assert 'id="overview-battery-cards"' in _INDEX_HTML
+    assert 'className="battery-card"' in _INDEX_HTML
+    assert 'className="battery-icon"' in _INDEX_HTML
+    assert 'item.battery_stored_energy_kwh' in _INDEX_HTML
+    assert 'value.appendChild(unit)' in _INDEX_HTML
+    assert 'unit.textContent="kWh"' in _INDEX_HTML
+    assert 'NOAH – PV- und Batteriezustand' not in _INDEX_HTML
+    assert 'overview-noah-metrics-panel' not in _INDEX_HTML
+    assert 'renderOverviewNoahMetrics' not in _INDEX_HTML
