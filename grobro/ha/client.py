@@ -544,6 +544,10 @@ class Client:
             self, device_id, payload, known_registers,
             detected_bat_count=_detect_bat_count(state.payload),
             max_bat=effective_max_bat,
+            preserve_assignment_gaps=(
+                KEEP_BATTERY_POSITION
+                and any(key.startswith("bat") and key.endswith("_serial") for key in payload)
+            ),
         )
 
         if not _should_serialize_state(self, device_id, payload, commit=False):
