@@ -1,3 +1,11 @@
+# Better GroBro 3.3.4 — Differences from robertzaage/GroBro
+
+## User-relevant differences
+
+- Aktueller Batterieenergieinhalt wird in der Better-GroBro-Übersicht und als vorgeschlagene Home-Assistant-Anzeigegenauigkeit mit zwei Nachkommastellen dargestellt; die interne Berechnung bleibt unverändert.
+
+---
+
 # Better GroBro 3.3.3 — Differences from robertzaage/GroBro
 
 ## User-relevant differences
