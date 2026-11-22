@@ -1,4 +1,4 @@
-# Better GroBro 3.3.0
+# Better GroBro 3.3.0 — Differences from robertzaage/GroBro
 
 - NOAH: PV1-/PV2- und Systemtemperatur sowie Batterie-SoH als zusätzliche Sensoren und in der Ingress-Übersicht.
 - Persistente Batteriezustandswerte bis zu zwölf Stunden; Live-Leistung und Energiezähler werden nicht aus dem Cache wiederhergestellt.
