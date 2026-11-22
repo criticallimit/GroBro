@@ -97,6 +97,7 @@ def merge_state(client, device_id: str, payload: dict, known_registers, *, detec
     cached = cache.setdefault("values", {})
     now = time.time()
     result = dict(payload)
+    cached_values = {}
     changed = False
 
     if isinstance(max_bat, int) and max_bat > saved_max_bat(client, device_id):
@@ -137,6 +138,15 @@ def merge_state(client, device_id: str, payload: dict, known_registers, *, detec
                     seen = previous.get("observed_at")
                     if isinstance(seen, (float, int)) and 0 <= now - seen <= MAX_AGE_SECONDS and _valid(previous.get("value")):
                         result[name] = previous["value"]
+                        cached_values[name] = {
+                            "observed_at": seen,
+                            "age_minutes": round((now - seen) / 60, 1),
+                        }
+
+    # Metadata is separate from the values and can be used by the ingress UI
+    # and diagnostic entities to distinguish stale battery data from telemetry.
+    if cached_values:
+        result["battery_cached_values"] = cached_values
 
     if changed:
         dirty = getattr(client, "_persistent_sensor_cache_dirty", None)
