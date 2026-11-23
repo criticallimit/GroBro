@@ -27,6 +27,7 @@ class CloudForwardQueue:
         self._stopped = False
         self._thread: threading.Thread | None = None
         self._overflow_logged = False
+        self._retry_after: dict[str, float] = {}
 
     def submit(self, device_id: str, topic: str, payload: bytes, qos: int, retain: bool) -> bool:
         """Never block a source MQTT callback on networking or an occupied queue."""
@@ -67,11 +68,22 @@ class CloudForwardQueue:
                 created, args = self._messages.popleft()
                 if len(self._messages) < MAX_PENDING_CLOUD_MESSAGES:
                     self._overflow_logged = False
-            if time.monotonic() - created > MAX_CLOUD_MESSAGE_AGE_SECONDS:
+            now = time.monotonic()
+            if now - created > MAX_CLOUD_MESSAGE_AGE_SECONDS:
+                continue
+            device_id = args[0]
+            if now < self._retry_after.get(device_id, 0):
                 continue
             try:
-                self._sender(*args)
+                # The source timestamp must be rechecked *after* a possibly
+                # slow synchronous DNS/TLS connection, immediately before
+                # forwarding the device packet to Cloud MQTT.
+                self._sender(*args, received_at=created)
+                self._retry_after.pop(device_id, None)
             except Exception as exc:
+                # A disconnected Cloud endpoint must not cause one connection
+                # attempt for every queued device packet.
+                self._retry_after[device_id] = time.monotonic() + 10.0
                 LOG.error("Could not forward device data to Growatt Cloud (%s)", exc)
 
     def stop(self) -> None:
@@ -79,4 +91,5 @@ class CloudForwardQueue:
         with self._condition:
             self._stopped = True
             self._messages.clear()
+            self._retry_after.clear()
             self._condition.notify_all()
