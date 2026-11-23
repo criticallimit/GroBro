@@ -1,3 +1,14 @@
+# Better GroBro 3.3.7 — Differences from robertzaage/GroBro
+
+## User-relevant differences
+
+- NOAH, NEO and NEXA: after an accepted update-interval command, request the actual device setting automatically, without requiring the optional Growatt write acknowledgement or clicking Read All.
+- NEXA time-zone changes use the same readback approach.
+- Coalesce repeated changes to the same device setting and cancel pending readbacks on shutdown.
+- Do not mirror requested values or change MQTT network configuration, restart or time commands.
+
+---
+
 # Better GroBro 3.3.6 — Differences from robertzaage/GroBro
 
 ## User-relevant differences
