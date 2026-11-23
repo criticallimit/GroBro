@@ -541,9 +541,11 @@ _INDEX_HTML = r"""<!doctype html>
         <div class="actions">
           <button id="log-refresh" type="button" class="secondary">Aktualisieren</button>
           <button id="log-download" type="button" class="secondary">Protokoll herunterladen</button>
+          <button id="raw-dump-download" type="button" class="secondary">Raw MQTT Dump herunterladen</button>
         </div>
       </div>
       <p class="section-note">Es werden nur Einträge des aktuell laufenden Better-GroBro-Prozesses angezeigt. Ältere Supervisor-Protokolle bleiben ausgeblendet.</p>
+      <p class="section-note">Der Raw MQTT Dump enthält unveränderte Geräte-Nachrichten und kann vertrauliche Daten enthalten. Nur zur privaten Diagnose weitergeben.</p>
       <pre id="log-output" class="log-output">Protokoll wird geladen…</pre>
     </div>
   </section>
@@ -1026,6 +1028,29 @@ async function downloadLogs(){
     button.disabled=false;
   }
 }
+async function downloadRawDump(){
+  const button=document.getElementById("raw-dump-download");
+  button.disabled=true;
+  try{
+    const response=await fetch(apiUrl("api/raw-dump"),{cache:"no-store"});
+    if(!response.ok){
+      let message=l({de:"Raw MQTT Dump nicht verfügbar. Bitte unter Diagnose aktivieren und auf neue Nachrichten warten.",en:"Raw MQTT dump unavailable. Enable it in Diagnostics and wait for messages."});
+      try{const data=await response.json();if(data.error)message=data.error;}catch(_error){}
+      throw new Error(message);
+    }
+    const file=await response.blob();
+    const href=URL.createObjectURL(file);
+    const anchor=document.createElement("a");
+    anchor.href=href;
+    anchor.download="Better-GroBro-Raw-MQTT-"+new Date().toISOString().replace(/[:.]/g,"-")+".jsonl";
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(()=>URL.revokeObjectURL(href),1000);
+  }finally{
+    button.disabled=false;
+  }
+}
 async function loadLogs(){
   const output=logOutput;
   const r=await fetch(apiUrl("api/logs"),{cache:"no-store"});
@@ -1049,6 +1074,7 @@ async function loadLogs(){
 }
 document.getElementById("log-refresh").addEventListener("click",()=>loadLogs().catch(showError));
 document.getElementById("log-download").addEventListener("click",()=>downloadLogs().catch(showError));
+document.getElementById("raw-dump-download").addEventListener("click",()=>downloadRawDump().catch(showError));
 function showError(error){showMessage("config-message",error.message||String(error),"error");}
 loadConfig().then(loadBatteries).then(loadOverviewLogs).catch(showError);
 setInterval(()=>{
@@ -1125,6 +1151,47 @@ class BatteryIngressHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _send_raw_dump(self) -> None:
+        """Download only the configured raw MQTT dump, never an arbitrary path."""
+        try:
+            options = get_addon_options()["options"]
+            dump_dir = str(options.get("DUMP_DIR") or "/share/GroBro/dump")
+        except (SupervisorConfigError, KeyError, TypeError, ValueError) as exc:
+            self._send_json({"error": "Dump-Konfiguration konnte nicht geladen werden"}, HTTPStatus.BAD_GATEWAY)
+            return
+
+        root = os.path.realpath(dump_dir)
+        path = os.path.realpath(os.path.join(root, "messages.jsonl"))
+        if os.path.commonpath((root, path)) != root or not os.path.isfile(path):
+            self._send_json({"error": "Noch kein Raw MQTT Dump vorhanden"}, HTTPStatus.NOT_FOUND)
+            return
+
+        try:
+            with open(path, "rb") as source:
+                length = os.fstat(source.fileno()).st_size
+                if length <= 0:
+                    self._send_json({"error": "Raw MQTT Dump ist noch leer"}, HTTPStatus.NOT_FOUND)
+                    return
+                self.send_response(HTTPStatus.OK)
+                self.send_header("Content-Type", "application/x-ndjson")
+                self.send_header("Content-Disposition", 'attachment; filename="Better-GroBro-Raw-MQTT.jsonl"')
+                self.send_header("Content-Length", str(length))
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.end_headers()
+                remaining = length
+                while remaining:
+                    chunk = source.read(min(65536, remaining))
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+                    remaining -= len(chunk)
+        except OSError as exc:
+            LOG.warning("Could not read raw MQTT dump (%s)", type(exc).__name__)
+            if not getattr(self, "_headers_buffer", None):
+                return
+            self._send_json({"error": "Raw MQTT Dump konnte nicht gelesen werden"}, HTTPStatus.BAD_GATEWAY)
+
     def _send_json(self, payload: object, status: HTTPStatus = HTTPStatus.OK) -> None:
         body = json.dumps(payload, separators=(",", ":")).encode()
         self._send_body(body, "application/json; charset=utf-8", status)
@@ -1159,6 +1226,9 @@ class BatteryIngressHandler(BaseHTTPRequestHandler):
                 self._send_json(get_current_process_logs())
             except SupervisorConfigError as exc:
                 self._send_json({"error": str(exc)}, HTTPStatus.BAD_GATEWAY)
+            return
+        if path.endswith("/api/raw-dump"):
+            self._send_raw_dump()
             return
         if path in {"", "/"} or "/api/hassio_ingress/" in path:
             self._send_html()
