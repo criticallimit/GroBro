@@ -28,6 +28,7 @@ def initialize_instance_state(client) -> None:
     client._device_last_seen = {}
     client._device_timer_lock = Lock()
     client._last_availability = {}
+    client._last_online_sensor = {}
     client._config_read_queues = {}
     client._config_read_inflight = {}
     client._config_read_timers = {}
@@ -46,6 +47,7 @@ def initialize_instance_state(client) -> None:
 def clear_reconnect_caches(client) -> None:
     """Clear transient publication state on MQTT reconnect and HA birth."""
     getattr(client, "_last_availability", {}).clear()
+    getattr(client, "_last_online_sensor", {}).clear()
     getattr(client, "_discovery_signature", {}).clear()
     getattr(client, "_discovery_payload_cache", {}).clear()
     from grobro.ha.performance import _clear_state_publish_cache
