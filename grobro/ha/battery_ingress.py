@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import logging
 import os
+import tempfile
+import zipfile
 from http import HTTPStatus
 import threading
 import time
@@ -546,6 +548,7 @@ _INDEX_HTML = r"""<!doctype html>
           <button id="log-refresh" type="button" class="secondary">Aktualisieren</button>
           <button id="log-download" type="button" class="secondary">Protokoll herunterladen</button>
           <button id="raw-dump-download" type="button" class="secondary">Raw MQTT Dump herunterladen</button>
+          <button id="raw-dump-archive-download" type="button" class="secondary">Raw MQTT Dump (alle Dateien) als ZIP</button>
         </div>
       </div>
       <p class="section-note">Es werden nur Einträge des aktuell laufenden Better-GroBro-Prozesses angezeigt. Ältere Supervisor-Protokolle bleiben ausgeblendet.</p>
@@ -1060,6 +1063,29 @@ async function downloadRawDump(){
     button.disabled=false;
   }
 }
+async function downloadRawDumpArchive(){
+  const button=document.getElementById("raw-dump-archive-download");
+  button.disabled=true;
+  try{
+    const response=await fetch(apiUrl("api/raw-dump-archive"),{cache:"no-store"});
+    if(!response.ok){
+      let message=l({de:"Kein Raw MQTT Dump vorhanden.",en:"No raw MQTT dump available."});
+      try{const data=await response.json();if(data.error)message=data.error;}catch(_error){}
+      throw new Error(message);
+    }
+    const file=await response.blob();
+    const href=URL.createObjectURL(file);
+    const anchor=document.createElement("a");
+    anchor.href=href;
+    anchor.download="Better-GroBro-Raw-MQTT-Archiv-"+new Date().toISOString().replace(/[:.]/g,"-")+".zip";
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(()=>URL.revokeObjectURL(href),1000);
+  }finally{
+    button.disabled=false;
+  }
+}
 async function loadLogs(){
   const output=logOutput;
   const r=await fetch(apiUrl("api/logs"),{cache:"no-store"});
@@ -1084,6 +1110,7 @@ async function loadLogs(){
 document.getElementById("log-refresh").addEventListener("click",()=>loadLogs().catch(showError));
 document.getElementById("log-download").addEventListener("click",()=>downloadLogs().catch(showError));
 document.getElementById("raw-dump-download").addEventListener("click",()=>downloadRawDump().catch(showError));
+document.getElementById("raw-dump-archive-download").addEventListener("click",()=>downloadRawDumpArchive().catch(showError));
 function showError(error){showMessage("config-message",error.message||String(error),"error");}
 loadConfig().then(loadBatteries).then(loadOverviewLogs).catch(showError);
 setInterval(()=>{
@@ -1204,6 +1231,74 @@ class BatteryIngressHandler(BaseHTTPRequestHandler):
             else:
                 self._send_json({"error": "Raw MQTT Dump konnte nicht gelesen werden"}, HTTPStatus.BAD_GATEWAY)
 
+    def _send_raw_dump_archive(self) -> None:
+        """Export the current JSONL and its three rotation backups as one ZIP."""
+        try:
+            options = get_addon_options()["options"]
+            root = os.path.realpath(str(options.get("DUMP_DIR") or "/share/GroBro/dump"))
+        except (SupervisorConfigError, KeyError, TypeError, ValueError):
+            self._send_json({"error": "Dump-Konfiguration konnte nicht geladen werden"}, HTTPStatus.BAD_GATEWAY)
+            return
+
+        names = ("messages.jsonl.3", "messages.jsonl.2", "messages.jsonl.1", "messages.jsonl")
+        paths = []
+        for name in names:
+            path = os.path.realpath(os.path.join(root, name))
+            if os.path.commonpath((root, path)) != root:
+                continue
+            if os.path.isfile(path):
+                paths.append((name, path))
+        if not paths:
+            self._send_json({"error": "Noch kein Raw MQTT Dump vorhanden"}, HTTPStatus.NOT_FOUND)
+            return
+
+        headers_sent = False
+        try:
+            # Disk-backed temporary file: no 40 MB HTTP/ZIP payload in RAM.
+            with tempfile.TemporaryFile() as archive:
+                archived_files = 0
+                with zipfile.ZipFile(archive, mode="w", compression=zipfile.ZIP_DEFLATED, compresslevel=1) as zipped:
+                    for name, path in paths:
+                        try:
+                            with open(path, "rb") as source, zipped.open(name, "w") as target:
+                                # Keep the snapshot to the size observed at open.
+                                remaining = os.fstat(source.fileno()).st_size
+                                while remaining:
+                                    block = source.read(min(65536, remaining))
+                                    if not block:
+                                        break
+                                    target.write(block)
+                                    remaining -= len(block)
+                            archived_files += 1
+                        except FileNotFoundError:
+                            # Rotation can remove an older backup between the
+                            # directory scan and opening the file.
+                            LOG.info("Raw MQTT dump segment rotated during ZIP export: %s", name)
+                if not archived_files:
+                    self._send_json({"error": "Noch kein Raw MQTT Dump vorhanden"}, HTTPStatus.NOT_FOUND)
+                    return
+                length = archive.tell()
+                archive.seek(0)
+                self.send_response(HTTPStatus.OK)
+                self.send_header("Content-Type", "application/zip")
+                self.send_header("Content-Disposition", 'attachment; filename="Better-GroBro-Raw-MQTT-Archiv.zip"')
+                self.send_header("Content-Length", str(length))
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.end_headers()
+                headers_sent = True
+                while True:
+                    chunk = archive.read(65536)
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+        except OSError as exc:
+            LOG.warning("Could not export raw MQTT dump archive (%s)", type(exc).__name__)
+            if headers_sent:
+                self.close_connection = True
+            else:
+                self._send_json({"error": "Raw MQTT Dump-Archiv konnte nicht erstellt werden"}, HTTPStatus.BAD_GATEWAY)
+
     def _send_json(self, payload: object, status: HTTPStatus = HTTPStatus.OK) -> None:
         body = json.dumps(payload, separators=(",", ":")).encode()
         self._send_body(body, "application/json; charset=utf-8", status)
@@ -1238,6 +1333,9 @@ class BatteryIngressHandler(BaseHTTPRequestHandler):
                 self._send_json(get_current_process_logs())
             except SupervisorConfigError as exc:
                 self._send_json({"error": str(exc)}, HTTPStatus.BAD_GATEWAY)
+            return
+        if path.endswith("/api/raw-dump-archive"):
+            self._send_raw_dump_archive()
             return
         if path.endswith("/api/raw-dump"):
             self._send_raw_dump()
