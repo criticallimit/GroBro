@@ -1,4 +1,5 @@
 import json
+import urllib.error
 import urllib.request
 
 from grobro.ha import battery_ingress
@@ -614,7 +615,7 @@ def test_current_energy_card_uses_two_decimal_places():
 def test_ingress_raw_dump_download_returns_exact_jsonl_bytes(tmp_path, monkeypatch):
     dump_dir = tmp_path / "custom-raw"
     dump_dir.mkdir()
-    payload = b'{"topic":"c/33/TEST","payload_base64":"AQID"}\\n'.replace(b"\\\\n", b"\\n")
+    payload = json.dumps({"topic": "c/33/TEST", "payload_base64": "AQID"}).encode() + bytes([10])
     (dump_dir / "messages.jsonl").write_bytes(payload)
     monkeypatch.setattr(
         battery_ingress, "get_addon_options",
