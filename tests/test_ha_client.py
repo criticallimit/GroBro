@@ -382,6 +382,24 @@ class TestClientLifecycle:
         assert device not in ha_client._last_state_payload
         assert device not in ha_client._state_publish_cache
 
+    def test_same_smart_meter_state_is_republished_after_device_offline(self, ha_client):
+        device = "0PVP0000TEST0001"
+        topic = f"homeassistant/sensor/grobro/{device}/smart_meter/state"
+        payload = '{"power":250}'
+        ha_client.publish_smart_meter(device, payload)
+        def published_count():
+            return sum(call.args[0] == topic for call in ha_client._client.publish.call_args_list)
+
+        assert published_count() == 1
+        ha_client.publish_smart_meter(device, payload)
+        assert published_count() == 1
+
+        assert ha_client._Client__publish_availability(device, False) is True
+        ha_client.publish_smart_meter(device, payload)
+        assert published_count() == 2
+        ha_client.publish_smart_meter(device, payload)
+        assert published_count() == 2
+
     def test_same_telemetry_is_republished_after_ha_birth(self, ha_client):
         from grobro.model.growatt_registers import HomeAssistantInputRegister
 
