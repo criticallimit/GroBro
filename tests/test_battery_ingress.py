@@ -845,3 +845,36 @@ def test_ingress_raw_dump_archive_returns_404_if_all_segments_rotate_away(tmp_pa
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_ingress_raw_dump_archive_skips_one_rotated_away_segment(tmp_path, monkeypatch):
+    """One missing backup does not prevent the remaining dump from exporting."""
+    old = tmp_path / "messages.jsonl.1"
+    old.write_bytes(b"old\n")
+    current = tmp_path / "messages.jsonl"
+    current.write_bytes(b"current\n")
+    original_isfile = battery_ingress.os.path.isfile
+
+    def rotate_old_after_scan(path):
+        exists = original_isfile(path)
+        if exists and str(path).endswith("messages.jsonl.1"):
+            old.unlink()
+        return exists
+
+    monkeypatch.setattr(battery_ingress.os.path, "isfile", rotate_old_after_scan)
+    monkeypatch.setattr(
+        battery_ingress, "get_addon_options",
+        lambda: {"options": {"DUMP_DIR": str(tmp_path)}},
+    )
+    server = start_battery_ingress_server(0)
+    try:
+        _, port = server.server_address
+        with urllib.request.urlopen(
+            f"http://127.0.0.1:{port}/api/raw-dump-archive", timeout=3
+        ) as response:
+            with zipfile.ZipFile(io.BytesIO(response.read())) as archive:
+                assert archive.namelist() == ["messages.jsonl"]
+                assert archive.read("messages.jsonl") == b"current\n"
+    finally:
+        server.shutdown()
+        server.server_close()
