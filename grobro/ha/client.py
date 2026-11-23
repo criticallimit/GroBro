@@ -1158,6 +1158,11 @@ class Client:
             # Track the primary device availability independently of the optional
             # online entity. Do not republish it when only that entity needs retry.
             availability[device_id] = online
+            if not online:
+                # The first live packet after an offline period must be
+                # published even when its values equal the old cached state.
+                from grobro.ha.performance import clear_device_publish_cache
+                clear_device_publish_cache(self, device_id)
             from grobro.ha.device_inventory import observe_device_availability
             observe_device_availability(device_id, online)
 
