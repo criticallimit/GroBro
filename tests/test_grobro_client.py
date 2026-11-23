@@ -278,6 +278,43 @@ class TestClientOnMessage:
             "homeassistant/config/grobro/0PVP000ABC123/76/get",
         ]
 
+    @pytest.mark.parametrize("device_id", [
+        "QMN000ABC1D2E3FG", "0PVP000ABC123", "0HVR000ABC123",
+    ])
+    def test_config_state_validates_interval_and_wifi_uniformly(self, client, device_id):
+        client._publish_config_state(device_id, 4, "1280", retain=True)
+        client._publish_config_state(device_id, 76, "0", retain=True)
+        client._publish_config_state(device_id, 4, "5", retain=True)
+        client._publish_config_state(device_id, 76, "-61", retain=True)
+        values = [(call.args[0], call.args[1]) for call in client._client.publish.call_args_list]
+        assert values == [
+            (f"homeassistant/config/grobro/{device_id}/4/get", 5),
+            (f"homeassistant/config/grobro/{device_id}/76/get", -61),
+        ]
+
+    def test_invalid_compound_config_number_does_not_hide_next_wifi_value(self, client):
+        # A bad R4 must not terminate a compound R76 response.
+        wire = _msg("c/33/QMN000BZP4N991ML", b"wire")
+        parsed = {
+            "device_id": "QMN000BZP4N991ML",
+            "register_no": 4,
+            "value": "broken",
+            "entries": [
+                {"register_no": 4, "value": "broken"},
+                {"register_no": 76, "value": "-61"},
+            ],
+        }
+        with patch("grobro.grobro.client.parser.unscramble",
+                   return_value=bytes.fromhex("00 01 00 07 00 00 01 19")), patch(
+            "grobro.grobro.client.parser.parse_config_message", return_value=parsed,
+        ):
+            client._client.on_message(None, None, wire)
+        topics = {call.args[0]: call.args[1] for call in client._client.publish.call_args_list
+                  if len(call.args) > 1}
+        assert "homeassistant/config/grobro/QMN000BZP4N991ML/4/get" not in topics
+        assert topics["homeassistant/config/grobro/QMN000BZP4N991ML/76/get"] == -61
+        client.on_config_read_response.assert_called_once_with("QMN000BZP4N991ML", 76)
+
     def test_compound_config_read_fixture_publishes_individual_registers(self, client):
         data = (Path(DATA_DIR) / "NeoConfigReadResponse_337.bin").read_bytes()
         msg = _msg("c/33/QMN000ABC1D2E3FG", data)
