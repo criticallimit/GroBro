@@ -244,6 +244,46 @@ class TestClientOnMessage:
         assert published[f"homeassistant/config/grobro/{device_id}/76/get"] == -61
         client.on_config_read_response.assert_not_called()
 
+    @pytest.mark.parametrize("device_id", [
+        "QMN000ABC1D2E3FG", "0PVP000ABC123", "0HVR000ABC123",
+    ])
+    def test_invalid_tlv_measurements_are_not_merged_into_metadata(self, client, device_id):
+        from grobro.model.device_config import DeviceConfig
+
+        incoming = DeviceConfig(
+            serial_number=device_id, data_interval="1280",
+            wifi_signal="0", sw_version="7.7.1",
+        )
+        wire = _msg(f"c/33/{device_id}", b"wire")
+        with patch("grobro.grobro.client.parser.unscramble",
+                   return_value=bytes.fromhex("00 01 00 07 01 54 00 00")), patch(
+            "grobro.grobro.client.parser.find_config_offset", return_value=0,
+        ), patch("grobro.grobro.client.parser.parse_config_type", return_value=incoming):
+            client._client.on_message(None, None, wire)
+        client.on_config.assert_called_once()
+        _, clean = client.on_config.call_args.args
+        assert clean.data_interval is None
+        assert clean.wifi_signal is None
+        assert clean.sw_version == "7.7.1"
+        # The raw parsed object remains unchanged, and neither invalid state
+        # is presented as an updated HA sensor/number.
+        assert incoming.data_interval == "1280"
+        assert incoming.wifi_signal == "0"
+        published = [call.args[0] for call in client._client.publish.call_args_list]
+        assert f"homeassistant/config/grobro/{device_id}/4/get" not in published
+        assert f"homeassistant/config/grobro/{device_id}/76/get" not in published
+
+    def test_partial_tlv_does_not_erase_existing_valid_measurement(self, client):
+        from grobro.model.device_config import DeviceConfig
+        from grobro.ha.config_runtime import _merge_config
+
+        previous = DeviceConfig(data_interval="5", wifi_signal="-61")
+        incoming = DeviceConfig(data_interval="1280", wifi_signal="0")
+        cleaned = client._sanitize_tlv_config_measurements("QMN000ABC1D2E3FG", incoming)
+        merged = _merge_config(previous, cleaned)
+        assert merged.data_interval == "5"
+        assert merged.wifi_signal == "-61"
+
     def test_wifi_source_is_logged_for_tlv_and_direct_read(self, client, caplog):
         from grobro.model.device_config import DeviceConfig
 
