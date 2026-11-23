@@ -62,3 +62,22 @@ def test_discovery_builder_preserves_definitions_and_entity_identity(family):
     second = build_discovery_payload(device, family.registers, metadata, **options)
     assert second["cmps"]
     assert family.registers.model_dump() == definitions
+
+
+@pytest.mark.parametrize("family", DEVICE_FAMILIES, ids=lambda family: family.key)
+def test_all_temperature_entities_suggest_one_decimal_without_changing_registers(family):
+    device = family.prefixes[0] + "TEST"
+    before = family.registers.model_dump()
+    payload = build_discovery_payload(
+        device, family.registers, {"identifiers": [device]},
+        base_topic="ha-test", bridge_topic="ha-test/bridge/availability",
+        effective_max_bat=4, pv_count=4, max_slots=3,
+        device_timeout=120, availability_sensor=True,
+    )
+    temperatures = [
+        comp for comp in payload["cmps"].values()
+        if comp.get("platform") == "sensor"
+        and comp.get("device_class") == "temperature"
+    ]
+    assert all(comp["suggested_display_precision"] == 1 for comp in temperatures)
+    assert family.registers.model_dump() == before
