@@ -468,8 +468,27 @@ class TestClientOnMessage:
         assert client.on_config_read_response.call_count == 2
         client.on_config_read_response.assert_any_call("QMN000BZP4N991ML", 76)
         client.on_config_read_response.assert_any_call("QMN000BZP4N991ML", 5)
+        assert "Wi-Fi signal -61 dBm received via compound config telegram" in caplog.text
+        assert "Wi-Fi signal -61 dBm received via single-register response" not in caplog.text
         assert "Received compound config response" in caplog.text
         assert "NEO QMN000BZP4N991ML -> Better GroBro: config response" not in caplog.text
+
+    def test_single_wifi_reply_uses_single_register_source(self, client, caplog):
+        wire = _msg("c/33/QMN000BZP4N991ML", b"wire")
+        parsed = {
+            "device_id": "QMN000BZP4N991ML",
+            "register_no": 76,
+            "value": "-59",
+            "entries": [{"register_no": 76, "value": "-59"}],
+        }
+        caplog.set_level("INFO", logger=grobro_client.LOG.name)
+        with patch("grobro.grobro.client.parser.unscramble",
+                   return_value=bytes.fromhex("00 01 00 07 00 00 01 19")), patch(
+            "grobro.grobro.client.parser.parse_config_message", return_value=parsed,
+        ):
+            client._client.on_message(None, None, wire)
+        assert "Wi-Fi signal -59 dBm received via single-register response" in caplog.text
+        assert "received via compound config telegram" not in caplog.text
 
     def test_config_software_version_response_updates_metadata(self, client, caplog):
         data = bytes.fromhex(
