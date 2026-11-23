@@ -1177,11 +1177,8 @@ class Client:
         client = self.__connect_to_growatt_server(client_id)
         if client is None:
             return
-        if received_at is not None:
-            from grobro.grobro.cloud_dispatch import MAX_CLOUD_MESSAGE_AGE_SECONDS
-            if time.monotonic() - received_at > MAX_CLOUD_MESSAGE_AGE_SECONDS:
-                # A slow Cloud connect must not forward an obsolete reading.
-                return
+        # No arbitrary packet TTL: the Growatt protocol's first response /
+        # configuration frames must not silently expire during Cloud DNS/TLS.
         if self._forward_stopped:
             return
         result = client.publish(topic, payload=payload, qos=qos, retain=retain)
