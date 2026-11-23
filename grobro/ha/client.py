@@ -757,6 +757,9 @@ class Client:
     @guard_runtime
     def __on_subscribe(self, client, userdata, mid, reason_codes, properties):
         if subscription_rejected(reason_codes):
+            # Local acceptance of subscribe() does not mean the broker granted
+            # it. Retry from the existing device-activity recovery path.
+            self._command_subscription_pending = True
             if not getattr(self, "_subscription_failure_logged", False):
                 LOG.error("Home Assistant MQTT broker rejected a subscription; check broker permissions")
             self._subscription_failure_logged = True
