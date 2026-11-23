@@ -90,3 +90,9 @@ Der Empfang des Broker-SUBACK kann bei einem `subscribe()`-Aufruf vom Paho-Netzw
 **Regressionstest:** `test_cloud_suback_racing_subscribe_mid_registration_is_not_lost` startet aus dem simulierten Subscribe-Aufruf einen separaten Bestätigungs-Thread und weist nach, dass der passende SUBACK den Watchdog beendet, ohne einen falschen Retry zu planen. Ein direkt reentrant im gleichen Thread ausgeführter künstlicher `on_subscribe`-Aufruf gehört nicht zum regulären Paho-Callback-Modell; dieser Sonderfall ist nicht Gegenstand des Nachweises.
 
 **Freigabe unverändert:** Keine vollständige pytest-Ausführung und keine echten Broker-/Growatt-Cloud-Tests. Die Cloud-Queue mit fünf Sekunden Verfallsregel hat weiterhin eine ungeklärte Kompatibilitätsgrenze. Kein Merge nach `main` und kein Release.
+
+## Prüfung vorhandener E2E-Tests: keine Callback-Verfälschung (23.11.2026)
+
+Die E2E-Prüfung des Cloud-Reconnects hatte bei der Erweiterung um den Rückkanal die produktiven Paho-Callbacks `forward.on_message` und `forward.on_subscribe` überschrieben. Dadurch wurden lediglich Mess-Ereignisse gesetzt; der tatsächliche Cloud→Gerät-Forwarding-Handler sowie die neue MID-/SUBACK-Verarbeitung wurden im Test umgangen. Das ist ein **Testdesign-Fehler**, keine belegte Störung im produktiven Code.
+
+Im Branch werden beide Callbacks nur noch mit Beobachtern **umhüllt**: Erst wird der originale Handler aufgerufen, dann werden Beobachtungsereignisse gesetzt. Die SUBACK-Beobachtung prüft den Reason-Code über die vorhandene Helper-Funktion `subscription_rejected`. Damit bleibt der reale E2E-Test näher an der produktiven Pipeline. Der Test ist noch nicht ausgeführt; zunächst ist weiterhin ein echter Mosquitto-Testaufbau erforderlich.
