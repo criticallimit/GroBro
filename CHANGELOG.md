@@ -1,3 +1,13 @@
+# Better GroBro 3.3.31 — Gateway-Metadaten nicht als NEO-Online-Meldung behandeln
+
+- Korrigiert eine falsche Online-Erkennung: Bei einer NEO-/PTQ-Zuordnung können ShineWeLink-/RAQ-Gateway-Meldungen Metadaten und WLAN-Werte für einen NEO aktualisieren, obwohl der NEO selbst ausgeschaltet ist.
+- Solche vom Gateway abgeleiteten Konfigurationsdaten laufen nun über einen ausdrücklich gekennzeichneten Callback ohne Geräteaktivitäts-Refresh. Direkte NOAH-/NEO-/NEXA-Gerätetelegramme und echte Registerantworten behalten die bisherige Aktivitätsbehandlung.
+- Der NEO bleibt daher Offline, wenn nur das Gateway lebt, während seine Konfiguration weiter aktualisiert werden kann.
+- Regressionstests für den neuen Callback und die unveränderte NEO-Offline-Anzeige ergänzt. Kein Performance-Test, keine neuen Hintergrundaufgaben, Timer, Abfragen oder zusätzlichen Dauerlogs.
+- Source-/Integrationsprüfungen durchgeführt; Python-Testlauf und Home-Assistant-Praxistest stehen aus.
+
+---
+
 # Better GroBro 3.3.30 — Diagnose fehlgeschlagener Growatt-MQTT-Subscriptions
 
 - Prüft das unmittelbare Rückgabeergebnis der Growatt-MQTT-Subscription auf `c/#`. Eine lokal abgelehnte Subscription oder Exception wird mit aussagekräftiger Fehlermeldung protokolliert.
