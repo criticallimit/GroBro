@@ -413,6 +413,15 @@ def test_real_cloud_direct_forwarding_and_reconnect(tmp_path, monkeypatch):
         source._Client__publish_to_growatt_server(device, topic, b"first", 0, False)
         assert _wait_until(lambda: received == [b"first"])
         forward = source._forward_clients[f"forward_client_{device}"]
+        # Check the reverse Cloud -> device subscription, not only the
+        # outgoing device -> Cloud publish path.
+        cloud_reply = threading.Event()
+        forward.on_message = lambda _client, _userdata, msg: (
+            cloud_reply.set() if msg.topic == f"s/{device}" else None
+        )
+        probe.publish(f"s/{device}", b"command", qos=1).wait_for_publish(timeout=5)
+        assert cloud_reply.wait(5), "initial Cloud response subscription missing"
+        cloud_reply.clear()
         disconnected = threading.Event()
         original = forward.on_disconnect
         def on_disconnect(*args):
@@ -423,6 +432,10 @@ def test_real_cloud_direct_forwarding_and_reconnect(tmp_path, monkeypatch):
         forward.socket().shutdown(socket.SHUT_RDWR)
         assert disconnected.wait(5)
         assert _wait_until(forward.is_connected)
+        # MQTT clean sessions need the response subscription again after
+        # reconnect, even when outgoing Cloud publishes already work.
+        probe.publish(f"s/{device}", b"after-reconnect", qos=1).wait_for_publish(timeout=5)
+        assert cloud_reply.wait(5), "Cloud response subscription was lost on reconnect"
         source._Client__publish_to_growatt_server(device, topic, b"second", 0, False)
         source._Client__publish_to_growatt_server(device, topic, b"third", 0, False)
         assert _wait_until(lambda: received == [b"first", b"second", b"third"])
