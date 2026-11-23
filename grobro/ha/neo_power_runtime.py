@@ -64,7 +64,14 @@ def clear_neo_inverter_power_read_cache(client) -> None:
 
 
 def request_known_neo_states(client) -> int:
-    """Actively probe persisted NEO devices instead of waiting for telemetry."""
+    """Probe persisted NEOs only after source MQTT can accept register reads."""
+    ready = getattr(client, "config_reads_ready", None)
+    if callable(ready):
+        try:
+            if not ready():
+                return 0
+        except Exception:
+            return 0
     requested = 0
     for device_id in tuple(getattr(client, "_config_cache", {})):
         if request_initial_neo_inverter_power(client, device_id):
