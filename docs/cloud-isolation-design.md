@@ -60,4 +60,14 @@ Der ursprüngliche Code abonnierte `+/<Geräte-ID>` nur während `__connect_to_g
 - [ ] Broker lehnt Subscription per SUBACK ab: eindeutiger Logfehler für das betroffene Gerät; nicht als freigegeben interpretieren.
 - [ ] Lokaler Subscribe-Aufruf wirft einen Transportfehler: Paho-Netzwerk-Callback bleibt ohne unkontrollierte Exception.
 - [ ] Verspäteter SUBACK nach Add-on-Shutdown: wird ignoriert.
-- [ ] Recovery nach abgelehntem SUBACK: **noch offen**; bislang nur Fehlererkennung, kein eigenständiger Retry-/Ready-Mechanismus.
+- [ ] Recovery nach abgelehntem SUBACK: **auf Entwicklungszweig implementiert, noch ungetestet**. Ein verzögerter Einmal-Timer pro betroffenem Gerät; 10, 20, 40, 80, 160, höchstens 300 Sekunden. Kein zusätzlicher MQTT-Connect oder permanenter Polling-Loop. Erfolgreicher SUBACK bzw. neuer CONNACK hebt alte Retry-Timer auf; Shutdown verwirft sie.
+
+## Gezielter SUBACK-Retry (Entwicklungszweig)
+
+- Fehlerquelle: Broker lehnt `SUBSCRIBE` im SUBACK ab, lokaler `subscribe()` wirft oder meldet eine Fehlerrückgabe.
+- Reaktion: **ein** verzögerter Timer je betroffener Geräte-Cloud-Verbindung. Exponentieller Backoff 10–300 Sekunden. Timer ist daemonisiert, führt nur `subscribe()` auf der bestehenden MQTT-Verbindung aus und ruft nie direkt `connect()` auf.
+- Kein Retries bei erfolgreicher Subscription; erfolgreicher SUBACK löscht den Timer und setzt Backoff zurück.
+- Neuer CONNACK inkrementiert eine Sitzungskennung, löscht alle alten Timer des Geräts und startet das reguläre Abo; ein veralteter Timer führt wegen Sitzungsvergleich keine Aktion aus.
+- Beim Beenden werden alle Timer abgebrochen und die Statusdaten geleert.
+- **Noch offen:** Bei einer lokal akzeptierten Subscription, für die überhaupt kein SUBACK eintrifft, gibt es noch keinen separaten SUBACK-Timeout. Bei dauerhaft vom Broker verweigerter Subscription laufen bis zu einem Timer alle fünf Minuten pro betroffenem Gerät weiter. Ein eigener Cloud-Status in Ingress ist noch nicht implementiert.
+- **Nachweis:** Regressionstests mit Fake-Timer angelegt, nicht ausgeführt. Echte Paho/Broker-Tests stehen aus.
