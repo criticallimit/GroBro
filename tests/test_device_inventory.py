@@ -291,7 +291,7 @@ def test_recovery_offlines_live_device_without_config_cache_entry():
         assert target._last_availability[device] is False
         assert get_device_inventory()[0]["connection_status"] == "offline"
         assert any(
-            call.args[0] == f"homeassistant/grobro/{device}/availability"
+            call.args[0] == f"{ha.HA_BASE_TOPIC}/grobro/{device}/availability"
             and call.args[1] == "offline"
             for call in target._client.publish.call_args_list
         )
