@@ -1342,23 +1342,22 @@ class Client:
                         self._watch_cloud_suback(client_id, connected_client, epoch, result)
 
             def on_cloud_subscribe(connected_client, _userdata, mid, reason_codes, _properties):
+                # Keep the validated session epoch and the entire state
+                # transition together. A new CONNACK must not occur between
+                # matching the old MID and scheduling its retry.
                 with self._cloud_subscription_lock:
-                    pending = self._cloud_subscription_pending.get(client_id)
                     epoch = self._cloud_subscription_epochs.get(client_id)
-                    if self._forward_stopped or pending != (epoch, mid):
+                    if self._forward_stopped or self._cloud_subscription_pending.get(client_id) != (epoch, mid):
                         return
                     self._clear_cloud_suback(client_id)
-                if subscription_rejected(reason_codes):
-                    LOG.error(
-                        "%s: Growatt Cloud broker rejected response subscription",
-                        _device_label(client_id),
-                    )
-                    with self._cloud_subscription_lock:
-                        epoch = self._cloud_subscription_epochs.get(client_id)
-                    if epoch is not None:
+                    if subscription_rejected(reason_codes):
+                        LOG.error(
+                            "%s: Growatt Cloud broker rejected response subscription",
+                            _device_label(client_id),
+                        )
                         self._schedule_cloud_subscription_retry(client_id, connected_client, epoch)
-                else:
-                    self._clear_cloud_subscription_retry(client_id)
+                    else:
+                        self._clear_cloud_subscription_retry(client_id)
 
             client.on_connect = on_cloud_connect
             client.on_subscribe = on_cloud_subscribe
