@@ -80,3 +80,13 @@ Der ursprüngliche Code abonnierte `+/<Geräte-ID>` nur während `__connect_to_g
 - Bei CONNACK, erfolgreichem SUBACK und Shutdown werden unpassende Timer gelöscht. Timer-Callbacks kontrollieren zusätzlich die Identität des aktuell registrierten Timers, damit ein bereits storniertes Callback nicht nachträglich einen neueren Zustand verändert.
 - **Offene Grenze:** Für nicht identifizierbare `subscribe()`-Rückgaben ohne ganzzahlige MID kann kein verlässlicher MID-gebundener Timeout aufgebaut werden. Die Produktionsbibliothek Paho liefert auf dem regulären Pfad `(result, mid)`; die Mock-Tests müssen konkrete MIDs liefern.
 - **Weiter zu prüfen:** Paho-Callback-Timing, insbesondere ein SUBACK, der vor der Registrierung des MID-Watchdogs eintrifft, sowie ein MID-Wraparound; reale Zwei-Broker-Tests wurden noch nicht ausgeführt.
+
+## Früher SUBACK / atomare MID-Registrierung (23.11.2026)
+
+Der Empfang des Broker-SUBACK kann bei einem `subscribe()`-Aufruf vom Paho-Netzwerkthread parallel eintreffen. Ohne gemeinsame Sperre lag zwischen Rückgabe von `(rc, mid)` und dem Anlegen des MID-Watchdogs ein mögliches Race Window. Die Subscription wurde dann möglicherweise nie als bestätigt erkannt und unnötig erneut versucht.
+
+**Branch-Korrektur:** Bei erstmaligem Cloud-CONNACK **und** beim Retry bleiben der `subscribe()`-Aufruf und die Registrierung des MIDs unter dem bereits vorhandenen `_cloud_subscription_lock` (RLock). Der `on_subscribe`-Callback benutzt dieselbe Sperre. Der Empfang kann deshalb nicht vor Abschluss der Registrierung ausgewertet werden. Nach der Freigabe wird der MID-geprüfte Callback regulär abgearbeitet.
+
+**Regressionstest:** `test_cloud_suback_racing_subscribe_mid_registration_is_not_lost` startet aus dem simulierten Subscribe-Aufruf einen separaten Bestätigungs-Thread und weist nach, dass der passende SUBACK den Watchdog beendet, ohne einen falschen Retry zu planen. Ein direkt reentrant im gleichen Thread ausgeführter künstlicher `on_subscribe`-Aufruf gehört nicht zum regulären Paho-Callback-Modell; dieser Sonderfall ist nicht Gegenstand des Nachweises.
+
+**Freigabe unverändert:** Keine vollständige pytest-Ausführung und keine echten Broker-/Growatt-Cloud-Tests. Die Cloud-Queue mit fünf Sekunden Verfallsregel hat weiterhin eine ungeklärte Kompatibilitätsgrenze. Kein Merge nach `main` und kein Release.
