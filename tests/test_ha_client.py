@@ -1877,3 +1877,56 @@ class TestBatteryPositionWatch:
         assert published["bat2_temp"] == 31.0
         assert "bat3_temp" not in published
         assert "kept at stable" not in caplog.text
+
+
+def test_ha_command_suback_clears_pending_without_repeated_subscriptions():
+    from unittest.mock import MagicMock
+    from grobro.ha.client import Client
+    from grobro.model.mqtt_config import MQTTConfig
+
+    with patch("grobro.ha.client.mqtt.Client"), patch(
+        "grobro.ha.client.os.listdir", return_value=[]
+    ):
+        target = Client(MQTTConfig(host="localhost", port=1883))
+    try:
+        target._client.subscribe.return_value = (0, 7)
+        target._Client__subscribe_commands(target._client)
+        assert target._command_subscription_pending is False
+
+        # Local subscribe acceptance is not SUBACK; the broker may still reject.
+        target._Client__on_subscribe(target._client, None, 7, [0], None)
+        assert target._command_subscription_pending is False
+        target._client.subscribe.reset_mock()
+
+        target._client.publish.return_value = (0, None)
+        target._ha_mqtt_connected = True
+        target._Client__refresh_device_activity("0PVPTEST000001")
+        target._Client__refresh_device_activity("QMNTEST0000001")
+        target._client.subscribe.assert_not_called()
+    finally:
+        target._stopped = True
+        target._client.disconnect()
+
+
+def test_ha_rejected_suback_remains_pending_for_device_activity_retry():
+    from grobro.ha.client import Client
+    from grobro.model.mqtt_config import MQTTConfig
+
+    with patch("grobro.ha.client.mqtt.Client"), patch(
+        "grobro.ha.client.os.listdir", return_value=[]
+    ):
+        target = Client(MQTTConfig(host="localhost", port=1883))
+    try:
+        target._client.subscribe.return_value = (0, 7)
+        target._Client__subscribe_commands(target._client)
+        target._Client__on_subscribe(target._client, None, 7, [128], None)
+        assert target._command_subscription_pending is True
+
+        target._client.subscribe.reset_mock()
+        target._client.publish.return_value = (0, None)
+        target._ha_mqtt_connected = True
+        target._Client__refresh_device_activity("0PVPTEST000001")
+        target._client.subscribe.assert_called_once()
+    finally:
+        target._stopped = True
+        target._client.disconnect()
