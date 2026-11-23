@@ -300,6 +300,32 @@ class TestClientLifecycle:
         assert ha_client.on_command.call_count > 0
         assert device_id in ha_client._read_all_active
 
+    def test_rejected_ha_reconnect_does_not_leave_devices_online(self, ha_client):
+        from types import SimpleNamespace
+        from grobro.ha.device_inventory import (
+            clear_device_inventory, get_device_inventory, observe_device_availability,
+        )
+        device = "QMN000ABC1D2E3FG"
+        clear_device_inventory()
+        try:
+            observe_device_availability(device, True)
+            ha_client._ha_mqtt_connected = True
+            ha_client._bridge_online_pending = False
+            ha_client._client.publish.reset_mock()
+
+            ha_client._Client__on_connect(
+                ha_client._client, None, None,
+                SimpleNamespace(is_failure=True), None,
+            )
+
+            assert ha_client._ha_mqtt_connected is False
+            assert ha_client._bridge_online_pending is True
+            assert get_device_inventory()[0]["connection_status"] == "offline"
+            assert ha_client._Client__publish_availability(device, True) is False
+            ha_client._client.publish.assert_not_called()
+        finally:
+            clear_device_inventory()
+
     def test_ha_birth_online_recovers_without_mqtt_reconnect(self, ha_client):
         device_id = "QMN000ABC1D2E3FG"
         pending_timer = MagicMock()
