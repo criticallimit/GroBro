@@ -1,3 +1,15 @@
+# Better GroBro 3.3.5 — Differences from robertzaage/GroBro
+
+## User-relevant differences
+
+- Home Assistant MQTT command subscriptions are retried on subsequent device activity when the broker rejects a SUBACK, even when the initial subscribe call succeeded locally.
+- NEXA PV1–PV4 and system temperature decoding corrected to use 0.1 K scale with Celsius offset, based on documented upstream raw telegrams.
+- Added NEXA battery 2 temperature (register 42), supported by an observed raw telegram. Unverified battery 3/4 temperature registers remain untouched.
+- No blanket one-decimal temperature display override for NOAH or NEO; that unverified change was reverted.
+- Existing settings, entity identifiers, Growatt Cloud forwarding, and MQTT broker configuration are preserved.
+
+---
+
 # Better GroBro 3.3.4 — Differences from robertzaage/GroBro
 
 ## User-relevant differences
