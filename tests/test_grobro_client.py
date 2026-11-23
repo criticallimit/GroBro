@@ -797,10 +797,14 @@ class TestClientOnMessage:
     @patch("grobro.grobro.client.GROWATT_CLOUD_ENABLED", True)
     def test_growatt_cloud_forwarding(self, client):
         client._forward_clients = {}
-        with patch.object(client, "_Client__publish_to_growatt_server") as mock_publish:
+        with patch.object(client._cloud_queue, "_sender") as mock_publish:
             data = (Path(DATA_DIR) / "NeoConfigTLV_340.bin").read_bytes()
             msg = _msg("c/33/QMN000ABC1D2E3FG", data)
             client._client.on_message(None, None, msg)
+            from time import monotonic, sleep
+            deadline = monotonic() + 2
+            while mock_publish.call_count < 1 and monotonic() < deadline:
+                sleep(0.01)
             mock_publish.assert_called_once_with(
                 "QMN000ABC1D2E3FG",
                 "c/33/QMN000ABC1D2E3FG",
@@ -1074,10 +1078,14 @@ class TestClientCloudConfig:
     @patch("grobro.grobro.client.GROWATT_CLOUD_FILTER", set())
     @patch("grobro.grobro.client.GROWATT_CLOUD_CONFIG_FILTER", "true")
     def test_config_filter_does_not_block_device_to_cloud(self, client):
-        with patch.object(client, "_Client__publish_to_growatt_server") as mock_publish:
+        with patch.object(client._cloud_queue, "_sender") as mock_publish:
             data = (Path(DATA_DIR) / "NeoConfigWriteAck_DataInterval.bin").read_bytes()
             msg = _msg("c/33/QMN000ABC1D2E3FG", data)
             client._client.on_message(None, None, msg)
+            from time import monotonic, sleep
+            deadline = monotonic() + 2
+            while mock_publish.call_count < 1 and monotonic() < deadline:
+                sleep(0.01)
             mock_publish.assert_called_once()
 
     @patch("grobro.grobro.client._cloud_lower", "true")
@@ -1218,42 +1226,87 @@ class TestExtractDeviceId:
         assert _extract_device_id("c/X/AB-CD_EF.GH") == "ABCDEFGH"
 
 
-def test_slow_cloud_forward_stalls_local_mqtt_processing_reproduction(client):
-    """Document the currently inherited synchronous Cloud-callback bottleneck.
-
-    This test deliberately verifies the *current* problematic ordering, so it
-    can be replaced by a no-blocking acceptance test with the architectural fix.
-    """
+def test_slow_cloud_forward_does_not_block_local_processing(client):
+    """Local device parsing and callbacks must finish while Cloud stalls."""
     import threading
 
     entered_cloud = threading.Event()
     release_cloud = threading.Event()
-    completed = threading.Event()
     data = (DATA_DIR / "NeoConfigTLV_340.bin").read_bytes()
     message = _msg("c/33/QMN000ABC1D2E3FG", data)
 
     def stalled_cloud(*_args):
         entered_cloud.set()
-        assert release_cloud.wait(3), "test must release the simulated Cloud connect"
-
-    def process():
-        try:
-            client._client.on_message(None, None, message)
-        finally:
-            completed.set()
+        release_cloud.wait(3)
 
     try:
         with patch("grobro.grobro.client._cloud_lower", "true"), patch(
             "grobro.grobro.client.GROWATT_CLOUD", "true"
-        ), patch.object(client, "_Client__publish_to_growatt_server", side_effect=stalled_cloud):
-            worker = threading.Thread(target=process, daemon=True)
-            worker.start()
-            assert entered_cloud.wait(1), "cloud forwarding was not reached"
-            assert not completed.wait(0.1), "synchronous Cloud path no longer blocks the callback"
-            client.on_config.assert_not_called()
-            release_cloud.set()
-            assert completed.wait(3)
+        ), patch.object(client._cloud_queue, "_sender", side_effect=stalled_cloud):
+            client._client.on_message(None, None, message)
+            assert entered_cloud.wait(1), "Cloud work was not scheduled"
             client.on_config.assert_called_once()
-            worker.join(timeout=1)
     finally:
         release_cloud.set()
+        client._cloud_queue.stop()
+
+
+def test_cloud_forward_queue_bounds_backlog_and_drops_stale_packets():
+    import threading
+    import time
+    from grobro.grobro.cloud_dispatch import (
+        CloudForwardQueue, MAX_PENDING_CLOUD_MESSAGES,
+    )
+
+    entered = threading.Event()
+    release = threading.Event()
+    delivered = []
+
+    def sender(*args):
+        delivered.append(args)
+        entered.set()
+        release.wait(2)
+
+    queue = CloudForwardQueue(sender)
+    try:
+        assert queue.submit("QMNTEST", "topic", b"first", 0, False)
+        assert entered.wait(1)
+        for i in range(MAX_PENDING_CLOUD_MESSAGES):
+            assert queue.submit("QMNTEST", "topic", str(i).encode(), 0, False)
+        assert not queue.submit("QMNTEST", "topic", b"overflow", 0, False)
+        queue.stop()
+        release.set()
+        time.sleep(0.02)
+        assert len(delivered) == 1, "stopped queue must not replay pending messages"
+    finally:
+        release.set()
+        queue.stop()
+
+
+def test_cloud_shutdown_does_not_wait_for_ongoing_cloud_connect(client):
+    import threading
+    import time
+
+    started = threading.Event()
+    release = threading.Event()
+    fake_forward = MagicMock()
+
+    def slow_connect(*_args):
+        started.set()
+        release.wait(3)
+
+    fake_forward.connect.side_effect = slow_connect
+    with patch("grobro.grobro.client.mqtt.Client", return_value=fake_forward):
+        worker = threading.Thread(
+            target=lambda: client._Client__connect_to_growatt_server("QMNTEST"),
+            daemon=True,
+        )
+        worker.start()
+        try:
+            assert started.wait(1)
+            start = time.monotonic()
+            client.stop()
+            assert time.monotonic() - start < 1, "shutdown held the Cloud connect lock"
+        finally:
+            release.set()
+            worker.join(timeout=1)
