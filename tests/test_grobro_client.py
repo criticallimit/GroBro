@@ -1449,3 +1449,42 @@ def test_cloud_shutdown_does_not_resubscribe_on_late_connack(client):
     forward.subscribe.reset_mock()
     callback(forward, None, None, 0, None)
     forward.subscribe.assert_not_called()
+
+
+def test_cloud_suback_rejection_is_reported(client, caplog):
+    """Broker denial must not be mistaken for successful Cloud command access."""
+    forward = MagicMock()
+    with patch("grobro.grobro.client.mqtt.Client", return_value=forward):
+        client._Client__connect_to_growatt_server("QMNTEST")
+
+    with caplog.at_level("ERROR"):
+        forward.on_subscribe(forward, None, 1, [128], None)
+    assert "rejected response subscription" in caplog.text
+
+    caplog.clear()
+    with caplog.at_level("ERROR"):
+        forward.on_subscribe(forward, None, 2, [0], None)
+    assert "rejected response subscription" not in caplog.text
+
+
+def test_cloud_subscription_exception_does_not_escape_paho_callback(client, caplog):
+    """A failed subscribe attempt must not kill the Cloud Paho network thread."""
+    forward = MagicMock()
+    forward.subscribe.side_effect = OSError("Cloud transport closed")
+    with patch("grobro.grobro.client.mqtt.Client", return_value=forward):
+        client._Client__connect_to_growatt_server("QMNTEST")
+
+    with caplog.at_level("WARNING"):
+        forward.on_connect(forward, None, None, 0, None)
+    assert "could not subscribe to Growatt Cloud" in caplog.text
+
+
+def test_cloud_suback_after_shutdown_is_ignored(client, caplog):
+    forward = MagicMock()
+    with patch("grobro.grobro.client.mqtt.Client", return_value=forward):
+        client._Client__connect_to_growatt_server("QMNTEST")
+    callback = forward.on_subscribe
+    client.stop()
+    with caplog.at_level("ERROR"):
+        callback(forward, None, 1, [128], None)
+    assert "rejected response subscription" not in caplog.text
