@@ -510,10 +510,18 @@ class Client:
             LOG.warning("MQTT rejected Home Assistant config state for %s R%s",
                         _device_label(device_id), register_no)
         elif register_no == 76 and source:
-            # MQTT acceptance is not a delivery acknowledgement. State the
-            # precise origin without implying that a pending read completed.
-            LOG.info("%s -> Better GroBro: Wi-Fi signal %s dBm received via %s; HA MQTT publish accepted",
-                     _device_label(device_id), value, source)
+            # A runtime guard may return None during shutdown; only an explicit
+            # Paho success code proves local MQTT acceptance. A successful
+            # publish still does not prove delivery/processing by HA.
+            status = getattr(result, "rc", None)
+            if status is None and isinstance(result, (tuple, list)) and result:
+                status = result[0]
+            if status == 0:
+                LOG.info("%s -> Better GroBro: Wi-Fi signal %s dBm received via %s; HA MQTT publish accepted",
+                         _device_label(device_id), value, source)
+            else:
+                LOG.info("%s -> Better GroBro: Wi-Fi signal %s dBm received via %s; HA MQTT publish not confirmed",
+                         _device_label(device_id), value, source)
 
     def _publish_tlv_config_states(self, device_id: str, config: model.DeviceConfig) -> None:
         """Mirror safe, exposed TLV telemetry; do not acknowledge pending reads.
