@@ -258,6 +258,7 @@ class Client:
         self._pending_config_writes: dict[str, deque[int]] = {}
         self._config_ack_tracking_disabled: set[str] = set()
         self._pending_config_lock = threading.Lock()
+        self._config_write_readback_timers: dict[tuple[str, int], threading.Timer] = {}
 
     def start(self):
         LOG.debug("GroBro: Start")
@@ -312,6 +313,9 @@ class Client:
             with self._forward_lifecycle_lock:
                 self._forward_clients.clear()
             with self._pending_config_lock:
+                for timer in self._config_write_readback_timers.values():
+                    timer.cancel()
+                self._config_write_readback_timers.clear()
                 self._pending_config_writes.clear()
                 self._config_ack_tracking_disabled.clear()
             self._diagnostic_writer.stop()
@@ -411,6 +415,13 @@ class Client:
                 except (TypeError, IndexError, KeyError):
                     status = None
             accepted = status in (None, 0)
+            if accepted and _config_register_name(device_id, register_no) in {
+                "data_interval", "time_zone",
+            }:
+                # A subset of devices does not send a usable config-write ACK.
+                # Read the actual setting shortly after local MQTT acceptance,
+                # independently of the ACK. Never mirror the requested value.
+                self._schedule_config_write_readback(device_id, register_no)
             return result
         finally:
             if not accepted:
@@ -423,6 +434,32 @@ class Client:
                                 break
                         if not pending:
                             self._pending_config_writes.pop(device_id, None)
+
+    def _schedule_config_write_readback(self, device_id: str, register_no: int) -> None:
+        key = (device_id, register_no)
+
+        def readback():
+            with self._pending_config_lock:
+                if self._forward_stopped or self._config_write_readback_timers.get(key) is not timer:
+                    return
+                self._config_write_readback_timers.pop(key, None)
+            try:
+                result = self.send_config_read_message(device_id, register_no)
+                if not publish_succeeded(result):
+                    LOG.warning("MQTT rejected config readback for %s R%s", _device_label(device_id), register_no)
+            except (OSError, RuntimeError, ValueError):
+                LOG.exception("Could not read back %s R%s after config write", _device_label(device_id), register_no)
+
+        timer = threading.Timer(1.0, readback)
+        timer.daemon = True
+        with self._pending_config_lock:
+            if self._forward_stopped:
+                return
+            previous = self._config_write_readback_timers.get(key)
+            if previous is not None:
+                previous.cancel()
+            self._config_write_readback_timers[key] = timer
+            timer.start()
 
     def config_reads_ready(self) -> bool:
         """Reads need both a connection and the subscription for their replies."""
@@ -690,15 +727,12 @@ class Client:
                 parsed_register = cfg["register_no"]
                 with self._pending_config_lock:
                     pending = self._pending_config_writes.get(ack_device_id)
-                    matched_local_write = False
                     if _config_register_name(ack_device_id, parsed_register):
                         register_no = parsed_register
                         if pending and parsed_register in pending:
                             pending.remove(parsed_register)
-                            matched_local_write = True
                     elif pending:
                         register_no = pending.popleft()
-                        matched_local_write = True
                         LOG.debug(
                             "%s config acknowledgement reported unknown register %s; "
                             "matched it to the pending Better GroBro write for register %s",
@@ -719,25 +753,6 @@ class Client:
                         register_no,
                     ),
                 )
-                # Read back only confirmed local writes to stable, supported
-                # settings. Connection parameters (R17–R19), time (R31),
-                # restart (R32), and non-user settings must not be probed here.
-                # A read response publishes the *device's* value to HA.
-                if matched_local_write and _config_register_name(ack_device_id, register_no) in {
-                    "data_interval", "time_zone",
-                }:
-                    try:
-                        result = self.send_config_read_message(ack_device_id, register_no)
-                        if not publish_succeeded(result):
-                            LOG.warning(
-                                "%s: MQTT did not accept config readback for register %s",
-                                _device_label(ack_device_id), register_no,
-                            )
-                    except (OSError, RuntimeError, ValueError) as exc:
-                        LOG.warning(
-                            "%s: config readback for register %s failed (%s)",
-                            _device_label(ack_device_id), register_no, type(exc).__name__,
-                        )
                 return
 
             # NOAH/NEXA Smart Meter (EcoTracker, Shelly etc.) JSON data (0x6F64)
