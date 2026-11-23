@@ -1,3 +1,13 @@
+# Better GroBro 3.3.6 — Differences from robertzaage/GroBro
+
+## User-relevant differences
+
+- After an acknowledged local configuration change, automatically read back the device's actual value for update interval (NOAH, NEO, NEXA) and NEXA time zone.
+- Do not trigger immediate readback for MQTT connection settings, device restart or system time; preserve existing behavior for other controls.
+- No optimistic Home Assistant state is published for these configuration changes.
+
+---
+
 # Better GroBro 3.3.5 — Differences from robertzaage/GroBro
 
 ## User-relevant differences
