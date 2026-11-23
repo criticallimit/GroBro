@@ -1652,3 +1652,30 @@ def test_cloud_suback_racing_subscribe_mid_registration_is_not_lost(client):
     finally:
         for thread in threads:
             thread.join(timeout=1)
+
+
+def test_cloud_queue_shutdown_during_failed_send_leaves_no_retry_state():
+    """A late failing Cloud sender must not resurrect state after stop()."""
+    import threading
+    from grobro.grobro.cloud_dispatch import CloudForwardQueue
+
+    entered = threading.Event()
+    release = threading.Event()
+
+    def fail_after_shutdown(*_args, **_kwargs):
+        entered.set()
+        assert release.wait(2)
+        raise OSError("Cloud unavailable")
+
+    queue = CloudForwardQueue(fail_after_shutdown)
+    try:
+        assert queue.submit("QMNTEST", "c/33/QMNTEST", b"first", 1, False)
+        assert entered.wait(1)
+        queue.stop()
+        release.set()
+        queue._thread.join(timeout=2)
+        assert not queue._thread.is_alive()
+        assert queue._retry_after == {}
+    finally:
+        release.set()
+        queue.stop()
