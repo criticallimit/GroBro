@@ -349,6 +349,14 @@ class TestClientOnMessage:
         msg = _msg("c/33/QMN000ABC1D2E3FG", data)
         client._client.on_message(None, None, msg)
 
+    def test_config_readback_uses_internal_key_not_display_name(self):
+        from grobro.grobro.client import _config_register_key, _config_register_name
+
+        assert _config_register_name("QMN000ABC1D2E3FG", 4) == "Update Interval"
+        assert _config_register_key("QMN000ABC1D2E3FG", 4) == "data_interval"
+        assert _config_register_key("0PVP0000TEST0001", 4) == "data_interval"
+        assert _config_register_key("0HVR0000TEST0001", 30) == "time_zone"
+
     @pytest.mark.parametrize(("device_id", "register_no"), [
         ("QMN000ABC1D2E3FG", 4),
         ("0PVP0000TEST0001", 4),
