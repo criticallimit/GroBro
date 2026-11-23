@@ -690,12 +690,15 @@ class Client:
                 parsed_register = cfg["register_no"]
                 with self._pending_config_lock:
                     pending = self._pending_config_writes.get(ack_device_id)
+                    matched_local_write = False
                     if _config_register_name(ack_device_id, parsed_register):
                         register_no = parsed_register
                         if pending and parsed_register in pending:
                             pending.remove(parsed_register)
+                            matched_local_write = True
                     elif pending:
                         register_no = pending.popleft()
+                        matched_local_write = True
                         LOG.debug(
                             "%s config acknowledgement reported unknown register %s; "
                             "matched it to the pending Better GroBro write for register %s",
@@ -716,6 +719,25 @@ class Client:
                         register_no,
                     ),
                 )
+                # Read back only confirmed local writes to stable, supported
+                # settings. Connection parameters (R17–R19), time (R31),
+                # restart (R32), and non-user settings must not be probed here.
+                # A read response publishes the *device's* value to HA.
+                if matched_local_write and _config_register_name(ack_device_id, register_no) in {
+                    "data_interval", "time_zone",
+                }:
+                    try:
+                        result = self.send_config_read_message(ack_device_id, register_no)
+                        if not publish_succeeded(result):
+                            LOG.warning(
+                                "%s: MQTT did not accept config readback for register %s",
+                                _device_label(ack_device_id), register_no,
+                            )
+                    except (OSError, RuntimeError, ValueError) as exc:
+                        LOG.warning(
+                            "%s: config readback for register %s failed (%s)",
+                            _device_label(ack_device_id), register_no, type(exc).__name__,
+                        )
                 return
 
             # NOAH/NEXA Smart Meter (EcoTracker, Shelly etc.) JSON data (0x6F64)
