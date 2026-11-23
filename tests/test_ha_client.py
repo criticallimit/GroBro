@@ -335,6 +335,29 @@ class TestClientLifecycle:
         assert ha_client._last_availability == {}
         ha_client._client.subscribe.assert_called_once_with(_command_subscriptions())
 
+    def test_same_telemetry_is_republished_after_device_offline_and_online(self, ha_client):
+        from grobro.model.growatt_registers import HomeAssistantInputRegister
+
+        device = "QMN000ABC1D2E3FG"
+        state = HomeAssistantInputRegister(device_id=device, payload={"Ppv": 123})
+        topic = f"homeassistant/grobro/{device}/state"
+
+        ha_client.publish_input_register(state)
+        def state_count():
+            return sum(call.args[0] == topic for call in ha_client._client.publish.call_args_list)
+
+        assert state_count() == 1
+        ha_client.publish_input_register(state)
+        assert state_count() == 1
+
+        # A device timeout marks it unavailable but does not restart HA.
+        assert ha_client._Client__publish_availability(device, False) is True
+        ha_client.publish_input_register(state)
+        assert state_count() == 2
+
+        ha_client.publish_input_register(state)
+        assert state_count() == 2
+
     def test_same_telemetry_is_republished_after_ha_birth(self, ha_client):
         from grobro.model.growatt_registers import HomeAssistantInputRegister
 
