@@ -1610,3 +1610,43 @@ def test_cloud_subscription_shutdown_cancels_ack_and_retry_timers(client):
         forward.on_subscribe(forward, None, 51, [0], None)
         assert forward.subscribe.call_count == 1
         assert client._cloud_subscription_pending == {}
+
+
+def test_cloud_suback_racing_subscribe_mid_registration_is_not_lost(client):
+    """The Paho SUBACK thread may run as subscribe() is returning its MID."""
+    import threading
+
+    _FakeCloudTimer.instances = []
+    callback_started = threading.Event()
+    finished = threading.Event()
+    threads = []
+    forward = MagicMock()
+
+    def subscribe(_topic):
+        def acknowledge():
+            callback_started.set()
+            forward.on_subscribe(forward, None, 73, [0], None)
+            finished.set()
+
+        thread = threading.Thread(target=acknowledge, daemon=True)
+        threads.append(thread)
+        thread.start()
+        assert callback_started.wait(1)
+        return (0, 73)
+
+    forward.subscribe.side_effect = subscribe
+    try:
+        with patch("grobro.grobro.client.threading.Timer", _FakeCloudTimer), patch(
+            "grobro.grobro.client.mqtt.Client", return_value=forward
+        ):
+            client._Client__connect_to_growatt_server("QMNTEST")
+            forward.on_connect(forward, None, None, 0, None)
+            assert finished.wait(2), "early SUBACK was blocked indefinitely"
+            assert client._cloud_subscription_pending == {}
+            assert client._cloud_subscription_ack_timers == {}
+            assert client._cloud_subscription_failures == {}
+            assert len(_FakeCloudTimer.instances) == 1
+            assert _FakeCloudTimer.instances[0].cancelled
+    finally:
+        for thread in threads:
+            thread.join(timeout=1)
