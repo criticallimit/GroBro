@@ -108,3 +108,40 @@ def test_overview_uses_the_same_temperature_validation_as_ha(tmp_path, monkeypat
         assert get_device_inventory()[0]["batteries"][0].get("temperature") == expected
     finally:
         target.stop()
+
+def test_restored_device_is_not_considered_online_without_live_telemetry():
+    observe_device("QMNTEST0000001")
+    observe_wifi_signal("QMNTEST0000001", -59)
+    item = get_device_inventory()[0]
+    assert item["connection_status"] == "unknown"
+    assert item["last_telemetry_seconds"] is None
+
+
+@pytest.mark.parametrize("device,age,expected", [
+    ("QMNTEST0000001", 0, "online"),
+    ("QMNTEST0000001", 300, "online"),
+    ("QMNTEST0000001", 400, "stale"),
+    ("QMNTEST0000001", 721, "offline"),
+    ("0PVPTEST000001", 10, "online"),
+    ("0PVPTEST000001", 30, "stale"),
+    ("0PVPTEST000001", 61, "offline"),
+])
+def test_status_uses_live_telemetry_age_without_night_assumptions(device, age, expected):
+    with patch("grobro.ha.device_inventory.time.monotonic", return_value=1000.0):
+        observe_telemetry(device, {"bat_1_soc_pct": 25})
+    with patch("grobro.ha.device_inventory.time.monotonic", return_value=1000.0 + age):
+        item = get_device_inventory()[0]
+    assert item["connection_status"] == expected
+    assert item["last_telemetry_seconds"] == age
+
+
+def test_wifi_updates_and_cached_inventory_do_not_refresh_offline_device():
+    with patch("grobro.ha.device_inventory.time.monotonic", return_value=1000.0):
+        observe_telemetry("QMNTEST0000001", {"wifi_signal_strength": -59})
+    with patch("grobro.ha.device_inventory.time.monotonic", return_value=2000.0):
+        observe_device("QMNTEST0000001")
+        observe_wifi_signal("QMNTEST0000001", -58)
+        assert get_device_inventory()[0]["connection_status"] == "offline"
+        observe_telemetry("QMNTEST0000001", {"bat_1_soc_pct": 21})
+        assert get_device_inventory()[0]["connection_status"] == "online"
+
