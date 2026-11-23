@@ -404,8 +404,30 @@ def test_real_cloud_direct_forwarding_and_reconnect(tmp_path, monkeypatch):
     probe.on_connect = lambda client, *args: client.subscribe(topic)
     probe.on_subscribe = lambda *args: subscribed.set()
     probe.on_message = lambda client, userdata, message: received.append(bytes(message.payload))
+    from grobro.grobro import client as growatt_client_module
+    from grobro.grobro.builder import build_config_read_packet
+
+    # Unlike a pure on_message observer, this verifies the live Cloud ->
+    # source-broker path while preserving the existing forward callback.
+    monkeypatch.setattr(growatt_client_module, "GROWATT_CLOUD_ENABLED", True)
+    monkeypatch.setattr(growatt_client_module, "_cloud_lower", "true")
+    source_reply = threading.Event()
+    source_received = []
+    source_witness = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
+    witness_subscribed = threading.Event()
+    source_witness.on_connect = lambda client, *_args: client.subscribe(f"s/33/{device}")
+    source_witness.on_subscribe = lambda *_args: witness_subscribed.set()
+
+    def witness_message(_client, _userdata, message):
+        source_received.append(bytes(message.payload))
+        source_reply.set()
+
+    source_witness.on_message = witness_message
     source = None
     try:
+        source_witness.connect(host, port, 60)
+        source_witness.loop_start()
+        assert witness_subscribed.wait(5), "source-broker reply witness did not subscribe"
         probe.connect(host, forward_port, 60)
         probe.loop_start()
         assert subscribed.wait(5)
@@ -426,9 +448,13 @@ def test_real_cloud_direct_forwarding_and_reconnect(tmp_path, monkeypatch):
                 original_on_message(*args)
 
         forward.on_message = observe_cloud_response
-        probe.publish(f"s/{device}", b"command", qos=1).wait_for_publish(timeout=5)
+        reply_packet = build_config_read_packet(device, 76)
+        probe.publish(f"s/{device}", reply_packet, qos=1).wait_for_publish(timeout=5)
         assert cloud_reply.wait(5), "initial Cloud response subscription missing"
+        assert source_reply.wait(5), "Cloud response was not forwarded to Growatt source broker"
+        assert source_received[-1] == reply_packet
         cloud_reply.clear()
+        source_reply.clear()
         cloud_resubscribed = threading.Event()
         original_on_subscribe = forward.on_subscribe
 
@@ -452,8 +478,10 @@ def test_real_cloud_direct_forwarding_and_reconnect(tmp_path, monkeypatch):
         assert _wait_until(forward.is_connected)
         # Wait for the broker SUBACK instead of racing CONNECT vs subscribe.
         assert cloud_resubscribed.wait(5), "Cloud response SUBACK missing after reconnect"
-        probe.publish(f"s/{device}", b"after-reconnect", qos=1).wait_for_publish(timeout=5)
+        probe.publish(f"s/{device}", reply_packet, qos=1).wait_for_publish(timeout=5)
         assert cloud_reply.wait(5), "Cloud response subscription was lost on reconnect"
+        assert source_reply.wait(5), "Cloud response not forwarded after reconnect"
+        assert source_received[-1] == reply_packet
         source._Client__publish_to_growatt_server(device, topic, b"second", 0, False)
         source._Client__publish_to_growatt_server(device, topic, b"third", 0, False)
         assert _wait_until(lambda: received == [b"first", b"second", b"third"])
@@ -463,6 +491,8 @@ def test_real_cloud_direct_forwarding_and_reconnect(tmp_path, monkeypatch):
             source.stop()
         probe.disconnect()
         probe.loop_stop()
+        source_witness.disconnect()
+        source_witness.loop_stop()
 
 
 @pytest.mark.integration
