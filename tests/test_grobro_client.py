@@ -644,6 +644,37 @@ class TestClientOnMessage:
             == '"Unknown setting" (register 465)'
         )
 
+    def test_truncated_modbus_block_warning_includes_safe_packet_context(self, caplog):
+        import struct
+        from grobro.model.modbus_message import GrowattModbusMessage
+
+        # "BZP4" deliberately mimics bytes from a device identifier where
+        # a Modbus register-block header would normally start.
+        body = b"BZP4" + bytes(543)
+        header = struct.pack(">HHHBB30s", 1, 7, 30 + len(body), 1, 3,
+                             b"SECRET_DEVICE_SERIAL".ljust(30, b"\\0"))
+        raw = header + body
+        assert len(raw) == 585
+        with caplog.at_level("WARNING"):
+            assert GrowattModbusMessage.parse_grobro(raw) is None
+        assert "Truncated register block 16986..20532" in caplog.text
+        assert "message_type=0x0103" in caplog.text
+        assert "function=3" in caplog.text
+        assert "packet_bytes=585" in caplog.text
+        assert "block_offset=38" in caplog.text
+        assert "SECRET_DEVICE_SERIAL" not in caplog.text
+        assert "425A5034" not in caplog.text
+
+    def test_valid_modbus_fixture_has_no_truncated_block_warning(self, caplog):
+        from grobro.grobro.parser import unscramble
+        from grobro.model.modbus_message import GrowattModbusMessage
+
+        raw = unscramble((Path(DATA_DIR) / "NeoReadInputRegisters.bin").read_bytes())
+        with caplog.at_level("WARNING"):
+            parsed = GrowattModbusMessage.parse_grobro(raw)
+        assert parsed is not None
+        assert "Truncated register block" not in caplog.text
+
     def test_modbus_input_register_neo(self, client):
         data = (Path(DATA_DIR) / "NeoReadInputRegisters.bin").read_bytes()
         msg = _msg("c/33/QMN000ABC1D2E3FG", data)
