@@ -259,6 +259,8 @@ class Client:
         self._cloud_subscription_timers: dict[str, threading.Timer] = {}
         self._cloud_subscription_epochs: dict[str, int] = {}
         self._cloud_subscription_failures: dict[str, int] = {}
+        self._cloud_subscription_ack_timers: dict[str, threading.Timer] = {}
+        self._cloud_subscription_pending: dict[str, tuple[int, int]] = {}
         self._forward_stopped = False
         self._cloud_queue = CloudForwardQueue(self.__publish_to_growatt_server)
         self._diagnostic_writer = DiagnosticWriter()
@@ -289,9 +291,11 @@ class Client:
         self._config_read_ready.clear()
         self._cloud_queue.stop()
         with self._cloud_subscription_lock:
-            for timer in self._cloud_subscription_timers.values():
+            for timer in (*self._cloud_subscription_timers.values(), *self._cloud_subscription_ack_timers.values()):
                 timer.cancel()
             self._cloud_subscription_timers.clear()
+            self._cloud_subscription_ack_timers.clear()
+            self._cloud_subscription_pending.clear()
             self._cloud_subscription_epochs.clear()
             self._cloud_subscription_failures.clear()
         with self._forward_lifecycle_lock:
@@ -1216,6 +1220,8 @@ class Client:
                 if not publish_succeeded(result):
                     LOG.warning("%s: Cloud subscription retry rejected locally", _device_label(device_id))
                     self._schedule_cloud_subscription_retry(device_id, cloud_client, epoch)
+                else:
+                    self._watch_cloud_suback(device_id, cloud_client, epoch, result)
 
             timer = threading.Timer(delay, retry)
             timer.daemon = True
@@ -1229,6 +1235,48 @@ class Client:
                 timer.cancel()
             if clear_failures:
                 self._cloud_subscription_failures.pop(device_id, None)
+
+    def _watch_cloud_suback(self, device_id, cloud_client, epoch, subscribe_result):
+        """Watch one accepted SUBSCRIBE until its matching broker SUBACK."""
+        if not isinstance(subscribe_result, (tuple, list)) or len(subscribe_result) < 2:
+            # The mock or transport did not return an identifiable MID. Never
+            # infer delivery from a missing identifier.
+            return
+        mid = subscribe_result[1]
+        if not isinstance(mid, int):
+            return
+        with self._cloud_subscription_lock:
+            if self._forward_stopped or self._cloud_subscription_epochs.get(device_id) != epoch:
+                return
+            previous = self._cloud_subscription_ack_timers.pop(device_id, None)
+            if previous is not None:
+                previous.cancel()
+            self._cloud_subscription_pending[device_id] = (epoch, mid)
+
+            def expired():
+                with self._cloud_subscription_lock:
+                    if (
+                        self._forward_stopped
+                        or self._cloud_subscription_pending.get(device_id) != (epoch, mid)
+                        or self._cloud_subscription_epochs.get(device_id) != epoch
+                    ):
+                        return
+                    self._cloud_subscription_pending.pop(device_id, None)
+                    self._cloud_subscription_ack_timers.pop(device_id, None)
+                LOG.warning("%s: timed out waiting for Growatt Cloud SUBACK", _device_label(device_id))
+                self._schedule_cloud_subscription_retry(device_id, cloud_client, epoch)
+
+            timer = threading.Timer(8.0, expired)
+            timer.daemon = True
+            self._cloud_subscription_ack_timers[device_id] = timer
+            timer.start()
+
+    def _clear_cloud_suback(self, device_id):
+        with self._cloud_subscription_lock:
+            timer = self._cloud_subscription_ack_timers.pop(device_id, None)
+            if timer is not None:
+                timer.cancel()
+            self._cloud_subscription_pending.pop(device_id, None)
 
     # Preserve the upstream per-device Cloud MQTT handshake, but never hold
     # the shutdown lock during synchronous DNS/TLS/connect operations.
@@ -1258,6 +1306,7 @@ class Client:
                     epoch = self._cloud_subscription_epochs.get(client_id, 0) + 1
                     self._cloud_subscription_epochs[client_id] = epoch
                     self._clear_cloud_subscription_retry(client_id)
+                    self._clear_cloud_suback(client_id)
                 if getattr(reason_code, "is_failure", False):
                     LOG.warning("%s: Growatt Cloud MQTT connection rejected", _device_label(client_id))
                     return
@@ -1275,10 +1324,16 @@ class Client:
                 if not publish_succeeded(result):
                     LOG.warning("%s: Growatt Cloud subscription rejected locally", _device_label(client_id))
                     self._schedule_cloud_subscription_retry(client_id, connected_client, epoch)
+                else:
+                    self._watch_cloud_suback(client_id, connected_client, epoch, result)
 
-            def on_cloud_subscribe(connected_client, _userdata, _mid, reason_codes, _properties):
-                if self._forward_stopped:
-                    return
+            def on_cloud_subscribe(connected_client, _userdata, mid, reason_codes, _properties):
+                with self._cloud_subscription_lock:
+                    pending = self._cloud_subscription_pending.get(client_id)
+                    epoch = self._cloud_subscription_epochs.get(client_id)
+                    if self._forward_stopped or pending != (epoch, mid):
+                        return
+                    self._clear_cloud_suback(client_id)
                 if subscription_rejected(reason_codes):
                     LOG.error(
                         "%s: Growatt Cloud broker rejected response subscription",
