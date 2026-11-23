@@ -1,3 +1,15 @@
+# Better GroBro 3.3.21 — Differences from robertzaage/GroBro
+
+## User-relevant differences
+
+- Fixed a confirmed NEO 0x0103 parser misclassification seen in a November 23 raw MQTT dump. In this actual packet, the 16-byte field at offset 38 contained only the zero-padded ten-character suffix of the NEO serial, rather than a complete device ID. The generic Modbus parser previously treated ASCII `BZP4` there as registers 16986..20532 and issued a false "Truncated register block" warning.
+- The 0x0103-special handling now also accepts an embedded 8+-character suffix of the verified NEO header/topic serial; complete known NOAH IDs are still supported. Unrelated embedded IDs and ordinary Modbus traffic stay on their existing parsing paths.
+- Added positive and negative tests; existing NOAH 0x0103 test retained.
+- No changes to MQTT forwarding, measurement registers, Wi-Fi reads, timeouts, or frequency of device communication.
+- Static checks passed and the condition was matched against both 0x0103 frames found in the supplied raw dump. Full pytest and device verification remain pending.
+
+---
+
 # Better GroBro 3.3.20 — Differences from robertzaage/GroBro
 
 ## User-relevant differences
