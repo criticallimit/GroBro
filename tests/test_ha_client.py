@@ -1108,6 +1108,44 @@ class TestClientConfigReadSequencing:
                 c._Client__config_read_timeout("QMN000ABC1D2E3FG", 1280)
                 assert "QMN000ABC1D2E3FG" not in c._config_read_inflight
 
+    def test_late_neo_wifi_answer_does_not_complete_broker_read(self):
+        """A delayed R76 after its timeout must not consume an in-flight R19."""
+        device = "QMN000ABC1D2E3FG"
+        with patch("grobro.ha.client.mqtt.Client"), patch(
+            "grobro.ha.client.os.listdir", return_value=[]
+        ):
+            c = Client(MQTTConfig(host="localhost", port=1883))
+        c._config_read_inflight[device] = 19
+        timer = MagicMock()
+        c._config_read_timers[device] = timer
+        with patch.object(c, "_Client__refresh_device_activity"), patch.object(
+            c, "_Client__kickoff_next_config_read"
+        ) as next_read:
+            c.handle_config_read_response(device, 76)
+            assert c._config_read_inflight[device] == 19
+            assert c._config_read_timers[device] is timer
+            timer.cancel.assert_not_called()
+            next_read.assert_not_called()
+            c.handle_config_read_response(device, 19)
+            assert device not in c._config_read_inflight
+            timer.cancel.assert_called_once()
+            next_read.assert_called_once_with(device)
+
+    def test_other_device_config_answer_cannot_advance_neo_queue(self):
+        neo = "QMN000ABC1D2E3FG"
+        noah = "0PVP0000TEST0001"
+        with patch("grobro.ha.client.mqtt.Client"), patch(
+            "grobro.ha.client.os.listdir", return_value=[]
+        ):
+            c = Client(MQTTConfig(host="localhost", port=1883))
+        c._config_read_inflight[neo] = 19
+        with patch.object(c, "_Client__refresh_device_activity"), patch.object(
+            c, "_Client__kickoff_next_config_read"
+        ) as next_read:
+            c.handle_config_read_response(noah, 19)
+            assert c._config_read_inflight[neo] == 19
+            next_read.assert_not_called()
+
     def test_config_read_timeout_wrong_register(self):
         with patch("grobro.ha.client.mqtt.Client"):
             with patch("grobro.ha.client.os.listdir", return_value=[]):
