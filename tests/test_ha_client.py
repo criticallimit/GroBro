@@ -440,6 +440,31 @@ class TestClientConfig:
         finally:
             clear_device_inventory()
 
+    def test_source_reconnect_skips_restored_offline_devices(self, ha_client):
+        sleeping_neo = "QMN000ABC1D2E3FG"
+        active_noah = "0PVP0000TEST0001"
+        ha_client._config_cache[sleeping_neo] = DeviceConfig(serial_number=sleeping_neo)
+        ha_client._config_cache[active_noah] = DeviceConfig(serial_number=active_noah)
+        ha_client._device_last_seen[active_noah] = 100.0
+
+        with patch.object(ha_client, "_Client__refresh_config_if_needed") as refresh:
+            ha_client.handle_source_ready()
+
+        refresh.assert_called_once_with(active_noah)
+        assert sleeping_neo not in ha_client._config_read_queues
+        assert sleeping_neo not in ha_client._config_refresh_started
+
+    def test_device_telemetry_still_triggers_config_refresh_after_source_reconnect(self, ha_client):
+        sleeping_neo = "QMN000ABC1D2E3FG"
+        ha_client._config_cache[sleeping_neo] = DeviceConfig(serial_number=sleeping_neo)
+        ha_client.handle_source_ready()
+        with patch.object(ha_client, "_Client__refresh_config_if_needed") as refresh:
+            from grobro.model.growatt_registers import HomeAssistantInputRegister
+            ha_client.publish_input_register(HomeAssistantInputRegister(
+                device_id=sleeping_neo, payload={"Ppv": 100},
+            ))
+        refresh.assert_called_with(sleeping_neo)
+
     def test_gateway_derived_metadata_does_not_schedule_neo_config_reads(self, ha_client):
         device = "QMN000ABC1D2E3FG"
         cfg = DeviceConfig(serial_number=device, wifi_signal="-61")
