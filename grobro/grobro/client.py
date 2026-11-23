@@ -1215,17 +1215,23 @@ class Client:
                     # A subsequent CONNACK handles resubscription; never poll
                     # an offline client or create an extra network connection.
                     return
-                try:
-                    result = cloud_client.subscribe(f"+/{device_id}")
-                except (OSError, RuntimeError, ValueError) as exc:
-                    LOG.warning("%s: Cloud subscription retry failed (%s)", _device_label(device_id), type(exc).__name__)
-                    self._schedule_cloud_subscription_retry(device_id, cloud_client, epoch)
-                    return
-                if not publish_succeeded(result):
-                    LOG.warning("%s: Cloud subscription retry rejected locally", _device_label(device_id))
-                    self._schedule_cloud_subscription_retry(device_id, cloud_client, epoch)
-                else:
-                    self._watch_cloud_suback(device_id, cloud_client, epoch, result)
+                # Hold the registration lock until the MID watchdog exists.
+                # A SUBACK arriving on the Paho network thread then cannot
+                # overtake registration on this retry timer thread.
+                with self._cloud_subscription_lock:
+                    if self._forward_stopped or self._cloud_subscription_epochs.get(device_id) != epoch:
+                        return
+                    try:
+                        result = cloud_client.subscribe(f"+/{device_id}")
+                    except (OSError, RuntimeError, ValueError) as exc:
+                        LOG.warning("%s: Cloud subscription retry failed (%s)", _device_label(device_id), type(exc).__name__)
+                        self._schedule_cloud_subscription_retry(device_id, cloud_client, epoch)
+                        return
+                    if not publish_succeeded(result):
+                        LOG.warning("%s: Cloud subscription retry rejected locally", _device_label(device_id))
+                        self._schedule_cloud_subscription_retry(device_id, cloud_client, epoch)
+                    else:
+                        self._watch_cloud_suback(device_id, cloud_client, epoch, result)
 
             timer = threading.Timer(delay, retry)
             timer.daemon = True
@@ -1317,20 +1323,26 @@ class Client:
                     return
                 # Cloud subscriptions are session-scoped; reconnecting requires
                 # a fresh subscription, even if a prior session succeeded.
-                try:
-                    result = connected_client.subscribe(f"+/{client_id}")
-                except (OSError, RuntimeError, ValueError) as exc:
-                    LOG.warning(
-                        "%s: could not subscribe to Growatt Cloud (%s)",
-                        _device_label(client_id), type(exc).__name__,
-                    )
-                    self._schedule_cloud_subscription_retry(client_id, connected_client, epoch)
-                    return
-                if not publish_succeeded(result):
-                    LOG.warning("%s: Growatt Cloud subscription rejected locally", _device_label(client_id))
-                    self._schedule_cloud_subscription_retry(client_id, connected_client, epoch)
-                else:
-                    self._watch_cloud_suback(client_id, connected_client, epoch, result)
+                # Atomic from the perspective of the independent SUBACK
+                # callback: do not release the lock between SUBSCRIBE and MID
+                # watchdog registration.
+                with self._cloud_subscription_lock:
+                    if self._forward_stopped or self._cloud_subscription_epochs.get(client_id) != epoch:
+                        return
+                    try:
+                        result = connected_client.subscribe(f"+/{client_id}")
+                    except (OSError, RuntimeError, ValueError) as exc:
+                        LOG.warning(
+                            "%s: could not subscribe to Growatt Cloud (%s)",
+                            _device_label(client_id), type(exc).__name__,
+                        )
+                        self._schedule_cloud_subscription_retry(client_id, connected_client, epoch)
+                        return
+                    if not publish_succeeded(result):
+                        LOG.warning("%s: Growatt Cloud subscription rejected locally", _device_label(client_id))
+                        self._schedule_cloud_subscription_retry(client_id, connected_client, epoch)
+                    else:
+                        self._watch_cloud_suback(client_id, connected_client, epoch, result)
 
             def on_cloud_subscribe(connected_client, _userdata, mid, reason_codes, _properties):
                 with self._cloud_subscription_lock:
