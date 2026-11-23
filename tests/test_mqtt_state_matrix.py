@@ -20,16 +20,24 @@ def clients():
 
     clear_device_inventory()
     config = MQTTConfig(host="localhost", port=1883)
-    with patch("grobro.grobro.client.mqtt.Client") as mock_source, patch(
+    # Both production modules import the same paho.mqtt.client module.
+    # Patching both Client paths separately can accidentally make source and
+    # target share one MagicMock, hiding cross-broker state isolation bugs.
+    source_transport = MagicMock(name="source_mqtt_transport")
+    target_transport = MagicMock(name="target_mqtt_transport")
+    with patch(
+        "paho.mqtt.client.Client",
+        side_effect=[source_transport, target_transport],
+    ) as factory, patch(
         "grobro.grobro.client.Path.glob", return_value=[]
-    ), patch("grobro.ha.client.mqtt.Client") as mock_target, patch(
-        "grobro.ha.client.os.listdir", return_value=[]
-    ):
+    ), patch("grobro.ha.client.os.listdir", return_value=[]):
         source = SourceClient(config, config)
         target = TargetClient(config)
+        assert factory.call_count == 2
 
-    source._client = mock_source.return_value
-    target._client = mock_target.return_value
+    assert source._client is source_transport
+    assert target._client is target_transport
+    assert source._client is not target._client
     source._client.subscribe.return_value = (0, 1)
     source._client.is_connected.return_value = True
     target._client.publish.return_value = (0, None)
