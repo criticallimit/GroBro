@@ -1,3 +1,15 @@
+# Better GroBro 3.3.13 — Differences from robertzaage/GroBro
+
+## User-relevant differences
+
+- Validate Update Interval (R4, Home Assistant minutes 0–60) and Wi-Fi Signal Strength (R76, signed dBm -120..-1) consistently for both direct config-read responses and full configuration TLV packets. Do not guess seconds-to-minutes conversions from ambiguous external examples.
+- When a compound config read contains an invalid integer value, continue processing later valid entries instead of discarding the remainder of the message.
+- Retain existing per-device read queue and timeout behavior; no additional periodic requests or speculative rejection of delayed valid values.
+- Added regression scenarios across NOAH, NEO and NEXA and malformed compound packets.
+- Structural checks passed; pytest and physical-device validation still pending.
+
+---
+
 # Better GroBro 3.3.12 — Differences from robertzaage/GroBro
 
 ## User-relevant differences
