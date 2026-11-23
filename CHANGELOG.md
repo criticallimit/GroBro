@@ -1,3 +1,14 @@
+# Better GroBro 3.3.10 — Differences from robertzaage/GroBro
+
+## User-relevant differences
+
+- When NEO firmware does not answer a standalone Wi-Fi signal-strength read (register 76), the config read queue continues after 10 seconds instead of waiting 60 seconds.
+- The existing handling of genuine NEO Wi-Fi values in standalone or compound config responses is preserved; no signal value is fabricated.
+- NOAH, NEXA and all other register read timeouts remain unchanged.
+- Added a regression test for the targeted timeout.
+
+---
+
 # Better GroBro 3.3.9 — Differences from robertzaage/GroBro
 
 ## User-relevant differences
