@@ -11,7 +11,7 @@ import paho.mqtt.client as mqtt
 import pytest
 
 from grobro import grobro, ha
-from grobro.model.mqtt_config import MQTTConfig
+from grobro.model.mqtt_config import MQTTConfig, subscription_rejected
 from grobro.ha_bridge import wire_clients
 
 
@@ -416,14 +416,30 @@ def test_real_cloud_direct_forwarding_and_reconnect(tmp_path, monkeypatch):
         # Check the reverse Cloud -> device subscription, not only the
         # outgoing device -> Cloud publish path.
         cloud_reply = threading.Event()
-        forward.on_message = lambda _client, _userdata, msg: (
-            cloud_reply.set() if msg.topic == f"s/{device}" else None
-        )
+        original_on_message = forward.on_message
+
+        def observe_cloud_response(*args):
+            if args[2].topic == f"s/{device}":
+                cloud_reply.set()
+            # Preserve the production Cloud -> device forwarding callback.
+            if callable(original_on_message):
+                original_on_message(*args)
+
+        forward.on_message = observe_cloud_response
         probe.publish(f"s/{device}", b"command", qos=1).wait_for_publish(timeout=5)
         assert cloud_reply.wait(5), "initial Cloud response subscription missing"
         cloud_reply.clear()
         cloud_resubscribed = threading.Event()
-        forward.on_subscribe = lambda *_args: cloud_resubscribed.set()
+        original_on_subscribe = forward.on_subscribe
+
+        def observe_cloud_suback(*args):
+            # Keep production MID/timeout/retry behavior active in the E2E test.
+            if callable(original_on_subscribe):
+                original_on_subscribe(*args)
+            if not subscription_rejected(args[3]):
+                cloud_resubscribed.set()
+
+        forward.on_subscribe = observe_cloud_suback
         disconnected = threading.Event()
         original = forward.on_disconnect
         def on_disconnect(*args):
