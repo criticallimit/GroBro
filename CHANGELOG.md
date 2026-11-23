@@ -1,3 +1,13 @@
+# Better GroBro 3.3.27 — MQTT availability retry correctness
+
+- Corrected handling when the primary retained device availability message succeeds but the optional separate `/online` sensor publish is rejected: the already accepted primary state is cached immediately and no longer repeatedly republished at every device activity.
+- The optional online sensor now has a separate publication cache and is retried independently on subsequent activity.
+- MQTT reconnect / HA restart invalidates both caches so primary device availability and optional sensor are republished correctly.
+- No changes to device communication, polling, timeouts, Home Assistant entity definitions, or Ingress appearance.
+- Added regression tests for optional publish failure and reconnect recovery. Source-level checks completed; full Python test execution and physical Home Assistant testing remain pending.
+
+---
+
 # Better GroBro 3.3.26 — Simplified two-state device overview
 
 - Ingress device cards now display only **Online** or **Offline**, without elapsed-time text.
