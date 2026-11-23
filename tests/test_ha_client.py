@@ -920,6 +920,46 @@ class TestClientAvailability:
         assert online_calls[-1].args[1] == "OFF"
 
     @patch("grobro.ha.client.AVAILABILITY_SENSOR", True)
+    def test_failed_optional_online_sensor_does_not_repeat_primary(self, ha_client):
+        device_id = "QMN000ABC1D2E3FG"
+        primary_topic = f"homeassistant/grobro/{device_id}/availability"
+        optional_topic = f"homeassistant/grobro/{device_id}/online"
+        calls = []
+
+        def publish(topic, payload, *args, **kwargs):
+            calls.append((topic, payload))
+            return (1, None) if topic == optional_topic and len([
+                item for item in calls if item[0] == optional_topic
+            ]) == 1 else (0, None)
+
+        ha_client._client.publish.side_effect = publish
+        assert ha_client._Client__publish_availability(device_id, True) is True
+        assert ha_client._last_availability[device_id] is True
+        assert device_id not in ha_client._last_online_sensor
+        # A new activity only retries the missing optional topic, not the
+        # already accepted primary availability topic.
+        assert ha_client._Client__publish_availability(device_id, True) is False
+        assert [t for t, _ in calls].count(primary_topic) == 1
+        assert [t for t, _ in calls].count(optional_topic) == 2
+        assert ha_client._last_online_sensor[device_id] is True
+
+    @patch("grobro.ha.client.AVAILABILITY_SENSOR", True)
+    def test_reconnect_clears_optional_online_sensor_cache(self, ha_client):
+        from grobro.ha.cleanup import clear_reconnect_caches
+
+        device_id = "QMN000ABC1D2E3FG"
+        ha_client._Client__publish_availability(device_id, True)
+        assert ha_client._last_online_sensor[device_id] is True
+        clear_reconnect_caches(ha_client)
+        assert ha_client._last_online_sensor == {}
+        assert ha_client._last_availability == {}
+        ha_client._client.publish.reset_mock()
+        ha_client._Client__publish_availability(device_id, True)
+        topics = [call.args[0] for call in ha_client._client.publish.call_args_list]
+        assert f"homeassistant/grobro/{device_id}/availability" in topics
+        assert f"homeassistant/grobro/{device_id}/online" in topics
+
+    @patch("grobro.ha.client.AVAILABILITY_SENSOR", True)
     def test_wifi_signal_sensor_becomes_unavailable_with_device(self, ha_client):
         device_id = "QMN000ABC1D2E3FG"
         ha_client._Client__publish_device_discovery(device_id)
