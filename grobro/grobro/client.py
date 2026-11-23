@@ -495,7 +495,7 @@ class Client:
             return None
         return number
 
-    def _publish_config_state(self, device_id: str, register_no: int, value, *, retain: bool) -> None:
+    def _publish_config_state(self, device_id: str, register_no: int, value, *, retain: bool, source: str | None = None) -> None:
         """Publish one validated config value by the same HA path for any wire format."""
         checked = self._validated_config_measurement(device_id, register_no, value)
         if checked is None:
@@ -509,6 +509,11 @@ class Client:
         if not publish_succeeded(result):
             LOG.warning("MQTT rejected Home Assistant config state for %s R%s",
                         _device_label(device_id), register_no)
+        elif register_no == 76 and source:
+            # MQTT acceptance is not a delivery acknowledgement. State the
+            # precise origin without implying that a pending read completed.
+            LOG.info("%s -> Better GroBro: Wi-Fi signal %s dBm received via %s; HA MQTT publish accepted",
+                     _device_label(device_id), value, source)
 
     def _publish_tlv_config_states(self, device_id: str, config: model.DeviceConfig) -> None:
         """Mirror safe, exposed TLV telemetry; do not acknowledge pending reads.
@@ -535,7 +540,7 @@ class Client:
             if value is None:
                 continue
             try:
-                self._publish_config_state(device_id, definition.growatt.register_no, value, retain=True)
+                self._publish_config_state(device_id, definition.growatt.register_no, value, retain=True, source="device configuration telegram")
             except Exception as exc:
                 LOG.warning("Could not publish TLV config state for %s R%s (%s)",
                             _device_label(device_id), definition.growatt.register_no, type(exc).__name__)
@@ -794,7 +799,7 @@ class Client:
                     if register_no == 7:
                         value, retain = "", True  # remove a legacy retained secret
                     try:
-                        self._publish_config_state(cfg["device_id"], register_no, value, retain=retain)
+                        self._publish_config_state(cfg["device_id"], register_no, value, retain=retain, source="register response")
                     except Exception as exc:
                         LOG.warning("Could not publish config readback for %s register %s (%s)", cfg["device_id"], register_no, type(exc).__name__)
 
