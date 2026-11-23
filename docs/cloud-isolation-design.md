@@ -150,3 +150,11 @@ Zwei Regressionstests mit auf 50 ms verkürztem Diagnoseintervall überprüfen d
 Shutdown-Race erkannt und korrigiert: Bisher wurden Subscription-Timer gelöscht und erst danach das Stop-Flag gesetzt. Ein Paho-Callback konnte dazwischen erneut einen Timer registrieren. Nun wird _forward_stopped=True vor der Timer-Bereinigung im selben Condition-RLock gesetzt und wartende Worker sofort benachrichtigt.
 
 Verbleibende Grenze: Wenn Cloud nie wieder einen erfolgreichen CONNACK liefert, bleibt der Worker absichtlich wartend und die Warteschlange kann nach 64 weiteren Paketen überlaufen. Die Warnung diagnostiziert, behebt aber keine vollständige Transportstörung. Reale Paho/Mosquitto-Tests und Growatt-Cloud-Kompatibilität bleiben offen.
+
+## Geräteübergreifendes Head-of-Line-Blocking: neuer Freigabeblocker (23.11.2026)
+
+Die aktuelle CloudForwardQueue betreibt genau einen Daemon-Worker. Dieser ruft den Client-Forwarder synchron auf. Seit der Absicherung 'erst SUBSCRIBE, dann erstes PUBLISH' kann der Client auf einen ausbleibenden Cloud-CONNACK eines Gerätes unbegrenzt warten. Der Worker ist damit vollständig belegt. Selbst wenn ein zweites Gerät eine funktionierende Cloud-Verbindung hat, wird dessen Paket in der globalen FIFO nicht mehr bearbeitet. Dieses Problem ist eine direkte Folge des Codepfads, nicht bloß eine unbewiesene Growatt-Vermutung.
+
+Ein neuer Test 'test_cloud_stalled_device_does_not_block_other_device' reproduziert diese Geräte-Konkurrenz mit zwei Events. Er ist ausdrücklich als pytest.xfail(strict=True) markiert, solange die Isolierung nicht implementiert ist; ein versehentliches XPASS wird bei strict=True als Fehler behandelt. Test ist im GitHub-Zweig angelegt, aber in dieser Runde nicht ausgeführt.
+
+Ein möglicher Architekturweg ist ein begrenzter gerätespezifischer Worker-Pool oder eine nichtblockierende Wiederanmeldung mit fairer Geräteplanung. Die Abnahme muss dabei pro Gerät FIFO, binäre Payload/QoS/Retain, eine **globale** Speicher-/Queue-Grenze, Shutdown und späteren Reconnect nachweisen. Erst danach sollte die Ein-Worker-Architektur ersetzt werden. Die bestehende Version ist keine freigabefähige Mehrgeräte-Lösung.
