@@ -1105,13 +1105,21 @@ class TestClientCloudConfig:
     @patch("grobro.grobro.client.GROWATT_CLOUD_ENABLED", True)
     @patch("grobro.grobro.client.GROWATT_CLOUD_FILTER", set())
     def test_cloud_forwarding_exception(self, client):
-        with patch.object(
-            client, "_Client__publish_to_growatt_server", side_effect=Exception("boom")
-        ):
+        from threading import Event
+
+        failed = Event()
+
+        def fail_cloud(*_args, **_kwargs):
+            failed.set()
+            raise RuntimeError("Cloud temporarily unavailable")
+
+        with patch.object(client._cloud_queue, "_sender", side_effect=fail_cloud):
             data = (Path(DATA_DIR) / "NeoConfigTLV_340.bin").read_bytes()
             msg = _msg("c/33/QMN000ABC1D2E3FG", data)
             client._client.on_message(None, None, msg)
+            # The local parsing path must succeed regardless of Cloud failure.
             client.on_config.assert_called_once()
+            assert failed.wait(1), "queued Cloud worker did not execute"
 
 
 class TestClientForward:
