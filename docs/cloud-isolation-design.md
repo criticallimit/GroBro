@@ -69,5 +69,14 @@ Der ursprüngliche Code abonnierte `+/<Geräte-ID>` nur während `__connect_to_g
 - Kein Retries bei erfolgreicher Subscription; erfolgreicher SUBACK löscht den Timer und setzt Backoff zurück.
 - Neuer CONNACK inkrementiert eine Sitzungskennung, löscht alle alten Timer des Geräts und startet das reguläre Abo; ein veralteter Timer führt wegen Sitzungsvergleich keine Aktion aus.
 - Beim Beenden werden alle Timer abgebrochen und die Statusdaten geleert.
-- **Noch offen:** Bei einer lokal akzeptierten Subscription, für die überhaupt kein SUBACK eintrifft, gibt es noch keinen separaten SUBACK-Timeout. Bei dauerhaft vom Broker verweigerter Subscription laufen bis zu einem Timer alle fünf Minuten pro betroffenem Gerät weiter. Ein eigener Cloud-Status in Ingress ist noch nicht implementiert.
+- **Ergänzt im Entwicklungszweig:** Bei lokal akzeptierter Subscription mit gültiger MQTT-MID wird eine **8-Sekunden-SUBACK-Frist** verfolgt. Ein Timeout plant einen gedrosselten Neuversuch ein. Bei dauerhaft vom Broker verweigerter Subscription laufen bis zu einem Timer alle fünf Minuten pro betroffenem Gerät weiter. Ein eigener Cloud-Status in Ingress ist noch nicht implementiert.
 - **Nachweis:** Regressionstests mit Fake-Timer angelegt, nicht ausgeführt. Echte Paho/Broker-Tests stehen aus.
+
+## MID-gebundener SUBACK-Timeout (23.11.2026)
+
+- Für einen angenommenen `subscribe()`-Aufruf mit gültiger Paho-MID wird **ein achtsekündiger Watchdog** angelegt. Der zugehörige Zustandswert enthält `(Verbindungs-Epoche, MID)`.
+- Nur ein `on_subscribe` mit passender aktueller MID darf den Watchdog löschen oder die Subscription als erfolgreich behandeln. Ein verspäteter SUBACK für einen abgelaufenen Versuch wird ignoriert.
+- Fehlt SUBACK, wird der Watchdog gelöscht und der vorhandene **10–300-Sekunden-Backoff** für einen neuen Subscribe-Versuch verwendet; keine permanente Abfrage oder neue MQTT-Verbindung.
+- Bei CONNACK, erfolgreichem SUBACK und Shutdown werden unpassende Timer gelöscht. Timer-Callbacks kontrollieren zusätzlich die Identität des aktuell registrierten Timers, damit ein bereits storniertes Callback nicht nachträglich einen neueren Zustand verändert.
+- **Offene Grenze:** Für nicht identifizierbare `subscribe()`-Rückgaben ohne ganzzahlige MID kann kein verlässlicher MID-gebundener Timeout aufgebaut werden. Die Produktionsbibliothek Paho liefert auf dem regulären Pfad `(result, mid)`; die Mock-Tests müssen konkrete MIDs liefern.
+- **Weiter zu prüfen:** Paho-Callback-Timing, insbesondere ein SUBACK, der vor der Registrierung des MID-Watchdogs eintrifft, sowie ein MID-Wraparound; reale Zwei-Broker-Tests wurden noch nicht ausgeführt.
