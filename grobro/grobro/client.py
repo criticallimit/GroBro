@@ -523,6 +523,22 @@ class Client:
                 LOG.info("%s -> Better GroBro: Wi-Fi signal %s dBm received via %s; HA MQTT publish not confirmed",
                          _device_label(device_id), value, source)
 
+    def _sanitize_tlv_config_measurements(self, device_id: str, config: model.DeviceConfig) -> model.DeviceConfig:
+        """Do not merge invalid TLV measurements into cached device metadata.
+
+        Preserve all other configuration fields and allow partial packets to
+        leave previously received valid measurements untouched.
+        """
+        corrections = {}
+        for register_no, field in ((4, "data_interval"), (76, "wifi_signal")):
+            raw = getattr(config, field, None)
+            if raw is None:
+                continue
+            validated = self._validated_config_measurement(device_id, register_no, raw)
+            if validated is None:
+                corrections[field] = None
+        return config.model_copy(update=corrections) if corrections else config
+
     def _publish_tlv_config_states(self, device_id: str, config: model.DeviceConfig) -> None:
         """Mirror safe, exposed TLV telemetry; do not acknowledge pending reads.
 
@@ -669,6 +685,7 @@ class Client:
             if msg_type_4 in (340, 341, 387) or msg_type == 0x0129:
                 config_offset = parser.find_config_offset(unscrambled)
                 config = parser.parse_config_type(unscrambled, config_offset)
+                config = self._sanitize_tlv_config_measurements(device_id, config)
                 if config and (
                     msg_type_4 in (340, 341, 387)
                     or msg_type == 0x0129
