@@ -1,3 +1,13 @@
+# Better GroBro 3.3.30 — Diagnose fehlgeschlagener Growatt-MQTT-Subscriptions
+
+- Prüft das unmittelbare Rückgabeergebnis der Growatt-MQTT-Subscription auf `c/#`. Eine lokal abgelehnte Subscription oder Exception wird mit aussagekräftiger Fehlermeldung protokolliert.
+- Der vorhandene Bereitschaftsmechanismus bleibt gesperrt, bis ein erfolgreiches SUBACK empfangen wurde. Bei einem späteren MQTT-Reconnect wird die Subscription wie bisher erneut versucht.
+- Zwei Regressionstests prüfen lokale Subscription-Ablehnung und OSError. Zusätzliche Regressionstests für verspätete NEO-R76-Antworten und geräteübergreifende Antwortisolation wurden ebenfalls ergänzt.
+- Keine Änderung an MQTT-Topics, Abfrageintervallen, Timeouts, Geräte-Entities oder Cloud-Weiterleitung.
+- Prüfungen beschränken sich auf Quelltext/Integrationsstellen. Vollständiges Python-Kompilieren, pytest und reale HA-Gerätetests sind noch ausstehend.
+
+---
+
 # Better GroBro 3.3.29 — Avoid false online status during HA MQTT outage
 
 - Fixed a disconnect/reconnect corner case: Paho may accept messages into a local queue while not connected, but those queued publications do not prove that Home Assistant has received the device availability update.
