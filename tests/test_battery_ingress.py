@@ -694,3 +694,11 @@ def test_ingress_log_download_uses_current_session_log_api():
     assert 'new Blob([data.logs||""],{type:"text/plain;charset=utf-8"})' in html
     assert 'anchor.download="Better-GroBro-Protokoll-"+timestamp+".txt"' in html
     assert 'if(!data.marker_found)throw new Error' in html
+
+def test_overview_displays_existing_availability_instead_of_live_detected():
+    html = battery_ingress._INDEX_HTML
+    assert 'item.connection_status' in html
+    assert 'item.last_activity_seconds' in html
+    assert 'online.classList.add("status-"+status)' in html
+    assert 'status==="online"' in html  # Hide stale Wi-Fi signal
+    assert 'online.textContent=l({de:"Live erkannt"' not in html
