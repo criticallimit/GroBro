@@ -297,3 +297,20 @@ def test_recovery_offlines_live_device_without_config_cache_entry():
         )
     finally:
         target.stop()
+
+
+@pytest.mark.parametrize("power_state", [0, 1])
+def test_neo_switch_power_state_does_not_define_mqtt_availability(power_state):
+    # Inverter power is a controllable function, not NEO connectivity.
+    with patch("paho.mqtt.client.Client"):
+        target = ha.Client(model.MQTTConfig(host="localhost", port=1883))
+        target._ha_mqtt_connected = True
+    try:
+        device = "QMNTEST0000001"
+        observe_telemetry(device, {"inverter_power": power_state})
+        target._client.publish.return_value = (0, None)
+        assert target._Client__publish_availability(device, True) is True
+        assert get_device_inventory()[0]["connection_status"] == "online"
+        assert target._last_availability[device] is True
+    finally:
+        target.stop()
