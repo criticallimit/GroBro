@@ -1,3 +1,12 @@
+# Better GroBro 3.3.39 — Abgelehnter Home-Assistant-MQTT-Reconnect meldet Geräte nicht online
+
+- Verhindert einen fehlerhaften Verbindungszustand bei vom Broker abgelehntem HA-MQTT-Reconnect. Ein früheres internes „verbunden“-Kennzeichen wird nun ausdrücklich zurückgesetzt.
+- Gleichzeitig wird der Bridge-Online-Status als ausstehend markiert und die Ingress-Geräteanzeige auf Offline gesetzt. Lokale MQTT-Queues können so nicht zur falschen Online-Anzeige führen.
+- Ein Regressionstest simuliert den abgelehnten Reconnect nach zuvor erfolgreicher Verbindung und prüft, dass keine Online-Verfügbarkeit veröffentlicht wird.
+- Keine zusätzlichen Hintergrundprozesse, Timer, regelmäßigen MQTT-Abfragen oder Dauerlogs. Quellcode-Verknüpfungen geprüft, vollständige Python-Testausführung und Live-Test in HA noch ausstehend.
+
+---
+
 # Better GroBro 3.3.38 — Smart-Meter-Daten nach Geräte-Offline erneut veröffentlichen
 
 - Der bereits vorhandene gerätebezogene Cache-Reset bei bestätigter Offline-Meldung berücksichtigt jetzt auch den separaten Smart-Meter-Veröffentlichungs-Cache.
