@@ -275,3 +275,25 @@ def test_bridge_online_publish_failure_blocks_device_online_until_retry():
         assert target._client.publish.call_count == 3
     finally:
         target.stop()
+
+
+def test_recovery_offlines_live_device_without_config_cache_entry():
+    # A NOAH or NEO can appear in Ingress before a complete config is stored.
+    with patch("paho.mqtt.client.Client"):
+        target = ha.Client(model.MQTTConfig(host="localhost", port=1883))
+        target._ha_mqtt_connected = True
+    try:
+        device = "QMNTEST0000001"
+        observe_device(device)
+        assert device not in target._config_cache
+        target._client.publish.return_value = (0, None)
+        target._Client__publish_offline_devices()
+        assert target._last_availability[device] is False
+        assert get_device_inventory()[0]["connection_status"] == "offline"
+        assert any(
+            call.args[0] == f"homeassistant/grobro/{device}/availability"
+            and call.args[1] == "offline"
+            for call in target._client.publish.call_args_list
+        )
+    finally:
+        target.stop()
