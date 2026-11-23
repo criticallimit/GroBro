@@ -248,6 +248,28 @@ class TestClientOnMessage:
         ("1280", "-61"), ("garbage", "-61"), ("10", "0"),
         ("10", "not-a-number"), (None, None),
     ])
+    def test_wifi_source_is_logged_for_tlv_and_direct_read(self, client, caplog):
+        from grobro.model.device_config import DeviceConfig
+
+        client._publish_tlv_config_states(
+            "QMN000ABC1D2E3FG", DeviceConfig(wifi_signal="-61"),
+        )
+        client._publish_config_state(
+            "QMN000ABC1D2E3FG", 76, -62,
+            retain=True, source="register response",
+        )
+        assert "Wi-Fi signal -61 dBm received via device configuration telegram" in caplog.text
+        assert "Wi-Fi signal -62 dBm received via register response" in caplog.text
+
+    def test_rejected_wifi_publish_does_not_claim_acceptance(self, client, caplog):
+        client.on_config_register_value = MagicMock(return_value=(4, None))
+        client._publish_config_state(
+            "QMN000ABC1D2E3FG", 76, -61,
+            retain=True, source="register response",
+        )
+        assert "MQTT rejected Home Assistant config state" in caplog.text
+        assert "Wi-Fi signal -61 dBm received via register response" not in caplog.text
+
     def test_tlv_config_rejects_invalid_or_missing_state_values(self, client, interval, wifi):
         from grobro.model.device_config import DeviceConfig
 
