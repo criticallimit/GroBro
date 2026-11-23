@@ -252,3 +252,26 @@ def test_offline_ha_mqtt_queue_does_not_falsely_restore_online_card():
         assert get_device_inventory()[0]["connection_status"] == "online"
     finally:
         target.stop()
+
+
+def test_bridge_online_publish_failure_blocks_device_online_until_retry():
+    with patch("paho.mqtt.client.Client"):
+        target = ha.Client(model.MQTTConfig(host="localhost", port=1883))
+        target._ha_mqtt_connected = True
+    try:
+        device = "QMNTEST0000001"
+        observe_device(device)
+        target._bridge_online_pending = True
+        target._client.publish.side_effect = [(1, None), (0, None), (0, None)]
+
+        assert target._Client__publish_availability(device, True) is False
+        assert target._bridge_online_pending is True
+        assert get_device_inventory()[0]["connection_status"] == "unknown"
+        assert target._client.publish.call_count == 1
+
+        assert target._Client__publish_availability(device, True) is True
+        assert target._bridge_online_pending is False
+        assert get_device_inventory()[0]["connection_status"] == "online"
+        assert target._client.publish.call_count == 3
+    finally:
+        target.stop()
