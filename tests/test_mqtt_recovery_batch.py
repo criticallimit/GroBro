@@ -159,3 +159,24 @@ def test_successful_subscription_ack_does_not_trigger_retry(clients):
     target._Client__subscribe_commands(target._client)
     target._Client__on_subscribe(target._client, None, 24, [0, 0], None)
     assert not target._command_subscription_pending
+
+
+@pytest.mark.parametrize(("device_id", "register_no", "expected_timeout"), [
+    ("QMNTEST", 76, 10),
+    ("QMNTEST", 4, 60),
+    ("0PVPTEST", 76, 60),
+    ("0HVRTEST", 76, 60),
+])
+def test_only_neo_wifi_single_read_has_shorter_timeout(clients, device_id, register_no, expected_timeout):
+    from collections import deque
+
+    _, target = clients
+    target.config_reads_ready = lambda: True
+    target.on_config_read = MagicMock(return_value=(0, None))
+    target._config_read_queues[device_id] = deque([register_no])
+    with patch.object(target, "_Client__start_config_read_timer") as schedule:
+        target._Client__kickoff_next_config_read(device_id)
+    schedule.assert_called_once()
+    assert schedule.call_args.args[0] == expected_timeout
+    assert schedule.call_args.args[1] == target._Client__config_read_timeout
+    target.on_config_read.assert_called_once_with(device_id, register_no)
