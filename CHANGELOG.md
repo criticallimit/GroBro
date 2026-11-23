@@ -1,3 +1,12 @@
+# Better GroBro 3.3.34 — Einheitliche Wiederanlaufprüfung für aktive Geräte
+
+- Nach Growatt-MQTT- und Home-Assistant-Wiederanlauf werden automatische Konfigurationsabfragen nur für Geräte geplant, deren letzte direkte Aktivität noch innerhalb des bereits vorhandenen Geräte-Timeouts liegt.
+- Ein gespeicherter NEO ohne aktuelles Lebenszeichen oder mit bereits abgelaufener Aktivitätszeit wird nicht aufgrund seiner Konfiguration automatisch vollständig abgefragt. Echte später eingehende NEO-Gerätetelemetrie startet weiter den regulären Refresh.
+- Keine zusätzlichen Timer, Hintergrundaufgaben, Logs oder Performance-Tests; die bestehende Timeout-Funktion wird wiederverwendet. Die separate einmalige NEO-Leistungszustandsprobe bleibt bewusst unverändert.
+- Tests für abgelaufene und frische Aktivität sowie HA-Restart mit inaktivem NEO ergänzt. Quelltext und Integration geprüft; pytest und HA-Praxistest noch nicht ausgeführt.
+
+---
+
 # Better GroBro 3.3.33 — Keine automatischen Vollabfragen für inaktive Geräte nach Growatt-MQTT-Reconnect
 
 - Der Wiederanlauf nach Bestätigung der Growatt-MQTT-Subscription (`c/#`) startet Konfigurationslesesequenzen nur noch für Geräte, deren Live-Aktivität während der laufenden Better-GroBro-Sitzung bereits registriert wurde.
