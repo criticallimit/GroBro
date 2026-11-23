@@ -1216,3 +1216,44 @@ class TestExtractDeviceId:
     def test_strips_non_alphanumeric(self):
         from grobro.grobro.client import _extract_device_id
         assert _extract_device_id("c/X/AB-CD_EF.GH") == "ABCDEFGH"
+
+
+def test_slow_cloud_forward_stalls_local_mqtt_processing_reproduction(client):
+    """Document the currently inherited synchronous Cloud-callback bottleneck.
+
+    This test deliberately verifies the *current* problematic ordering, so it
+    can be replaced by a no-blocking acceptance test with the architectural fix.
+    """
+    import threading
+
+    entered_cloud = threading.Event()
+    release_cloud = threading.Event()
+    completed = threading.Event()
+    data = (DATA_DIR / "NeoConfigTLV_340.bin").read_bytes()
+    message = _msg("c/33/QMN000ABC1D2E3FG", data)
+
+    def stalled_cloud(*_args):
+        entered_cloud.set()
+        assert release_cloud.wait(3), "test must release the simulated Cloud connect"
+
+    def process():
+        try:
+            client._client.on_message(None, None, message)
+        finally:
+            completed.set()
+
+    try:
+        with patch("grobro.grobro.client._cloud_lower", "true"), patch(
+            "grobro.grobro.client.GROWATT_CLOUD", "true"
+        ), patch.object(client, "_Client__publish_to_growatt_server", side_effect=stalled_cloud):
+            worker = threading.Thread(target=process, daemon=True)
+            worker.start()
+            assert entered_cloud.wait(1), "cloud forwarding was not reached"
+            assert not completed.wait(0.1), "synchronous Cloud path no longer blocks the callback"
+            client.on_config.assert_not_called()
+            release_cloud.set()
+            assert completed.wait(3)
+            client.on_config.assert_called_once()
+            worker.join(timeout=1)
+    finally:
+        release_cloud.set()
