@@ -16,7 +16,6 @@ from typing import Callable
 LOG = logging.getLogger(__name__)
 
 MAX_PENDING_CLOUD_MESSAGES = 64
-MAX_CLOUD_MESSAGE_AGE_SECONDS = 5.0
 
 
 class CloudForwardQueue:
@@ -68,16 +67,13 @@ class CloudForwardQueue:
                 created, args = self._messages.popleft()
                 if len(self._messages) < MAX_PENDING_CLOUD_MESSAGES:
                     self._overflow_logged = False
-            now = time.monotonic()
-            if now - created > MAX_CLOUD_MESSAGE_AGE_SECONDS:
-                continue
             device_id = args[0]
-            if now < self._retry_after.get(device_id, 0):
+            if time.monotonic() < self._retry_after.get(device_id, 0):
                 continue
             try:
-                # The source timestamp must be rechecked *after* a possibly
-                # slow synchronous DNS/TLS connection, immediately before
-                # forwarding the device packet to Cloud MQTT.
+                # Preserve Upstream's opaque binary payload semantics: neither
+                # initial config frames nor later messages have a proven TTL.
+                # Do not discard an otherwise accepted message by age.
                 self._sender(*args, received_at=created)
                 self._retry_after.pop(device_id, None)
             except Exception as exc:
