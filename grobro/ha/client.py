@@ -659,15 +659,24 @@ class Client:
             except (RuntimeError, OSError) as exc:
                 LOG.warning("Could not schedule config refresh for %s (%s); will retry on device activity", device_id, type(exc).__name__)
 
+    def __has_recent_device_activity(self, device_id: str) -> bool:
+        """Reuse the device's established availability timeout; no new polling."""
+        from grobro.ha.timer_runtime import effective_device_timeout
+
+        last_seen = self._device_last_seen.get(device_id)
+        return (
+            last_seen is not None
+            and 0 <= time.monotonic() - last_seen < effective_device_timeout(self, device_id)
+        )
+
     @guard_runtime
     def handle_source_ready(self) -> None:
         """Restart interrupted reads after the source broker acknowledges c/#."""
         self.__reset_config_read_state()
-        # Restored metadata does not prove a device is powered/online. Avoid
-        # scheduling a full read sequence for a sleeping NEO on MQTT recovery.
-        # Fresh device traffic will call __refresh_config_if_needed normally.
+        # Stored device metadata alone does not prove the device is powered.
+        # Fresh device traffic triggers the regular automatic refresh later.
         for device_id in tuple(self._config_cache):
-            if device_id in self._device_last_seen:
+            if self.__has_recent_device_activity(device_id):
                 self.__refresh_config_if_needed(device_id)
 
     def __queue_all_config_reads(self, device_id: str, *, delay: float = 0.0) -> bool:
@@ -749,7 +758,8 @@ class Client:
         # same generic queue used by Read All. This includes Wi-Fi RSSI (R76)
         # without introducing any device-family-specific request.
         for known_device_id in tuple(self._config_cache):
-            self.__refresh_config_if_needed(known_device_id)
+            if self.__has_recent_device_activity(known_device_id):
+                self.__refresh_config_if_needed(known_device_id)
 
         from grobro.ha.neo_power_runtime import schedule_known_neo_state_probe
         schedule_known_neo_state_probe(self, delay=0.5)
