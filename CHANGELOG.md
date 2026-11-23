@@ -1,3 +1,15 @@
+# Better GroBro 3.3.16 — Differences from robertzaage/GroBro
+
+## User-relevant differences
+
+- WLAN logging now distinguishes an explicit successful local MQTT publication (return code 0) from an unconfirmed publish result, such as when the Home Assistant runtime is already stopped.
+- Valid WLAN values still report their actual source (direct config-register response or full configuration telegram) independently of MQTT publication acceptance.
+- No new periodic device reads, changes to source MQTT packets, reconnect behavior, or device-specific exceptions.
+- Added a regression for suppressed MQTT publishing on shutdown; retained existing source logging tests.
+- Static source checks passed; Python pytest and real-device checks remain pending.
+
+---
+
 # Better GroBro 3.3.15 — Differences from robertzaage/GroBro
 
 ## User-relevant differences
