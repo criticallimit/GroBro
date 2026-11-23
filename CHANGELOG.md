@@ -1,3 +1,15 @@
+# Better GroBro 3.3.11 — Differences from robertzaage/GroBro
+
+## User-relevant differences
+
+- The Wi-Fi signal-strength register (R76) now follows the same ten-second non-response timeout on NEO, NOAH and NEXA; previously only NEO had that timeout.
+- The existing common config read queue continues with the next setting when a device does not respond. Other configuration registers still use their original 60-second timeout.
+- Existing MQTT commands, Home Assistant entity IDs, and real device readbacks remain unchanged.
+- Added a NOAH/NEO/NEXA regression matrix for Wi-Fi timeouts, queue continuation and common discovery topics.
+- Structural checks passed; end-to-end pytest and device verification are still pending.
+
+---
+
 # Better GroBro 3.3.10 — Differences from robertzaage/GroBro
 
 ## User-relevant differences
