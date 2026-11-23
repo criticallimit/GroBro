@@ -119,3 +119,84 @@ def test_run_clients_logs_successful_startup():
     assert ha_client.stopped is True
     assert grobro_client.stopped is True
     log_info.assert_any_call("Better GroBro started successfully")
+
+
+def test_bridge_client_lifecycle_failure_matrix():
+    """A failure in either startup path must attempt cleanup of both clients."""
+    import pytest
+    import grobro.ha_bridge as mod
+
+    for failing_stage in ("ha_start", "source_start", "signal_wait", "ha_stop"):
+        events = []
+
+        class FakeClient:
+            def __init__(self, label):
+                self.label = label
+
+            def start(self):
+                events.append(f"{self.label}_start")
+                if failing_stage == f"{self.label}_start":
+                    raise RuntimeError(failing_stage)
+
+            def stop(self):
+                events.append(f"{self.label}_stop")
+                if failing_stage == f"{self.label}_stop":
+                    raise RuntimeError(failing_stage)
+
+        class FakeSignal:
+            def wait(self):
+                events.append("signal_wait")
+                if failing_stage == "signal_wait":
+                    raise RuntimeError("signal_wait")
+
+        with pytest.raises(RuntimeError, match=failing_stage):
+            mod.run_clients(FakeClient("ha"), FakeClient("source"), FakeSignal())
+
+        assert events[0] == "ha_start"
+        assert events[-2:] == ["ha_stop", "source_stop"]
+        if failing_stage == "ha_start":
+            assert "source_start" not in events
+        else:
+            assert events.index("ha_start") < events.index("source_start")
+        if failing_stage in ("ha_start", "source_start"):
+            assert "signal_wait" not in events
+
+
+def test_bridge_wiring_connects_all_data_command_and_readiness_callbacks():
+    """Verify the central source-to-target contract, independent of device family."""
+    from types import SimpleNamespace
+    from grobro.ha_bridge import wire_clients
+
+    callback_names = (
+        "publish_input_register",
+        "publish_holding_register_input",
+        "set_config",
+        "set_derived_config",
+        "handle_config_read_response",
+        "publish_config_register_value",
+        "publish_smart_meter",
+        "handle_source_ready",
+    )
+    command_names = ("send_command", "send_config_read_message", "config_reads_ready")
+    ha = SimpleNamespace(**{name: object() for name in callback_names})
+    source = SimpleNamespace(**{name: object() for name in command_names})
+    source.send_config_message = lambda *args: args
+
+    wire_clients(ha, source)
+
+    mappings = {
+        "on_input_register": "publish_input_register",
+        "on_holding_register_input": "publish_holding_register_input",
+        "on_config": "set_config",
+        "on_derived_config": "set_derived_config",
+        "on_config_read_response": "handle_config_read_response",
+        "on_config_register_value": "publish_config_register_value",
+        "on_smart_meter": "publish_smart_meter",
+        "on_ready": "handle_source_ready",
+    }
+    for target_name, source_name in mappings.items():
+        assert getattr(source, target_name) is getattr(ha, source_name)
+    assert ha.on_command is source.send_command
+    assert ha.on_config_read is source.send_config_read_message
+    assert ha.config_reads_ready is source.config_reads_ready
+    assert ha.on_config_command("device", 76, "value") == ("device", 76, "value")
