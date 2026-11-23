@@ -1,3 +1,13 @@
+# Better GroBro 3.3.24 — Unified Ingress online/offline display
+
+- Replaced the always-green `Live erkannt` label in the Ingress device overview with actual `Online`, `Offline` or `Noch keine Live-Daten` status.
+- Reused the **existing** Home Assistant device-availability activity refreshes and timeout events for NOAH, NEO and NEXA; **no second timer** and no night/PV-power assumptions.
+- Shows elapsed time since last activity. The Wi-Fi RSSI box displays a dash rather than pretending a retained signal is current when a device is offline or not yet seen.
+- Existing MQTT availability topics, optional online sensors, timeout configuration, HA entities and battery assignments remain unchanged.
+- Added tests for all three device families and the Ingress display. The embedded Ingress JavaScript was syntax-compiled. Python pytest and on-device tests remain pending.
+
+---
+
 # Better GroBro 3.3.23 — Emergency startup syntax fix
 
 - Fixed a blocking SyntaxError in `grobro/grobro/client.py` introduced in 3.3.22: literal backslash-n escape sequences had accidentally been written into a function call instead of real newlines.
