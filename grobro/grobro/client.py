@@ -255,6 +255,10 @@ class Client:
         self._forward_clients: dict[str, mqtt.Client] = {}
         self._forward_lifecycle_lock = threading.RLock()
         self._forward_connect_lock = threading.Lock()
+        self._cloud_subscription_lock = threading.RLock()
+        self._cloud_subscription_timers: dict[str, threading.Timer] = {}
+        self._cloud_subscription_epochs: dict[str, int] = {}
+        self._cloud_subscription_failures: dict[str, int] = {}
         self._forward_stopped = False
         self._cloud_queue = CloudForwardQueue(self.__publish_to_growatt_server)
         self._diagnostic_writer = DiagnosticWriter()
@@ -284,6 +288,12 @@ class Client:
         LOG.debug("GroBro: Stop")
         self._config_read_ready.clear()
         self._cloud_queue.stop()
+        with self._cloud_subscription_lock:
+            for timer in self._cloud_subscription_timers.values():
+                timer.cancel()
+            self._cloud_subscription_timers.clear()
+            self._cloud_subscription_epochs.clear()
+            self._cloud_subscription_failures.clear()
         with self._forward_lifecycle_lock:
             if self._forward_stopped:
                 return
@@ -1176,6 +1186,50 @@ class Client:
         if received_at is not None and not publish_succeeded(result):
             raise ConnectionError(f"Growatt Cloud MQTT publish rejected locally for {client_id}")
 
+    def _schedule_cloud_subscription_retry(self, device_id, cloud_client, epoch):
+        """Schedule at most one retry after a failed Cloud subscription."""
+        with self._cloud_subscription_lock:
+            if self._forward_stopped or self._cloud_subscription_epochs.get(device_id) != epoch:
+                return
+            previous = self._cloud_subscription_timers.pop(device_id, None)
+            if previous is not None:
+                previous.cancel()
+            attempts = self._cloud_subscription_failures.get(device_id, 0) + 1
+            self._cloud_subscription_failures[device_id] = attempts
+            delay = min(10 * 2 ** min(attempts - 1, 5), 300)
+
+            def retry():
+                with self._cloud_subscription_lock:
+                    if self._forward_stopped or self._cloud_subscription_epochs.get(device_id) != epoch:
+                        return
+                    self._cloud_subscription_timers.pop(device_id, None)
+                if not cloud_client.is_connected():
+                    # A subsequent CONNACK handles resubscription; never poll
+                    # an offline client or create an extra network connection.
+                    return
+                try:
+                    result = cloud_client.subscribe(f"+/{device_id}")
+                except (OSError, RuntimeError, ValueError) as exc:
+                    LOG.warning("%s: Cloud subscription retry failed (%s)", _device_label(device_id), type(exc).__name__)
+                    self._schedule_cloud_subscription_retry(device_id, cloud_client, epoch)
+                    return
+                if not publish_succeeded(result):
+                    LOG.warning("%s: Cloud subscription retry rejected locally", _device_label(device_id))
+                    self._schedule_cloud_subscription_retry(device_id, cloud_client, epoch)
+
+            timer = threading.Timer(delay, retry)
+            timer.daemon = True
+            self._cloud_subscription_timers[device_id] = timer
+            timer.start()
+
+    def _clear_cloud_subscription_retry(self, device_id, *, clear_failures=True):
+        with self._cloud_subscription_lock:
+            timer = self._cloud_subscription_timers.pop(device_id, None)
+            if timer is not None:
+                timer.cancel()
+            if clear_failures:
+                self._cloud_subscription_failures.pop(device_id, None)
+
     # Preserve the upstream per-device Cloud MQTT handshake, but never hold
     # the shutdown lock during synchronous DNS/TLS/connect operations.
     def __connect_to_growatt_server(self, client_id):
@@ -1198,13 +1252,17 @@ class Client:
             client.on_message = self.__on_message_forward_client
 
             def on_cloud_connect(connected_client, _userdata, _flags, reason_code, _properties):
-                if self._forward_stopped:
-                    return
+                with self._cloud_subscription_lock:
+                    if self._forward_stopped:
+                        return
+                    epoch = self._cloud_subscription_epochs.get(client_id, 0) + 1
+                    self._cloud_subscription_epochs[client_id] = epoch
+                    self._clear_cloud_subscription_retry(client_id)
                 if getattr(reason_code, "is_failure", False):
                     LOG.warning("%s: Growatt Cloud MQTT connection rejected", _device_label(client_id))
                     return
-                # Cloud subscriptions are session-scoped; a reconnect may
-                # create a clean session and lose the original subscription.
+                # Cloud subscriptions are session-scoped; reconnecting requires
+                # a fresh subscription, even if a prior session succeeded.
                 try:
                     result = connected_client.subscribe(f"+/{client_id}")
                 except (OSError, RuntimeError, ValueError) as exc:
@@ -1212,18 +1270,26 @@ class Client:
                         "%s: could not subscribe to Growatt Cloud (%s)",
                         _device_label(client_id), type(exc).__name__,
                     )
+                    self._schedule_cloud_subscription_retry(client_id, connected_client, epoch)
                     return
                 if not publish_succeeded(result):
                     LOG.warning("%s: Growatt Cloud subscription rejected locally", _device_label(client_id))
+                    self._schedule_cloud_subscription_retry(client_id, connected_client, epoch)
 
-            def on_cloud_subscribe(_connected_client, _userdata, _mid, reason_codes, _properties):
-                # Paho accepting subscribe() does not prove the Cloud broker
-                # granted the response channel. Check the actual SUBACK.
-                if not self._forward_stopped and subscription_rejected(reason_codes):
+            def on_cloud_subscribe(connected_client, _userdata, _mid, reason_codes, _properties):
+                if self._forward_stopped:
+                    return
+                if subscription_rejected(reason_codes):
                     LOG.error(
                         "%s: Growatt Cloud broker rejected response subscription",
                         _device_label(client_id),
                     )
+                    with self._cloud_subscription_lock:
+                        epoch = self._cloud_subscription_epochs.get(client_id)
+                    if epoch is not None:
+                        self._schedule_cloud_subscription_retry(client_id, connected_client, epoch)
+                else:
+                    self._clear_cloud_subscription_retry(client_id)
 
             client.on_connect = on_cloud_connect
             client.on_subscribe = on_cloud_subscribe
