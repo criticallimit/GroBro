@@ -1,4 +1,6 @@
+import io
 import json
+import zipfile
 import urllib.error
 import urllib.request
 
@@ -704,3 +706,110 @@ def test_overview_displays_existing_availability_instead_of_live_detected():
     assert 'online.classList.add("status-"+status)' in html
     assert 'status==="online"' in html  # Hide stale Wi-Fi signal
     assert 'online.textContent=l({de:"Live erkannt"' not in html
+
+
+def test_ingress_raw_dump_archive_includes_current_and_rotated_bytes(tmp_path, monkeypatch):
+    dump_dir = tmp_path / "dump"
+    dump_dir.mkdir()
+    expected = {
+        "messages.jsonl.3": b'{"message":"oldest"}\n',
+        "messages.jsonl.2": b'{"message":"older"}\n',
+        "messages.jsonl.1": b'{"message":"previous"}\n',
+        "messages.jsonl": b'{"message":"current"}\n',
+    }
+    for name, payload in expected.items():
+        (dump_dir / name).write_bytes(payload)
+    monkeypatch.setattr(
+        battery_ingress, "get_addon_options",
+        lambda: {"options": {"DUMP_DIR": str(dump_dir)}},
+    )
+    server = start_battery_ingress_server(0)
+    try:
+        _, port = server.server_address
+        with urllib.request.urlopen(
+            f"http://127.0.0.1:{port}/api/raw-dump-archive", timeout=3
+        ) as response:
+            assert response.status == 200
+            assert response.headers["Content-Type"] == "application/zip"
+            assert "attachment;" in response.headers["Content-Disposition"]
+            archive_bytes = response.read()
+        with zipfile.ZipFile(io.BytesIO(archive_bytes)) as archive:
+            assert archive.namelist() == list(expected)
+            assert {name: archive.read(name) for name in archive.namelist()} == expected
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_ingress_raw_dump_archive_supports_backup_only(tmp_path, monkeypatch):
+    (tmp_path / "messages.jsonl.1").write_bytes(b"old\n")
+    monkeypatch.setattr(
+        battery_ingress, "get_addon_options",
+        lambda: {"options": {"DUMP_DIR": str(tmp_path)}},
+    )
+    server = start_battery_ingress_server(0)
+    try:
+        _, port = server.server_address
+        with urllib.request.urlopen(
+            f"http://127.0.0.1:{port}/api/raw-dump-archive", timeout=3
+        ) as response:
+            with zipfile.ZipFile(io.BytesIO(response.read())) as archive:
+                assert archive.namelist() == ["messages.jsonl.1"]
+                assert archive.read("messages.jsonl.1") == b"old\n"
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_ingress_raw_dump_archive_missing_returns_404(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        battery_ingress, "get_addon_options",
+        lambda: {"options": {"DUMP_DIR": str(tmp_path)}},
+    )
+    server = start_battery_ingress_server(0)
+    try:
+        _, port = server.server_address
+        try:
+            urllib.request.urlopen(
+                f"http://127.0.0.1:{port}/api/raw-dump-archive", timeout=3
+            )
+            assert False, "expected HTTP 404"
+        except urllib.error.HTTPError as exc:
+            assert exc.code == 404
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_ingress_raw_dump_archive_excludes_symlink_escape(tmp_path, monkeypatch):
+    dump_dir = tmp_path / "dump"
+    dump_dir.mkdir()
+    secret = tmp_path / "secret.txt"
+    secret.write_text("do not expose")
+    (dump_dir / "messages.jsonl.1").symlink_to(secret)
+    (dump_dir / "messages.jsonl").write_bytes(b"safe\n")
+    monkeypatch.setattr(
+        battery_ingress, "get_addon_options",
+        lambda: {"options": {"DUMP_DIR": str(dump_dir)}},
+    )
+    server = start_battery_ingress_server(0)
+    try:
+        _, port = server.server_address
+        with urllib.request.urlopen(
+            f"http://127.0.0.1:{port}/api/raw-dump-archive", timeout=3
+        ) as response:
+            with zipfile.ZipFile(io.BytesIO(response.read())) as archive:
+                assert archive.namelist() == ["messages.jsonl"]
+                assert archive.read("messages.jsonl") == b"safe\n"
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_ingress_raw_dump_archive_button_keeps_existing_download():
+    html = battery_ingress._INDEX_HTML
+    assert 'id="raw-dump-download"' in html
+    assert 'id="raw-dump-archive-download"' in html
+    assert 'apiUrl("api/raw-dump-archive")' in html
+    assert 'document.getElementById("raw-dump-archive-download").addEventListener' in html
+    assert 'document.getElementById("raw-dump-download").addEventListener' in html
