@@ -1170,7 +1170,11 @@ class Client:
                 return
         if self._forward_stopped:
             return
-        client.publish(topic, payload=payload, qos=qos, retain=retain)
+        result = client.publish(topic, payload=payload, qos=qos, retain=retain)
+        # Only the queued path needs a failure signal for its per-device retry
+        # cooldown. Explicit direct calls preserve the existing return behavior.
+        if received_at is not None and not publish_succeeded(result):
+            raise ConnectionError(f"Growatt Cloud MQTT publish rejected locally for {client_id}")
 
     # Preserve the upstream per-device Cloud MQTT handshake, but never hold
     # the shutdown lock during synchronous DNS/TLS/connect operations.
