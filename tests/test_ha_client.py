@@ -1930,3 +1930,32 @@ def test_ha_rejected_suback_remains_pending_for_device_activity_retry():
     finally:
         target._stopped = True
         target._client.disconnect()
+
+
+def test_locally_accepted_state_is_deduplicated_without_broker_ack(ha_client):
+    """Characterize Paho-queue acceptance versus real broker delivery.
+
+    A successful local publish is currently sufficient to cache the JSON; the
+    following identical device frame is then suppressed. This test documents
+    the existing limitation rather than claiming successful broker delivery.
+    """
+    device = "0PVP0000TEST0001"
+    state = HomeAssistantInputRegister(device_id=device, payload={"Ppv": 123})
+
+    ha_client._client.publish.return_value = (0, None)
+    ha_client.publish_input_register(state)
+    topic = f"homeassistant/grobro/{device}/state"
+    state_calls = [
+        call for call in ha_client._client.publish.call_args_list
+        if call.args and call.args[0] == topic
+    ]
+    assert len(state_calls) == 1
+
+    # No broker acknowledgment was synthesized, yet the cache prevents
+    # republishing unchanged telemetry in the same connection epoch.
+    ha_client.publish_input_register(state)
+    state_calls = [
+        call for call in ha_client._client.publish.call_args_list
+        if call.args and call.args[0] == topic
+    ]
+    assert len(state_calls) == 1
