@@ -1,3 +1,14 @@
+# Better GroBro 3.3.9 — Differences from robertzaage/GroBro
+
+## User-relevant differences
+
+- Fixed the confirmed internal-key/display-label mismatch that prevented automatic config readback after changing Update Interval (NOAH, NEO, NEXA) or Time Zone (NEXA).
+- Audited all config and holding command mappings across NOAH, NEO and NEXA; other command families do not share this mismatched-name check.
+- No optimistic setting value is shown: the UI still waits for the actual device response.
+- Added regression coverage of real register definitions.
+
+---
+
 # Better GroBro 3.3.8 — Differences from robertzaage/GroBro
 
 ## User-relevant differences
