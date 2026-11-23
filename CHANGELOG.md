@@ -1,3 +1,13 @@
+# Better GroBro 3.3.29 — Avoid false online status during HA MQTT outage
+
+- Fixed a disconnect/reconnect corner case: Paho may accept messages into a local queue while not connected, but those queued publications do not prove that Home Assistant has received the device availability update.
+- After a target MQTT disconnect, Better GroBro keeps Ingress devices Offline and does not publish/accept another device availability update until the target broker reconnects. On reconnect, the existing discovery and state recovery flow resumes.
+- Added a targeted regression test for the sequence Online -> broker disconnect -> locally accepted queued publish -> reconnect -> Online.
+- Reviewed NOAH's hot path: the existing cached register rules, pre-JSON payload comparison, identical-state suppression and cached discovery already avoid common redundant MQTT publishes. No speculative performance rewrite added.
+- Verified committed source-level markers and embedded Ingress JavaScript syntax. Python compilation/pytest and live Home Assistant tests remain unexecuted.
+
+---
+
 # Better GroBro 3.3.28 — HA MQTT broker-disconnect state handling
 
 - Added a Paho MQTT callback-v2 `on_disconnect` hook for the Home Assistant target broker. The Ingress device overview now displays Offline instead of stale Online when that MQTT transport is disconnected; the existing per-device HA MQTT availability and source-device timeouts remain unchanged.
