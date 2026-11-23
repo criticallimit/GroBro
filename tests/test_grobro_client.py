@@ -122,6 +122,22 @@ class TestClientLifecycle:
         assert client._smart_meter_state_cache == {}
 
 
+    def test_source_subscribe_local_rejection_keeps_reads_disabled(self, client, caplog):
+        client._client.subscribe.return_value = (grobro_client.mqtt.MQTT_ERR_NO_CONN, None)
+        client._config_read_ready.clear()
+        with caplog.at_level("ERROR"):
+            client._client.on_connect(client._client, None, None, 0, None)
+        assert not client._config_read_ready.is_set()
+        assert "rejected c/# subscription locally" in caplog.text
+
+    def test_source_subscribe_exception_keeps_reads_disabled(self, client, caplog):
+        client._client.subscribe.side_effect = OSError("broker temporarily unavailable")
+        client._config_read_ready.clear()
+        with caplog.at_level("ERROR"):
+            client._client.on_connect(client._client, None, None, 0, None)
+        assert not client._config_read_ready.is_set()
+        assert "Could not subscribe to Growatt MQTT c/#" in caplog.text
+
     def test_forward_client_uses_upstream_connection_sequence(self, client):
         forward = MagicMock()
         with patch("grobro.grobro.client.mqtt.Client", return_value=forward) as factory:
