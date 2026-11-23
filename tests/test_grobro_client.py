@@ -219,6 +219,65 @@ class TestClientOnMessage:
         client._client.on_message(None, None, msg)
         client.on_config.assert_called_once()
 
+    @pytest.mark.parametrize("device_id", [
+        "QMN000ABC1D2E3FG", "0PVP000ABC123", "0HVR000ABC123",
+    ])
+    def test_tlv_config_updates_shared_interval_and_wifi_states(self, client, device_id):
+        from grobro.model.device_config import DeviceConfig
+
+        config = DeviceConfig(serial_number=device_id, data_interval="10", wifi_signal="-61")
+        wire = _msg(f"c/33/{device_id}", b"wire")
+        # Full TLV packets (340) must update HA state but never complete a
+        # pending single-register config read.
+        with patch("grobro.grobro.client.parser.unscramble",
+                   return_value=bytes.fromhex("00 01 01 54 00 00 00 00")), patch(
+            "grobro.grobro.client.parser.find_config_offset", return_value=0
+        ), patch("grobro.grobro.client.parser.parse_config_type", return_value=config):
+            client._client.on_message(None, None, wire)
+
+        published = {
+            call.args[0]: call.args[1]
+            for call in client._client.publish.call_args_list
+            if len(call.args) > 1
+        }
+        assert published[f"homeassistant/config/grobro/{device_id}/4/get"] == 10
+        assert published[f"homeassistant/config/grobro/{device_id}/76/get"] == -61
+        client.on_config_read_response.assert_not_called()
+
+    @pytest.mark.parametrize(("interval", "wifi"), [
+        ("1280", "-61"), ("garbage", "-61"), ("10", "0"),
+        ("10", "not-a-number"), (None, None),
+    ])
+    def test_tlv_config_rejects_invalid_or_missing_state_values(self, client, interval, wifi):
+        from grobro.model.device_config import DeviceConfig
+
+        client._publish_tlv_config_states(
+            "QMN000ABC1D2E3FG",
+            DeviceConfig(data_interval=interval, wifi_signal=wifi),
+        )
+        published_topics = [call.args[0] for call in client._client.publish.call_args_list]
+        if interval not in ("10",):
+            assert "homeassistant/config/grobro/QMN000ABC1D2E3FG/4/get" not in published_topics
+        if wifi not in ("-61",):
+            assert "homeassistant/config/grobro/QMN000ABC1D2E3FG/76/get" not in published_topics
+
+    def test_tlv_does_not_publish_sensitive_or_network_configuration(self, client):
+        from grobro.model.device_config import DeviceConfig
+
+        client._publish_tlv_config_states(
+            "0PVP000ABC123",
+            DeviceConfig(
+                data_interval="5", wifi_signal="-72",
+                password="SECRET", remote_ip="192.0.2.1",
+                remote_url="example.invalid", remote_port="7006",
+            ),
+        )
+        topics = [call.args[0] for call in client._client.publish.call_args_list]
+        assert topics == [
+            "homeassistant/config/grobro/0PVP000ABC123/4/get",
+            "homeassistant/config/grobro/0PVP000ABC123/76/get",
+        ]
+
     def test_compound_config_read_fixture_publishes_individual_registers(self, client):
         data = (Path(DATA_DIR) / "NeoConfigReadResponse_337.bin").read_bytes()
         msg = _msg("c/33/QMN000ABC1D2E3FG", data)
