@@ -768,8 +768,8 @@ function renderOverviewDevices(){
     const online=document.createElement("div");online.className="online-line";
     const status=["online","stale","offline"].includes(item.connection_status)?item.connection_status:"unknown";
     online.classList.add("status-"+status);
-    const age=Number(item.last_telemetry_seconds);
-    const hasAge=item.last_telemetry_seconds!==null&&item.last_telemetry_seconds!==undefined&&Number.isFinite(age);
+    const age=Number(item.last_activity_seconds);
+    const hasAge=item.last_activity_seconds!==null&&item.last_activity_seconds!==undefined&&Number.isFinite(age);
     const ageText=hasAge
       ? (age<60 ? l({de:"vor "+Math.round(age)+" s",en:Math.round(age)+" s ago",fr:"il y a "+Math.round(age)+" s",es:"hace "+Math.round(age)+" s",nl:Math.round(age)+" s geleden"})
         : l({de:"vor "+Math.round(age/60)+" Min.",en:Math.round(age/60)+" min ago",fr:"il y a "+Math.round(age/60)+" min",es:"hace "+Math.round(age/60)+" min",nl:Math.round(age/60)+" min geleden"}))
