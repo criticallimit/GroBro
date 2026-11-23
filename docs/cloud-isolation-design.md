@@ -127,6 +127,16 @@ Bei der Prüfung des bisherigen Cloud-E2E-Tests zeigte sich, dass dessen Beobach
 
 **Bewertung:** Diese Umordnung ist eine Protokolländerung und aktuell nicht durch vollständige Paho-/Broker-Tests gedeckt. Eine bloße Prüfung, dass später sowohl PUBLISH als auch SUBACK eintreffen, belegt die entscheidende ursprüngliche Reihenfolge nicht.
 
-**Freigabebedingung:** Vor Merge muss der Startpfad nachweislich `SUBSCRIBE queued before first PUBLISH` herstellen und zugleich die bereits ergänzte Subscription-Erneuerung auf jedem Reconnect erhalten. Die Lösung darf den lokalen Source-MQTT-Callback nicht blockieren und soll unnötige doppelte erste Subscriptions vermeiden. Dazu ein gezielter Paho-E2E-Test mit verzögertem CONNACK; die vorhandenen Mocktests müssen dazu konsistent angepasst werden. Noch keine Codeänderung für diesen Punkt vorgenommen, da ein ungetesteter Umbau an dieser Stelle eine weitere Regression erzeugen könnte.
+**Freigabebedingung:** Vor Merge muss der Startpfad nachweislich `SUBSCRIBE queued before first PUBLISH` herstellen und zugleich die bereits ergänzte Subscription-Erneuerung auf jedem Reconnect erhalten. Die Lösung darf den lokalen Source-MQTT-Callback nicht blockieren und soll unnötige doppelte erste Subscriptions vermeiden. Dazu ein gezielter Paho-E2E-Test mit verzögertem CONNACK; die vorhandenen Mocktests müssen dazu konsistent angepasst werden. Der produktive Cloud-Worker wartet jetzt auf die lokal eingereihte Cloud-Subscription; die reale Broker-Validierung bleibt offen.
 
 **Unabhängig verifizierbar:** Die bereits lokal vorhandene exakte Dispatcher-Version mit Git-Blob-Hash `398903c69317b29feea055436a84e6ea5aaccd20` wurde erneut isoliert getestet: `5 passed in 0.10s`. Das ist keine Cloud-Client-/Paho-Validierung.
+
+## Reihenfolge erstes Cloud-SUBSCRIBE vor erstem PUBLISH (23.11.2026)
+
+Der separate Cloud-Worker wartet nun ereignisgesteuert mit einer Condition auf eine erfolgreich lokal eingereihte Cloud-Antwort-Subscription. Erst wenn der CONNACK-Handler SUBSCRIBE eingereiht und die MID-Überwachung registriert hat, darf der Worker PUBLISH aufrufen. Der lokale Growatt-Source-Callback wartet weiterhin nicht auf Cloud. Das ist eine lokale Queue-Reihenfolge, keine Garantie für den Broker-SUBACK.
+
+Ein Cloud-Disconnect setzt die Freigabe zurück. Ein neuer erfolgreicher CONNACK und SUBSCRIBE gibt sie erneut frei. Ein abgelehntes SUBSCRIBE löst den bereits vorhandenen Subscription-Retry aus; Shutdown weckt wartende Worker, die danach keine Nachrichten mehr veröffentlichen dürfen.
+
+Drei neue Regressionstests für initiales SUBSCRIBE-before-PUBLISH, erneuten Reconnect und Shutdown-Wakeup sind hinzugefügt. Der bestehende reale MQTT-E2E-Test wurde auf den zeitgestempelten Worker-Pfad umgestellt. Die neuen Tests sind hier wegen fehlender Paho-, CRC- und Mosquitto-Abhängigkeiten noch nicht ausgeführt.
+
+Offenes Betriebsrisiko: Wenn eine erfolgreiche Cloud-Verbindung ausbleibt, wartet der Cloud-Worker unbeschränkt. Weitere Nachrichten werden bis zum festen Limit von 64 wartenden Paketen aufgenommen, danach verworfen; die lokale HA-Verarbeitung bleibt frei. Vor Merge echte längere Offline-Phasen und Broker-Reconnect prüfen.
