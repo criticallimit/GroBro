@@ -824,7 +824,10 @@ class Client:
                     if register_no == 7:
                         value, retain = "", True  # remove a legacy retained secret
                     try:
-                        self._publish_config_state(\n                            cfg["device_id"], register_no, value, retain=retain,\n                            source="compound config telegram" if is_compound else "single-register response",\n                        )
+                        self._publish_config_state(
+                            cfg["device_id"], register_no, value, retain=retain,
+                            source="compound config telegram" if is_compound else "single-register response",
+                        )
                     except Exception as exc:
                         LOG.warning("Could not publish config readback for %s register %s (%s)", cfg["device_id"], register_no, type(exc).__name__)
 
