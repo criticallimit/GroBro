@@ -36,3 +36,12 @@ Bislang löst `grobro/grobro/client.py::__on_message` den synchronen Cloud-Conne
 - [ ] Zwei Geräte über denselben Quellbroker; Cloud-Verbindung eines Geräts langsam, lokale HA-Telemetrie beider Geräte ohne Verzögerung.
 - [ ] Zusätzliche CPU-, RAM- und Thread-Last unter Cloud aus / Cloud an messen.
 - [ ] Erst dann Merge, vollständige Regression und neues Release nach Freigabe.
+
+
+## Upstream-Kompatibilitätsabgleich (23.11.2026)
+
+Der relevante Upstream-Quellpfad in `robertzaage/GroBro/grobro/grobro/client.py` gibt **jede erlaubte eingehende Growatt-Nachricht** mit unverändertem MQTT-Topic, Byte-Payload, QoS und Retain unmittelbar an den Cloud-Client weiter; die Cloud-Verbindung wird beim ersten Telegramm synchron erzeugt. Aus diesem Code ist **nicht ableitbar**, dass das erste Paket ein bestimmter Konfigurationstyp sein muss. Folglich kann derzeit weder bestätigt noch ausgeschlossen werden, dass die 5-Sekunden-Verfallsregel initiale für die Cloud wichtige Nachrichten verwirft.
+
+**Neuer Sicherungstest:** der Cloud-Queue-Pfad wahrt Byte-Inhalt, Topic, QoS/Retain und FIFO-Reihenfolge für mehrere Geräte. Der asynchrone Cloud-Worker erkennt jetzt auch `MQTT_ERR_NO_CONN` bzw. andere lokale Publish-Ablehnungen ohne Exception und aktiviert den gerätespezifischen Cooldown.
+
+**Ungeklärt vor Merge:** tatsächliche Cloud-Anmeldung und erste Konfigurationsnachricht gegen einen echten Growatt-Cloud-Endpunkt validieren; die neue Verfalls-/Überlaufpolitik gegenüber dem Upstream als bewusste Verhaltensänderung freigeben oder so anpassen, dass initiale protokollwichtige Telegramme nicht verloren gehen. Der Test mit lokalem Mosquitto kann das Cloud-Anmeldeprotokoll nicht belegen. Bis dahin keine Produktivübernahme.
