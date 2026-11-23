@@ -1,3 +1,13 @@
+# Better GroBro 3.3.25 — Keep Ingress online state aligned with HA MQTT availability
+
+- After 3.3.24, fixed a publish-failure edge case: the overview no longer displays Online merely because a device packet arrived if its primary availability MQTT publish was rejected.
+- The overview now follows the accepted primary per-device MQTT availability publish. Activity timestamps are still refreshed on live device events; the pre-existing HA expiry timer remains the only offline timer.
+- Optional extra online-sensor MQTT publish is not used as an additional criterion for the overview, since the primary device availability topic can succeed independently.
+- Added tests for MQTT accept/reject paths and NOAH/NEO/NEXA status transitions; rechecked the embedded Ingress JavaScript syntax and inspected sources for the previous escaped-newline regression.
+- Full Python compilation, pytest and Home Assistant device tests are **not yet executed**; there is no remote test environment available.
+
+---
+
 # Better GroBro 3.3.24 — Unified Ingress online/offline display
 
 - Replaced the always-green `Live erkannt` label in the Ingress device overview with actual `Online`, `Offline` or `Noch keine Live-Daten` status.
