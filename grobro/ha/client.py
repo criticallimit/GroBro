@@ -817,6 +817,12 @@ class Client:
             if getattr(self, "_stopped", False):
                 return
             if getattr(reason_code, "is_failure", False):
+                # A rejected reconnect must never preserve a previous connected
+                # state or let queued publishes mark devices online.
+                self._ha_mqtt_connected = False
+                self._bridge_online_pending = True
+                from grobro.ha.device_inventory import mark_all_devices_offline
+                mark_all_devices_offline()
                 self.__on_connect_fail(client, userdata)
                 return
             self._connection_failure_logged = False
