@@ -355,38 +355,46 @@ class TestClientOnMessage:
         ("0HVR0000TEST0001", 4),
         ("0HVR0000TEST0001", 30),
     ])
-    def test_config_ack_reads_back_stable_setting(self, client, device_id, register_no):
-        client.send_config_message(device_id, register_no, "2")
-        ack = bytes.fromhex("00 01 00 07 00 00 01 18")
-        msg = _msg(f"c/33/{device_id}", b"wire")
-        with patch("grobro.grobro.client.parser.unscramble", return_value=ack), patch(
-            "grobro.grobro.client.parser.parse_config_ack",
-            return_value={"device_id": device_id, "register_no": register_no},
-        ), patch.object(client, "send_config_read_message", return_value=(0, None)) as read:
-            client._client.on_message(None, None, msg)
-        read.assert_called_once_with(device_id, register_no)
+    def test_accepted_config_write_schedules_readback_without_ack(self, client, device_id, register_no):
+        with patch("grobro.grobro.client.threading.Timer") as timer_factory:
+            client.send_config_message(device_id, register_no, "2")
+            timer_factory.assert_called_once()
+            callback = timer_factory.call_args.args[1]
+            timer_factory.return_value.start.assert_called_once()
+            with patch.object(client, "send_config_read_message", return_value=(0, None)) as read:
+                callback()
+            read.assert_called_once_with(device_id, register_no)
 
     @pytest.mark.parametrize("register_no", [17, 18, 19, 31, 32, 76])
-    def test_config_ack_skips_unsafe_or_non_writable_readback(self, client, register_no):
-        device_id = "QMN000ABC1D2E3FG"
-        client.send_config_message(device_id, register_no, "1")
-        msg = _msg(f"c/33/{device_id}", b"wire")
-        with patch("grobro.grobro.client.parser.unscramble", return_value=bytes.fromhex("00 01 00 07 00 00 01 18")), patch(
-            "grobro.grobro.client.parser.parse_config_ack",
-            return_value={"device_id": device_id, "register_no": register_no},
-        ), patch.object(client, "send_config_read_message") as read:
-            client._client.on_message(None, None, msg)
-        read.assert_not_called()
+    def test_config_write_does_not_probe_unsafe_registers(self, client, register_no):
+        with patch("grobro.grobro.client.threading.Timer") as timer_factory:
+            client.send_config_message("QMN000ABC1D2E3FG", register_no, "1")
+            timer_factory.assert_not_called()
 
-    def test_unsolicited_config_ack_does_not_request_readback(self, client):
+    def test_failed_config_write_does_not_schedule_readback(self, client):
+        client._client.publish.return_value = (4, None)
+        with patch("grobro.grobro.client.threading.Timer") as timer_factory:
+            client.send_config_message("QMN000ABC1D2E3FG", 4, "10")
+            timer_factory.assert_not_called()
+
+    def test_new_config_write_cancels_previous_readback(self, client):
+        with patch("grobro.grobro.client.threading.Timer") as timer_factory:
+            client.send_config_message("QMN000ABC1D2E3FG", 4, "5")
+            first = timer_factory.return_value
+            client.send_config_message("QMN000ABC1D2E3FG", 4, "10")
+            first.cancel.assert_called_once()
+
+    def test_config_ack_does_not_duplicate_deferred_readback(self, client):
         device_id = "QMN000ABC1D2E3FG"
-        msg = _msg(f"c/33/{device_id}", b"wire")
-        with patch("grobro.grobro.client.parser.unscramble", return_value=bytes.fromhex("00 01 00 07 00 00 01 18")), patch(
-            "grobro.grobro.client.parser.parse_config_ack",
-            return_value={"device_id": device_id, "register_no": 4},
-        ), patch.object(client, "send_config_read_message") as read:
-            client._client.on_message(None, None, msg)
-        read.assert_not_called()
+        with patch("grobro.grobro.client.threading.Timer"):
+            client.send_config_message(device_id, 4, "10")
+            msg = _msg(f"c/33/{device_id}", b"wire")
+            with patch("grobro.grobro.client.parser.unscramble", return_value=bytes.fromhex("00 01 00 07 00 00 01 18")), patch(
+                "grobro.grobro.client.parser.parse_config_ack",
+                return_value={"device_id": device_id, "register_no": 4},
+            ), patch.object(client, "send_config_read_message") as read:
+                client._client.on_message(None, None, msg)
+            read.assert_not_called()
 
     def test_config_write_ack_uses_pending_write_for_human_readable_label(
         self, client, caplog
