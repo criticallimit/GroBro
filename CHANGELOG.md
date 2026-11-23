@@ -1,3 +1,12 @@
+# Better GroBro 3.3.26 — Simplified two-state device overview
+
+- Ingress device cards now display only **Online** or **Offline**, without elapsed-time text.
+- Known/restored devices without a confirmed online availability publish are displayed as **Offline**.
+- Reuses existing Home Assistant availability decisions for NOAH, NEO and NEXA, with no additional polls, timers or changes to device MQTT topics.
+- Updated Ingress regression assertion; verified embedded JavaScript syntax. Full Python pytest and actual Home Assistant startup remain unverified.
+
+---
+
 # Better GroBro 3.3.25 — Keep Ingress online state aligned with HA MQTT availability
 
 - After 3.3.24, fixed a publish-failure edge case: the overview no longer displays Online merely because a device packet arrived if its primary availability MQTT publish was rejected.
