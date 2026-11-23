@@ -1,3 +1,16 @@
+# Better GroBro 3.3.12 — Differences from robertzaage/GroBro
+
+## User-relevant differences
+
+- Valid Update Interval (R4) and Wi-Fi Signal Strength (R76) values from full configuration TLV packets (message types 340, 341, 387 and ShineWeLink 0x0129) now update the same Home Assistant state topics as direct config-read responses (0x0119).
+- All supported device families use the shared state path without modifying device MQTT commands or register mappings.
+- Full configuration packets are not treated as acknowledgements of an outstanding single-register read and cannot advance the read queue.
+- Publishing is limited to exposed R4/R76 values within defined entity/signal ranges; credentials and network configuration are excluded.
+- Added regression scenarios for NEO, NOAH and NEXA, including ignored malformed values and sensitive fields.
+- GitHub code/structural checks passed; automated pytest and real-device confirmation remain pending.
+
+---
+
 # Better GroBro 3.3.11 — Differences from robertzaage/GroBro
 
 ## User-relevant differences
