@@ -944,7 +944,11 @@ class Client:
             # NEO function-6 write acknowledgements use register/status/value
             # rather than a standard register-block response. Only confirmed
             # (status=0) values may update the Home Assistant state.
-            if device_id.startswith("QMN"):
+            if (
+                device_id.startswith("QMN")
+                and len(unscrambled) >= 8
+                and unscrambled[7] == GrowattModbusFunction.PRESET_SINGLE_REGISTER
+            ):
                 write_message = GrowattModbusMessage.parse_grobro(unscrambled)
                 if (
                     write_message is not None
