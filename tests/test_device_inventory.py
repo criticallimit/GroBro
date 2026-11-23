@@ -146,3 +146,19 @@ def test_wifi_and_cached_telemetry_do_not_override_existing_offline_status():
     observe_device_activity(device)
     assert get_device_inventory()[0]["connection_status"] == "online"
 
+
+@pytest.mark.parametrize("device", [
+    "0PVPTEST000001", "QMNTEST0000001", "0HVRTEST000001",
+])
+def test_all_families_use_same_existing_ha_availability(device):
+    from grobro.ha.device_inventory import observe_device_activity, observe_device_offline
+
+    observe_device(device)
+    assert get_device_inventory()[0]["connection_status"] == "unknown"
+    observe_device_activity(device)
+    assert get_device_inventory()[0]["connection_status"] == "online"
+    observe_device_offline(device)
+    assert get_device_inventory()[0]["connection_status"] == "offline"
+    observe_device_activity(device)
+    assert get_device_inventory()[0]["connection_status"] == "online"
+
