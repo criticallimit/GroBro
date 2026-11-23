@@ -1085,8 +1085,6 @@ class Client:
                     "%s has stopped sending data; Home Assistant values are now unavailable",
                     _device_label(d_id),
                 )
-                from grobro.ha.device_inventory import observe_device_offline
-                observe_device_offline(d_id)
                 self.__publish_availability(d_id, False)
 
         with lock:
@@ -1112,6 +1110,10 @@ class Client:
         )
         if not publish_succeeded(result):
             return False
+        # The primary availability topic has now been accepted by HA MQTT.
+        # The optional extra online sensor must not determine this UI state.
+        from grobro.ha.device_inventory import observe_device_availability
+        observe_device_availability(device_id, online)
         if AVAILABILITY_SENSOR:
             result = self._client.publish(
                 f"{HA_BASE_TOPIC}/grobro/{device_id}/online",
