@@ -216,6 +216,8 @@ def ha_client(mock_mqtt):
     with patch("grobro.ha.client.os.listdir", return_value=[]):
         cfg = MQTTConfig(host="localhost", port=1883)
         c = Client(cfg)
+        # Most runtime tests start after Paho's successful on_connect.
+        c._ha_mqtt_connected = True
         c.on_command = MagicMock()
         c.on_config_command = MagicMock()
         c.on_config_read = MagicMock()
@@ -224,6 +226,26 @@ def ha_client(mock_mqtt):
 
 
 class TestClientLifecycle:
+    def test_initial_mqtt_transport_is_disconnected_until_connack(self):
+        with patch("grobro.ha.client.mqtt.Client") as mqtt_factory, patch(
+            "grobro.ha.client.os.listdir", return_value=[]
+        ):
+            target = Client(MQTTConfig(host="localhost", port=1883))
+            assert target._ha_mqtt_connected is False
+            target._client.publish.return_value = (0, None)
+            assert target._Client__publish_availability("QMN000ABC1D2E3FG", True) is False
+            target._client.publish.assert_not_called()
+
+    def test_connect_failure_keeps_initial_transport_disconnected(self):
+        with patch("grobro.ha.client.mqtt.Client"), patch(
+            "grobro.ha.client.os.listdir", return_value=[]
+        ):
+            target = Client(MQTTConfig(host="localhost", port=1883))
+            target._Client__on_connect_fail(target._client, None)
+            assert target._ha_mqtt_connected is False
+            assert target._Client__publish_availability("QMN000ABC1D2E3FG", True) is False
+            target._client.publish.assert_not_called()
+
     def test_init(self, ha_client):
         assert ha_client._client is not None
         ha_client._client.connect_async.assert_called_once_with("localhost", 1883, 60)
