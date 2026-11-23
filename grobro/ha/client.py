@@ -663,8 +663,12 @@ class Client:
     def handle_source_ready(self) -> None:
         """Restart interrupted reads after the source broker acknowledges c/#."""
         self.__reset_config_read_state()
+        # Restored metadata does not prove a device is powered/online. Avoid
+        # scheduling a full read sequence for a sleeping NEO on MQTT recovery.
+        # Fresh device traffic will call __refresh_config_if_needed normally.
         for device_id in tuple(self._config_cache):
-            self.__refresh_config_if_needed(device_id)
+            if device_id in self._device_last_seen:
+                self.__refresh_config_if_needed(device_id)
 
     def __queue_all_config_reads(self, device_id: str, *, delay: float = 0.0) -> bool:
         """Queue the device's full config-register set using the standard read sequence."""
