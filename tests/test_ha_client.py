@@ -423,6 +423,23 @@ class TestClientConfig:
         assert ha_client._config_cache["QMN000ABC1D2E3FG"] == cfg
         assert ha_client._client.publish.called
 
+    def test_gateway_derived_neo_wifi_does_not_mark_offline_inverter_online(self, ha_client):
+        from grobro.ha.device_inventory import (
+            clear_device_inventory, get_device_inventory, observe_device_availability,
+        )
+        device = "QMN000ABC1D2E3FG"
+        clear_device_inventory()
+        observe_device_availability(device, False)
+        try:
+            ha_client.set_derived_config(device, DeviceConfig(serial_number=device, wifi_signal="-61"))
+            item = next(x for x in get_device_inventory() if x["device_id"] == device)
+            assert item["connection_status"] == "offline"
+            assert item["wifi_signal"] == -61
+            # The gateway-only update must not arm a NEO activity timeout.
+            assert device not in ha_client._device_last_seen
+        finally:
+            clear_device_inventory()
+
     def test_set_config_unchanged(self, ha_client):
         cfg = DeviceConfig(serial_number="QMN000ABC1D2E3FG")
         ha_client._config_cache["QMN000ABC1D2E3FG"] = cfg
