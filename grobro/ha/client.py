@@ -326,7 +326,10 @@ class Client:
             LOG.debug("Device metadata unchanged for %s; skipping config save", device_id)
 
         self._config_cache[device_id] = effective_config
-        self.__refresh_config_if_needed(device_id)
+        # Gateway-projected metadata must not start a full inverter config read.
+        # Direct device config still uses the existing automatic refresh path.
+        if mark_activity:
+            self.__refresh_config_if_needed(device_id)
         if not discovery_changed and device_id in self._discovery_cache:
             LOG.debug("No discovery-relevant config change for %s", device_id)
             return
