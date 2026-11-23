@@ -673,6 +673,10 @@ class Client:
     def handle_source_ready(self) -> None:
         """Restart interrupted reads after the source broker acknowledges c/#."""
         self.__reset_config_read_state()
+        # An earlier NEO power read may have been lost with the source connection.
+        # Let the next live NEO telemetry retry it through the existing path.
+        from grobro.ha.neo_power_runtime import clear_neo_inverter_power_read_cache
+        clear_neo_inverter_power_read_cache(self)
         # Stored device metadata alone does not prove the device is powered.
         # Fresh device traffic triggers the regular automatic refresh later.
         for device_id in tuple(self._config_cache):
