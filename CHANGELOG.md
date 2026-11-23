@@ -1,3 +1,12 @@
+# Better GroBro 3.3.8 — Differences from robertzaage/GroBro
+
+## User-relevant differences
+
+- Added a download button to the Better GroBro ingress Protokoll tab. It saves current-session Supervisor log entries as a timestamped UTF-8 text file without changing the existing log collection or retention.
+- The export refuses to save a placeholder when the current session log has not yet become available.
+
+---
+
 # Better GroBro 3.3.7 — Differences from robertzaage/GroBro
 
 ## User-relevant differences
