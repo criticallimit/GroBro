@@ -1196,13 +1196,26 @@ class Client:
             client.tls_set(cert_reqs=ssl.CERT_NONE)
             client.tls_insecure_set(True)
             client.on_message = self.__on_message_forward_client
+
+            def on_cloud_connect(connected_client, _userdata, _flags, reason_code, _properties):
+                if self._forward_stopped:
+                    return
+                if getattr(reason_code, "is_failure", False):
+                    LOG.warning("%s: Growatt Cloud MQTT connection rejected", _device_label(client_id))
+                    return
+                # Cloud subscriptions are session-scoped; a reconnect may
+                # create a clean session and lose the original subscription.
+                result = connected_client.subscribe(f"+/{client_id}")
+                if not publish_succeeded(result):
+                    LOG.warning("%s: Growatt Cloud subscription rejected locally", _device_label(client_id))
+
+            client.on_connect = on_cloud_connect
             try:
                 client.connect(
                     self._forward_mqtt_config.host,
                     self._forward_mqtt_config.port,
                     60,
                 )
-                client.subscribe(f"+/{client_id}")
                 started = client.loop_start()
                 if isinstance(started, int) and started != mqtt.MQTT_ERR_SUCCESS:
                     raise RuntimeError(f"Cloud MQTT loop could not start: {started}")
