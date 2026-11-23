@@ -289,6 +289,27 @@ def test_holding_state_cache_is_cleared_with_reconnect_cache():
     assert _should_publish_holding_state(client, "QMNTEST", "inverter_power", "ON") is True
 
 
+def test_device_offline_cache_clear_is_isolated_and_republishes_unchanged_values():
+    from grobro.ha.performance import clear_device_publish_cache
+
+    client = SimpleNamespace()
+    a, b = "QMNTEST", "0PVPTEST"
+    payload = {"power": 500}
+    for device in (a, b):
+        assert _should_serialize_state(client, device, payload)
+        assert _should_publish_state(client, device, '{"power":500}')
+        assert _should_publish_holding_state(client, device, "inverter_power", "ON")
+
+    clear_device_publish_cache(client, a)
+
+    assert _should_serialize_state(client, a, payload)
+    assert _should_publish_state(client, a, '{"power":500}')
+    assert _should_publish_holding_state(client, a, "inverter_power", "ON")
+    assert not _should_serialize_state(client, b, payload)
+    assert not _should_publish_state(client, b, '{"power":500}')
+    assert not _should_publish_holding_state(client, b, "inverter_power", "ON")
+
+
 def test_performance_hook_is_compatibility_noop():
     original_input = ha_client.Client.publish_input_register
     original_holding = ha_client.Client.publish_holding_register_input
