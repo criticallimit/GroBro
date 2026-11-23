@@ -63,3 +63,31 @@ def test_discovery_builder_preserves_definitions_and_entity_identity(family):
     assert second["cmps"]
     assert family.registers.model_dump() == definitions
 
+
+
+@pytest.mark.parametrize("family_key", ["neo", "noah", "nexa"])
+def test_common_config_entities_keep_identical_register_topics(family_key):
+    family = next(f for f in DEVICE_FAMILIES if f.key == family_key)
+    serial = family.prefixes[0] + "TEST"
+    components = build_discovery_payload(
+        serial, family.registers,
+        {"identifiers": [serial], "manufacturer": "Growatt"},
+        base_topic="ha-test", bridge_topic="ha-test/bridge/availability",
+        effective_max_bat=4, pv_count=4, max_slots=3,
+        device_timeout=120, availability_sensor=True,
+    )["cmps"]
+
+    for key, register_no, platform in (
+        ("data_interval", 4, "number"),
+        ("wifi_signal_strength", 76, "sensor"),
+    ):
+        config = family.registers.config_registers[key]
+        assert config.growatt.register_no == register_no
+        uid = f"grobro_{serial}_cmd_{key}"
+        component = components[uid]
+        assert component["platform"] == platform
+        assert component["state_topic"] == f"ha-test/config/grobro/{serial}/{register_no}/get"
+        if platform != "sensor":
+            assert component["command_topic"] == f"ha-test/config/grobro/{serial}/{register_no}/set"
+        else:
+            assert "command_topic" not in component
