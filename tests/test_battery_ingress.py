@@ -698,7 +698,9 @@ def test_ingress_log_download_uses_current_session_log_api():
 def test_overview_displays_existing_availability_instead_of_live_detected():
     html = battery_ingress._INDEX_HTML
     assert 'item.connection_status' in html
-    assert 'item.last_activity_seconds' in html
+    assert 'item.last_activity_seconds' not in html
+    assert 'item.connection_status==="online"?"online":"offline"' in html
+    assert 'online.textContent=status==="online"' in html
     assert 'online.classList.add("status-"+status)' in html
     assert 'status==="online"' in html  # Hide stale Wi-Fi signal
     assert 'online.textContent=l({de:"Live erkannt"' not in html
