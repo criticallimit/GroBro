@@ -1,3 +1,16 @@
+# Better GroBro 3.3.14 — Differences from robertzaage/GroBro
+
+## User-relevant differences
+
+- Detect locally rejected MQTT publications of config-state updates and log a clear warning instead of silently treating the update as successfully accepted.
+- Validate direct register 4 (interval) and register 76 (Wi-Fi signal) responses before they update cached device metadata, consistent with already validated Home Assistant states.
+- Keep processing subsequent valid values in compound packets when another entry is invalid.
+- No additional periodic reads, retries, MQTT broker configuration changes or changes to device command packets.
+- Added regression cases for NEO, NOAH and NEXA, including rejected MQTT publications.
+- Targeted structural checks passed; pytest and device tests still pending.
+
+---
+
 # Better GroBro 3.3.13 — Differences from robertzaage/GroBro
 
 ## User-relevant differences
