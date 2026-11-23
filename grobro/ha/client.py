@@ -1027,6 +1027,8 @@ class Client:
 
     def __refresh_device_activity(self, device_id: str):
         """Record live traffic even when its availability publish fails."""
+        from grobro.ha.device_inventory import observe_device_activity
+        observe_device_activity(device_id)
         if getattr(self, "_command_subscription_pending", False):
             self.__subscribe_commands(self._client)
         try:
@@ -1083,6 +1085,8 @@ class Client:
                     "%s has stopped sending data; Home Assistant values are now unavailable",
                     _device_label(d_id),
                 )
+                from grobro.ha.device_inventory import observe_device_offline
+                observe_device_offline(d_id)
                 self.__publish_availability(d_id, False)
 
         with lock:
