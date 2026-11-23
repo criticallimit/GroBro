@@ -471,6 +471,47 @@ class Client:
             self._config_write_readback_timers[key] = timer
             timer.start()
 
+    def _publish_config_state(self, device_id: str, register_no: int, value, *, retain: bool) -> None:
+        """Publish one validated config value by the same HA path for any wire format."""
+        if callable(self.on_config_register_value):
+            self.on_config_register_value(device_id, register_no, value, retain=retain)
+        else:
+            topic = f"{HA_BASE_TOPIC}/config/grobro/{device_id}/{register_no}/get"
+            _publish_checked(self._client, topic, value, retain=retain)
+
+    def _publish_tlv_config_states(self, device_id: str, config: model.DeviceConfig) -> None:
+        """Mirror safe, exposed TLV telemetry; do not acknowledge pending reads.
+
+        Full configuration packets are asynchronous snapshots and are not necessarily
+        replies to the currently outstanding config-register request.
+        """
+        known = _known_registers_for_device(device_id)
+        if known is None:
+            return
+        for name, attribute, minimum, maximum in (
+            ("data_interval", "data_interval", 0, 60),
+            ("wifi_signal_strength", "wifi_signal", -120, -1),
+        ):
+            definition = known.config_registers.get(name)
+            if definition is None or not definition.homeassistant.publish:
+                continue
+            raw = getattr(config, attribute, None)
+            if raw is None:
+                continue
+            try:
+                value = int(str(raw).strip())
+            except (TypeError, ValueError):
+                LOG.debug("Ignoring invalid TLV value for %s %s", _device_label(device_id), name)
+                continue
+            if not minimum <= value <= maximum:
+                LOG.debug("Ignoring out-of-range TLV value for %s %s", _device_label(device_id), name)
+                continue
+            try:
+                self._publish_config_state(device_id, definition.growatt.register_no, value, retain=True)
+            except Exception as exc:
+                LOG.warning("Could not publish TLV config state for %s R%s (%s)",
+                            _device_label(device_id), definition.growatt.register_no, type(exc).__name__)
+
     def config_reads_ready(self) -> bool:
         """Reads need both a connection and the subscription for their replies."""
         return self._config_read_ready.is_set() and self._client.is_connected()
@@ -593,6 +634,7 @@ class Client:
                     or config.serial_number
                 ):
                     self.on_config(device_id, config)
+                    self._publish_tlv_config_states(device_id, config)
                     self._remember_gateway(device_id, config.serial_number)
                     LOG.info(
                         "%s -> Better GroBro: device settings received",
@@ -710,11 +752,7 @@ class Client:
                     if register_no == 7:
                         value, retain = "", True  # remove a legacy retained secret
                     try:
-                        if callable(self.on_config_register_value):
-                            self.on_config_register_value(cfg["device_id"], register_no, value, retain=retain)
-                        else:
-                            topic = f"{HA_BASE_TOPIC}/config/grobro/{cfg['device_id']}/{register_no}/get"
-                            _publish_checked(self._client, topic, value, retain=retain)
+                        self._publish_config_state(cfg["device_id"], register_no, value, retain=retain)
                     except Exception as exc:
                         LOG.warning("Could not publish config readback for %s register %s (%s)", cfg["device_id"], register_no, type(exc).__name__)
 
