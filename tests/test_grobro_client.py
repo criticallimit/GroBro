@@ -963,7 +963,7 @@ class TestClientOnMessage:
     def test_gateway_wifi_uses_derived_config_callback_when_available(self, client):
         client.on_derived_config = MagicMock()
         client._ptq_for_raq["RAQTEST"] = "PTQTEST"
-        data = b"\\x00" * 6 + b"\\x01\\x19" + b"\\x00" * 32
+        data = b"\x00" * 6 + b"\x01\x19" + b"\x00" * 32
         with patch("grobro.grobro.client.parser.unscramble", return_value=data), patch(
             "grobro.grobro.client.parser.parse_config_message",
             return_value={"device_id": "RAQTEST", "register_no": 76, "value": "-61"},
