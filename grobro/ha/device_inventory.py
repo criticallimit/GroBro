@@ -29,6 +29,25 @@ def observe_device(device_id: str) -> None:
         }
 
 
+
+def observe_device_activity(device_id: str) -> None:
+    """Mirror an actual device activity event from HA's existing availability path."""
+    observe_device(device_id)
+    with _LOCK:
+        item = _DEVICES.get(device_id)
+        if item is not None:
+            item["_availability"] = "online"
+            item["_last_activity_monotonic"] = time.monotonic()
+
+
+def observe_device_offline(device_id: str) -> None:
+    """Mirror HA's existing expiry instead of running a second offline timer."""
+    with _LOCK:
+        item = _DEVICES.get(str(device_id).strip())
+        if item is not None:
+            item["_availability"] = "offline"
+
+
 def observe_wifi_signal(device_id: str, value) -> None:
     """Store the latest Wi-Fi signal value from device configuration."""
     device_id = str(device_id).strip()
@@ -87,9 +106,6 @@ def observe_telemetry(device_id: str, payload: dict, max_bat: int = 1) -> None:
                 "display_name": family.display_name if family else "UNKNOWN",
             }
         item["batteries"] = batteries
-        # Only fresh input-register telemetry proves that a device is currently active.
-        # Merely restoring saved config or receiving an old Wi-Fi value does not.
-        item["_last_telemetry_monotonic"] = time.monotonic()
         for key in (
             "bat_sysstate",
             "charging_discharging",
@@ -135,27 +151,12 @@ def get_device_inventory() -> list[dict[str, object]]:
         snapshot = []
         for item in _DEVICES.values():
             copy = dict(item)
-            last = copy.pop("_last_telemetry_monotonic", None)
-            if last is None:
-                copy["connection_status"] = "unknown"
-                copy["last_telemetry_seconds"] = None
-            else:
-                age = max(0.0, time.monotonic() - last)
-                copy["last_telemetry_seconds"] = round(age)
-                # NEO reports about every 5 min, while NOAH reports about every 5 s.
-                # Neither status depends on PV production, time of day, or cached values.
-                family = copy.get("family")
-                if family == "neo":
-                    stale_after, offline_after = 360, 720
-                elif family == "noah":
-                    stale_after, offline_after = 20, 60
-                else:
-                    stale_after, offline_after = 360, 720
-                copy["connection_status"] = (
-                    "online" if age <= stale_after
-                    else "stale" if age <= offline_after
-                    else "offline"
-                )
+            # Mirror the same status used by Home Assistant device availability.
+            copy["connection_status"] = copy.pop("_availability", "unknown")
+            last = copy.pop("_last_activity_monotonic", None)
+            copy["last_telemetry_seconds"] = (
+                round(max(0.0, time.monotonic() - last)) if last is not None else None
+            )
             if "batteries" in copy:
                 copy["batteries"] = [dict(battery) for battery in copy["batteries"]]
             snapshot.append(copy)
