@@ -1,3 +1,12 @@
+# Better GroBro 3.3.43 — NEO-Startabfrage erst bei bereitem Growatt-MQTT
+
+- Die automatische Register-0-Abfrage für gespeicherte NEO-Geräte respektiert nun die bereits vorhandene Bereitschaftsprüfung des Growatt-Quellbrokers, sofern diese im Runtime-Client verdrahtet ist.
+- Solange die Quelle nicht bereit ist, wird weder ein Registerbefehl gesendet noch der NEO als bereits abgefragt markiert. Die bestehenden kurzen Start-Wiederholungen können erneut prüfen; spätere echte Telemetrie nutzt unverändert den regulären Pfad.
+- Zwei Regressionstests für zunächst nicht bereite und fehlschlagende Bereitschaftsprüfungen ergänzt.
+- Keine Änderung an Online/Offline-Erkennung, Wechselrichter-Schalter, Berichtintervall, Zeitsteuerung oder MQTT-Broker. Vollständiger pytest-Lauf und HA-Praxistest ausstehend.
+
+---
+
 # Better GroBro 3.3.42 — Telemetriegeräte beim HA-MQTT-Wiederanlauf ebenfalls offline setzen
 
 - Berücksichtigt beim Offline-Reset zusätzlich Geräte aus dem bestehenden Ingress-Inventar, auch wenn noch keine vollständige Gerätekonfiguration im Cache liegt.
