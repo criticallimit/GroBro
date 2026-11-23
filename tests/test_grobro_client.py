@@ -292,6 +292,40 @@ class TestClientOnMessage:
             (f"homeassistant/config/grobro/{device_id}/76/get", -61),
         ]
 
+    @pytest.mark.parametrize("device_id", [
+        "QMN000ABC1D2E3FG", "0PVP000ABC123", "0HVR000ABC123",
+    ])
+    def test_invalid_config_read_does_not_update_metadata(self, client, device_id):
+        wire = _msg(f"c/33/{device_id}", b"wire")
+        parsed = {
+            "device_id": device_id, "register_no": 4, "value": "1280",
+            "entries": [
+                {"register_no": 4, "value": "1280"},
+                {"register_no": 76, "value": "0"},
+                {"register_no": 76, "value": "-62"},
+            ],
+        }
+        with patch("grobro.grobro.client.parser.unscramble",
+                   return_value=bytes.fromhex("00 01 00 07 00 00 01 19")), patch(
+            "grobro.grobro.client.parser.parse_config_message", return_value=parsed,
+        ):
+            client._client.on_message(None, None, wire)
+        client.on_config.assert_called_once()
+        _, config = client.on_config.call_args.args
+        assert config.wifi_signal == "-62"
+        assert config.data_interval is None
+        topics = [call.args[0] for call in client._client.publish.call_args_list]
+        assert f"homeassistant/config/grobro/{device_id}/4/get" not in topics
+        assert f"homeassistant/config/grobro/{device_id}/76/get" in topics
+
+    def test_config_state_publish_rejection_is_logged(self, client, caplog):
+        client.on_config_register_value = MagicMock(return_value=(4, None))
+        client._publish_config_state("QMN000ABC1D2E3FG", 76, -61, retain=True)
+        client.on_config_register_value.assert_called_once_with(
+            "QMN000ABC1D2E3FG", 76, -61, retain=True,
+        )
+        assert "MQTT rejected Home Assistant config state" in caplog.text
+
     def test_invalid_compound_config_number_does_not_hide_next_wifi_value(self, client):
         # A bad R4 must not terminate a compound R76 response.
         wire = _msg("c/33/QMN000BZP4N991ML", b"wire")
