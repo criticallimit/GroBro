@@ -1,3 +1,16 @@
+# Better GroBro 3.3.19 — Differences from robertzaage/GroBro
+
+## User-relevant differences
+
+- Added **Raw MQTT Dump herunterladen** next to the existing log download button in the Ingress *Protokoll* tab.
+- The new GET `/api/raw-dump` endpoint streams the unmodified `messages.jsonl` from the currently configured `DUMP_DIR` as a download without loading the entire file in memory.
+- Handles not-yet-created or empty dumps with user-facing error messages. The route only accesses `messages.jsonl`, rejects symlinks outside the configured dump directory and remains behind existing Ingress client restrictions.
+- Added a warning that raw packets may contain credentials or sensitive device information; raw capture itself still requires the existing diagnostics setting.
+- Added regression tests for downloaded bytes, unavailable dumps, path traversal through symlinks and the download button.
+- 11 structural checks passed; full Python pytest and Home Assistant device tests still pending.
+
+---
+
 # Better GroBro 3.3.18 — Differences from robertzaage/GroBro
 
 ## User-relevant differences
