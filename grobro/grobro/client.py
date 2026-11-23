@@ -295,7 +295,12 @@ class Client:
         LOG.debug("GroBro: Stop")
         self._config_read_ready.clear()
         self._cloud_queue.stop()
-        with self._cloud_subscription_lock:
+        # Mark shutdown before clearing timers. No Cloud callback may
+        # recreate subscription state between cleanup and the stop flag.
+        with self._cloud_initial_condition:
+            if self._forward_stopped:
+                return
+            self._forward_stopped = True
             for timer in (*self._cloud_subscription_timers.values(), *self._cloud_subscription_ack_timers.values()):
                 timer.cancel()
             self._cloud_subscription_timers.clear()
@@ -303,14 +308,10 @@ class Client:
             self._cloud_subscription_pending.clear()
             self._cloud_subscription_epochs.clear()
             self._cloud_subscription_failures.clear()
-        with self._forward_lifecycle_lock:
-            if self._forward_stopped:
-                return
-            self._forward_stopped = True
-            forwards = list(self._forward_clients.values())
-        with self._cloud_initial_condition:
             self._cloud_initial_subscribed.clear()
             self._cloud_initial_condition.notify_all()
+        with self._forward_lifecycle_lock:
+            forwards = list(self._forward_clients.values())
 
         def stop_client(client):
             try:
