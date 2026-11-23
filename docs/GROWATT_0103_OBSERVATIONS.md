@@ -41,3 +41,14 @@ The same capture contains multiple 585-byte NEO messages with type `0x0104`, all
 2. Cross-check stable text areas with device/version information from confirmed config responses.
 3. Confirm each candidate numeric field against an independent known register or device observation across multiple values, and verify byte order/scaling.
 4. Only then implement explicit per-field parsing with fixtures; keep unsupported values opaque and private.
+
+## Follow-up: user-triggered setting changes (same 2026-11-23 raw capture)
+
+The user confirmed changing both the NEO update interval and output power limit from 100% to 72% during the observation period. Correlation with the raw packets gives two independent, defensible findings:
+
+- The only varying fields in the two NEO `0x0103` samples at offsets **170:182** decode as six big-endian 16-bit integers: **2022-01-01 00:00:00** and **2026-11-23 17:45:11** respectively. The second corresponds to the actual reception at 17:45:13 local time. They are a device date/time structure, **not** an output-power percentage. The two trailing changed bytes are presumed trailer/checksum and have not been independently validated.
+- NEO `0x0105` responses explicitly report **holding register 3** separately: value **72** at 17:51:36 and 17:51:46 local time, and **100** at 17:51:53. The interpretation of register 3 as NEO output-power limit matches `grobro/model/growatt_neo_registers.json`. The data do not establish why the final response returned to 100, and no assertion should be made that the setting persisted at 72.
+- NEO configuration `0x0119` replies for register 4 returned **10** at 17:51:30 and **5** at 17:52:00; these demonstrate separate changes of the reporting interval, not a field inside `0x0103`.
+- The two NEO `0x0103` samples both **predate** the 17:51 register-3 responses and cannot establish whether the 72% setting would ever appear in a later `0x0103` frame.
+
+**Decision:** No new Home Assistant mapping for `0x0103` based on this comparison. Continue distinguishing `0x0103` device-information/time structure, `0x0105` holding-register responses, and `0x0119` configuration values.
