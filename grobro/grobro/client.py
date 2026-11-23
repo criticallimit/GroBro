@@ -89,6 +89,16 @@ def _config_register_name(device_id: str, register_no: int) -> str | None:
     return None
 
 
+def _config_register_key(device_id: str, register_no: int) -> str | None:
+    """Return the internal config key, not the translated HA display name."""
+    known_registers = _known_registers_for_device(device_id)
+    if known_registers:
+        for name, reg in known_registers.config_registers.items():
+            if reg.growatt.register_no == register_no:
+                return name
+    return None
+
+
 def _config_register_label(device_id: str, register_no: int) -> str:
     """Return a stable user-facing config register label."""
     display_name = _config_register_name(device_id, register_no)
@@ -415,7 +425,7 @@ class Client:
                 except (TypeError, IndexError, KeyError):
                     status = None
             accepted = status in (None, 0)
-            if accepted and _config_register_name(device_id, register_no) in {
+            if accepted and _config_register_key(device_id, register_no) in {
                 "data_interval", "time_zone",
             }:
                 # A subset of devices does not send a usable config-write ACK.
