@@ -1517,6 +1517,31 @@
         "icon": "mdi:thermometer"
       }
     },
+    "battery2Temp": {
+      "growatt": {
+        "position": {
+          "register_no": 42,
+          "offset": 0,
+          "size": 2
+        },
+        "data": {
+          "data_type": "FLOAT",
+          "float_options": {
+            "delta": -273.1,
+            "multiplier": 0.1
+          }
+        }
+      },
+      "homeassistant": {
+        "name": "Battery 2 Temperature",
+        "publish": true,
+        "state_class": "measurement",
+        "device_class": "temperature",
+        "unit_of_measurement": "°C",
+        "icon": "mdi:thermometer",
+        "suggested_display_precision": 1
+      }
+    },
     "bat2_ser_part_1": {
       "growatt": {
         "position": {
@@ -2014,8 +2039,8 @@
         "data": {
           "data_type": "FLOAT",
           "float_options": {
-            "delta": 0,
-            "multiplier": 0.01
+            "delta": -273.1,
+            "multiplier": 0.1
           }
         }
       },
@@ -2086,8 +2111,8 @@
         "data": {
           "data_type": "FLOAT",
           "float_options": {
-            "delta": 0,
-            "multiplier": 0.01
+            "delta": -273.1,
+            "multiplier": 0.1
           }
         }
       },
@@ -2110,8 +2135,8 @@
         "data": {
           "data_type": "FLOAT",
           "float_options": {
-            "delta": 0,
-            "multiplier": 0.01
+            "delta": -273.1,
+            "multiplier": 0.1
           }
         }
       },
@@ -2270,8 +2295,8 @@
         "data": {
           "data_type": "FLOAT",
           "float_options": {
-            "delta": 0,
-            "multiplier": 0.01
+            "delta": -273.1,
+            "multiplier": 0.1
           }
         }
       },
@@ -2342,8 +2367,8 @@
         "data": {
           "data_type": "FLOAT",
           "float_options": {
-            "delta": 0,
-            "multiplier": 0.01
+            "delta": -273.1,
+            "multiplier": 0.1
           }
         }
       },
