@@ -52,4 +52,12 @@ Der ursprüngliche Code abonnierte `+/<Geräte-ID>` nur während `__connect_to_g
 
 - **Unit-Test:** aufeinanderfolgende erfolgreiche Cloud-CONNACKs erzeugen erneute Subscription; abgelehnter CONNACK und Shutdown nicht.
 - **Real-MQTT-Test:** `tests/test_mqtt_e2e.py::test_real_cloud_direct_forwarding_and_reconnect` prüft jetzt zusätzlich Empfang auf dem Cloud-Rückantwort-Topic unmittelbar vor und nach dem Reconnect; nach Reconnect wird explizit auf SUBACK gewartet.
-- **Rest-Risiko:** Ein erfolgreicher Subscribe-Aufruf bestätigt nicht die spätere Broker-Autorisierung; ein abgelehnter SUBACK ist aktuell nur durch die externe Testprüfung erkennbar, noch nicht als Cloud-Status im Produktionscode nachgeführt.
+- **SUBACK-Härtung:** Der Cloud-Client prüft einen abgelehnten SUBACK jetzt im `on_subscribe`-Callback und meldet ihn als Fehler; eine lokale Subscribe-Ausnahme wird im `on_connect`-Callback abgefangen. Das meldet fehlenden Zugriff, stellt ihn aber ohne neue erfolgreiche Verbindung noch nicht wieder her. Es existiert kein separater vollständiger Cloud-Ready-Status für die Ingress-Oberfläche.
+
+## Zusätzliche Rückkanal-Abnahmen
+
+- [ ] Broker akzeptiert Subscription: kein Fehlalarm im SUBACK-Callback.
+- [ ] Broker lehnt Subscription per SUBACK ab: eindeutiger Logfehler für das betroffene Gerät; nicht als freigegeben interpretieren.
+- [ ] Lokaler Subscribe-Aufruf wirft einen Transportfehler: Paho-Netzwerk-Callback bleibt ohne unkontrollierte Exception.
+- [ ] Verspäteter SUBACK nach Add-on-Shutdown: wird ignoriert.
+- [ ] Recovery nach abgelehntem SUBACK: **noch offen**; bislang nur Fehlererkennung, kein eigenständiger Retry-/Ready-Mechanismus.
