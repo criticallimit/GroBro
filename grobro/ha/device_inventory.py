@@ -36,16 +36,24 @@ def observe_device_activity(device_id: str) -> None:
     with _LOCK:
         item = _DEVICES.get(device_id)
         if item is not None:
-            item["_availability"] = "online"
             item["_last_activity_monotonic"] = time.monotonic()
 
 
-def observe_device_offline(device_id: str) -> None:
-    """Mirror HA's existing expiry instead of running a second offline timer."""
+def observe_device_availability(device_id: str, online: bool) -> None:
+    """Mirror an accepted HA availability publish, without a separate timer."""
+    device_id = str(device_id).strip()
+    if not device_id:
+        return
+    observe_device(device_id)
     with _LOCK:
-        item = _DEVICES.get(str(device_id).strip())
+        item = _DEVICES.get(device_id)
         if item is not None:
-            item["_availability"] = "offline"
+            item["_availability"] = "online" if online else "offline"
+
+
+def observe_device_offline(device_id: str) -> None:
+    """Legacy entrypoint for a confirmed device-offline event."""
+    observe_device_availability(device_id, False)
 
 
 def observe_wifi_signal(device_id: str, value) -> None:
