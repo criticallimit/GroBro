@@ -1,3 +1,12 @@
+# Better GroBro 3.3.37 — Keine überflüssige Rückleseabfrage nach abgelehnten Schaltbefehlen
+
+- Korrigiert die Holding-Register-Steuerung: Lehnt der lokale Growatt-MQTT-Client einen Schreibbefehl ab, wird nicht trotzdem sofort eine Rückleseabfrage für denselben Registerwert gesendet.
+- Ein Warnhinweis dokumentiert die Ablehnung. Bei angenommenen Schreibbefehlen bleibt der bestehende Read-after-write-Ablauf erhalten, einschließlich der NEO-Schalterzustandsbehandlung.
+- Zwei Regressionstests für abgelehnten und akzeptierten NEO-Schreibbefehl ergänzt.
+- Keine zusätzlichen Timer, Hintergrundprozesse, regelmäßigen Abfragen oder Dauerlogs. Quellcode geprüft; vollständige Python-Tests und HA-Praxistest stehen aus.
+
+---
+
 # Better GroBro 3.3.36 — Messwerte nach Offline-/Online-Wechsel erneut veröffentlichen
 
 - Korrigiert einen Zustands-Cache-Fehler: Nach erfolgreicher Offline-Verfügbarkeit blieben zuletzt gesendete Messwert-Caches erhalten; identische erste Messwerte nach dem Wiedereinschalten konnten daher ohne erneute MQTT-State-Veröffentlichung unterdrückt werden.
