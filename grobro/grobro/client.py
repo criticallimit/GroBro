@@ -930,12 +930,23 @@ class Client:
             # Keep 0x0103 out of the generic Modbus path; optional diagnostics
             # consume the already-decoded result directly.
             if noah_msg and noah_msg.get("message_type") == 0x0103:
-                # A NOAH 0x0103 message embeds another valid Growatt serial
-                # at offset 38. A normal function-3 Modbus block starts with
-                # register start/end there instead. This distinction avoids
-                # passing known NOAH frames to the generic decoder at all.
+                # NOAH embeds a full serial at offset 38. Captured NEO 0x0103
+                # packets instead embed a zero-padded *suffix* of their own
+                # header/topic serial (e.g. the last ten characters). Without
+                # recognizing the suffix the generic parser reads ASCII serial
+                # bytes as an impossible Modbus block range.
                 embedded_id = noah_msg.get("device_id", "")
-                if model.is_known_device(embedded_id):
+                header_id = unscrambled[8:38].rstrip(b"\\x00").decode(
+                    "ascii", errors="ignore"
+                )
+                neo_embedded_suffix = (
+                    device_id.startswith("QMN")
+                    and header_id == device_id
+                    and isinstance(embedded_id, str)
+                    and 8 <= len(embedded_id) < len(device_id)
+                    and device_id.endswith(embedded_id)
+                )
+                if model.is_known_device(embedded_id) or neo_embedded_suffix:
                     if REGISTER_CAPTURE_ENABLED:
                         capture_noah_0103(unscrambled, noah_msg)
                     LOG.debug("Handled NOAH/NEO 0x0103 message for %s", device_id)
