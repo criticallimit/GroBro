@@ -28,6 +28,7 @@ from grobro.grobro.builder import (
     scramble,
 )
 from grobro.grobro.cloud_policy import CloudForwardingPolicy
+from grobro.grobro.cloud_dispatch import CloudForwardQueue
 from grobro.grobro.diagnostic_io import DiagnosticWriter, diagnostic_scope
 from grobro.grobro.raw_dump import dump_message_jsonl
 from grobro.grobro.register_debug import (
@@ -253,7 +254,9 @@ class Client:
         self._forward_mqtt_config = forward_mqtt
         self._forward_clients: dict[str, mqtt.Client] = {}
         self._forward_lifecycle_lock = threading.RLock()
+        self._forward_connect_lock = threading.Lock()
         self._forward_stopped = False
+        self._cloud_queue = CloudForwardQueue(self.__publish_to_growatt_server)
         self._diagnostic_writer = DiagnosticWriter()
         self._ptq_for_raq: dict[str, str] = {}
         self._gateway_dirty = set()
@@ -280,6 +283,7 @@ class Client:
     def stop(self):
         LOG.debug("GroBro: Stop")
         self._config_read_ready.clear()
+        self._cloud_queue.stop()
         with self._forward_lifecycle_lock:
             if self._forward_stopped:
                 return
@@ -657,16 +661,12 @@ class Client:
 
             cloud_policy = _current_cloud_policy()
             if cloud_policy.allows_device(device_id):
-                try:
-                    self.__publish_to_growatt_server(
-                        device_id,
-                        msg.topic,
-                        msg.payload,
-                        msg.qos,
-                        msg.retain,
-                    )
-                except Exception as exc:
-                    LOG.error("Could not forward device data to Growatt Cloud (%s)", exc)
+                # Do not block the local MQTT callback on Cloud DNS/TLS.
+                # A bounded, short-lived queue preserves order and rejects
+                # excess/stale forwards rather than replaying old telemetry.
+                self._cloud_queue.submit(
+                    device_id, msg.topic, msg.payload, msg.qos, msg.retain,
+                )
 
             unscrambled = parser.unscramble(msg.payload)
             if NOAH_TRAFFIC_CAPTURE_ENABLED and model.uses_noah_protocol(device_id):
@@ -1162,39 +1162,55 @@ class Client:
         if client is not None:
             client.publish(topic, payload=payload, qos=qos, retain=retain)
 
-    # Setup Growatt MQTT broker using Robert Zaage's synchronous sequence.
+    # Preserve the upstream per-device Cloud MQTT handshake, but never hold
+    # the shutdown lock during synchronous DNS/TLS/connect operations.
     def __connect_to_growatt_server(self, client_id):
-        with self._forward_lifecycle_lock:
-            if self._forward_stopped:
-                return None
-            key = f"forward_client_{client_id}"
-            if key not in self._forward_clients:
-                LOG.info("%s: connecting to Growatt Cloud", _device_label(client_id))
-                client = mqtt.Client(
-                    client_id=client_id,
-                    callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
+        key = f"forward_client_{client_id}"
+        with self._forward_connect_lock:
+            with self._forward_lifecycle_lock:
+                if self._forward_stopped:
+                    return None
+                existing = self._forward_clients.get(key)
+                if existing is not None:
+                    return existing
+
+            LOG.info("%s: connecting to Growatt Cloud", _device_label(client_id))
+            client = mqtt.Client(
+                client_id=client_id,
+                callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
+            )
+            client.tls_set(cert_reqs=ssl.CERT_NONE)
+            client.tls_insecure_set(True)
+            client.on_message = self.__on_message_forward_client
+            try:
+                client.connect(
+                    self._forward_mqtt_config.host,
+                    self._forward_mqtt_config.port,
+                    60,
                 )
-                client.tls_set(cert_reqs=ssl.CERT_NONE)
-                client.tls_insecure_set(True)
-                client.on_message = self.__on_message_forward_client
+                client.subscribe(f"+/{client_id}")
+                started = client.loop_start()
+                if isinstance(started, int) and started != mqtt.MQTT_ERR_SUCCESS:
+                    raise RuntimeError(f"Cloud MQTT loop could not start: {started}")
+            except Exception:
                 try:
-                    client.connect(
-                        self._forward_mqtt_config.host,
-                        self._forward_mqtt_config.port,
-                        60,
-                    )
-                    client.subscribe(f"+/{client_id}")
-                    started = client.loop_start()
-                    if isinstance(started, int) and started != mqtt.MQTT_ERR_SUCCESS:
-                        raise RuntimeError(f"Cloud MQTT loop could not start: {started}")
+                    client.disconnect()
                 except Exception:
-                    try:
-                        client.disconnect()
-                    except Exception:
-                        LOG.exception("Could not clean up a failed cloud connection")
-                    raise
-                self._forward_clients[key] = client
-            return self._forward_clients[key]
+                    LOG.exception("Could not clean up a failed Cloud connection")
+                raise
+
+            with self._forward_lifecycle_lock:
+                if not self._forward_stopped:
+                    self._forward_clients[key] = client
+                    return client
+
+            # Shutdown raced the DNS/TLS connect: never install a new forward
+            # client after the source was stopped.
+            try:
+                client.disconnect()
+            finally:
+                client.loop_stop()
+            return None
 
 
 def dump_message_binary(topic, payload):
