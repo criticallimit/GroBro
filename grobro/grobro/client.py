@@ -188,6 +188,7 @@ def _current_cloud_policy() -> CloudForwardingPolicy:
 
 
 CLOUD_SHUTDOWN_TIMEOUT = 3.0
+CLOUD_SUBSCRIPTION_WAIT_LOG_SECONDS = 30.0
 MAX_PENDING_CONFIG_WRITES = 128
 
 @lru_cache(maxsize=16)
@@ -1193,12 +1194,12 @@ class Client:
                 while not self._forward_stopped and client_id not in self._cloud_initial_subscribed:
                     # Bounded wait solely for diagnostics. Do not expire or
                     # replay the opaque first Growatt protocol frame.
-                    self._cloud_initial_condition.wait(timeout=30.0)
+                    self._cloud_initial_condition.wait(timeout=CLOUD_SUBSCRIPTION_WAIT_LOG_SECONDS)
                     now = time.monotonic()
                     if (
                         not self._forward_stopped
                         and client_id not in self._cloud_initial_subscribed
-                        and now - last_warning >= 30.0
+                        and now - last_warning >= CLOUD_SUBSCRIPTION_WAIT_LOG_SECONDS
                     ):
                         LOG.warning(
                             "%s: waiting for Growatt Cloud response subscription; "
