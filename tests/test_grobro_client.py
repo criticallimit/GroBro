@@ -1365,3 +1365,51 @@ def test_failed_cloud_connection_has_per_device_retry_cooldown():
         assert tries == ["QMNTEST", "0PVPTEST"]
     finally:
         queue.stop()
+
+
+def test_queued_cloud_publish_rejection_triggers_retry_failure(client):
+    """Paho can reject a queued publish without raising an exception."""
+    import time
+
+    forward = MagicMock()
+    forward.publish.return_value = (grobro_client.mqtt.MQTT_ERR_NO_CONN, None)
+    with patch.object(
+        client, "_Client__connect_to_growatt_server", return_value=forward
+    ):
+        with pytest.raises(ConnectionError, match="rejected locally"):
+            client._Client__publish_to_growatt_server(
+                "QMNTEST", "c/33/QMNTEST", b"payload", 1, False,
+                received_at=time.monotonic(),
+            )
+    forward.publish.assert_called_once_with(
+        "c/33/QMNTEST", payload=b"payload", qos=1, retain=False
+    )
+
+
+def test_cloud_queue_preserves_binary_payload_qos_retain_and_fifo():
+    """Cloud forwarding must preserve the existing upstream wire contract."""
+    import threading
+    import time
+    from grobro.grobro.cloud_dispatch import CloudForwardQueue
+
+    received = []
+    ready = threading.Event()
+
+    def sender(device, topic, payload, qos, retain, *, received_at):
+        received.append((device, topic, payload, qos, retain))
+        if len(received) == 3:
+            ready.set()
+
+    queue = CloudForwardQueue(sender)
+    try:
+        packets = [
+            ("QMNTEST", "c/33/QMNTEST", b"\x00\x01config", 1, True),
+            ("0PVPTEST", "c/33/0PVPTEST", b"\x00\xffbinary", 0, False),
+            ("QMNTEST", "c/33/QMNTEST", b"telemetry", 2, False),
+        ]
+        for packet in packets:
+            assert queue.submit(*packet)
+        assert ready.wait(2)
+        assert received == packets
+    finally:
+        queue.stop()
