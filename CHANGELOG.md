@@ -1,3 +1,14 @@
+# Better GroBro 3.3.22 — Differences from robertzaage/GroBro
+
+## User-relevant differences
+
+- Changed only INFO-log source descriptions for configuration-register values received in type 0x0119: one-register replies are logged as `single-register response`; compound TLV packets are logged as `compound config telegram`.
+- This avoids implying NEO's unsolicited periodic R76+R5 packets were direct responses to an R76 query. Raw captures show NEO sent these every five minutes, while NOAH R76 messages were individual responses in the observed capture.
+- Existing MQTT messages, callbacks, Home Assistant states, timeouts and polling remain unchanged.
+- Extended existing compound-message regression and added a single-register origin test. Code static checks passed; pytest and live device tests remain pending.
+
+---
+
 # Better GroBro 3.3.21 — Differences from robertzaage/GroBro
 
 ## User-relevant differences
