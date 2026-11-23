@@ -538,7 +538,10 @@ _INDEX_HTML = r"""<!doctype html>
           <h2>Protokoll</h2>
           <div class="muted"><span>Seit Better-GroBro-Start:</span> <span id="log-started">–</span></div>
         </div>
-        <button id="log-refresh" type="button" class="secondary">Aktualisieren</button>
+        <div class="actions">
+          <button id="log-refresh" type="button" class="secondary">Aktualisieren</button>
+          <button id="log-download" type="button" class="secondary">Protokoll herunterladen</button>
+        </div>
       </div>
       <p class="section-note">Es werden nur Einträge des aktuell laufenden Better-GroBro-Prozesses angezeigt. Ältere Supervisor-Protokolle bleiben ausgeblendet.</p>
       <pre id="log-output" class="log-output">Protokoll wird geladen…</pre>
@@ -1001,6 +1004,28 @@ logOutput.addEventListener("scroll",()=>{
   logFollowTail=logOutput.scrollHeight-logOutput.scrollTop-logOutput.clientHeight<20;
 });
 
+async function downloadLogs(){
+  const button=document.getElementById("log-download");
+  button.disabled=true;
+  try{
+    const response=await fetch(apiUrl("api/logs"),{cache:"no-store"});
+    const data=await response.json();
+    if(!response.ok)throw new Error(data.error||"Protokoll konnte nicht geladen werden");
+    if(!data.marker_found)throw new Error(l({de:"Für diesen Start sind noch keine Protokolleinträge verfügbar.",en:"No log entries are available for this session yet.",fr:"Aucune entrée de journal disponible pour cette session.",es:"Todavía no hay registros de esta sesión.",nl:"Nog geen logboekvermeldingen beschikbaar voor deze sessie."}));
+    const timestamp=new Date().toISOString().replace(/[:.]/g,"-");
+    const file=new Blob([data.logs||""],{type:"text/plain;charset=utf-8"});
+    const href=URL.createObjectURL(file);
+    const anchor=document.createElement("a");
+    anchor.href=href;
+    anchor.download="Better-GroBro-Protokoll-"+timestamp+".txt";
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(()=>URL.revokeObjectURL(href),1000);
+  }finally{
+    button.disabled=false;
+  }
+}
 async function loadLogs(){
   const output=logOutput;
   const r=await fetch(apiUrl("api/logs"),{cache:"no-store"});
@@ -1023,6 +1048,7 @@ async function loadLogs(){
   }
 }
 document.getElementById("log-refresh").addEventListener("click",()=>loadLogs().catch(showError));
+document.getElementById("log-download").addEventListener("click",()=>downloadLogs().catch(showError));
 function showError(error){showMessage("config-message",error.message||String(error),"error");}
 loadConfig().then(loadBatteries).then(loadOverviewLogs).catch(showError);
 setInterval(()=>{
