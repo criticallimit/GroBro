@@ -256,6 +256,10 @@ class Client:
         self._forward_lifecycle_lock = threading.RLock()
         self._forward_connect_lock = threading.Lock()
         self._cloud_subscription_lock = threading.RLock()
+        # The source callback never waits: only the forwarding worker waits
+        # for Paho to queue the initial Cloud response subscription.
+        self._cloud_initial_subscribed = set()
+        self._cloud_initial_condition = threading.Condition(self._cloud_subscription_lock)
         self._cloud_subscription_timers: dict[str, threading.Timer] = {}
         self._cloud_subscription_epochs: dict[str, int] = {}
         self._cloud_subscription_failures: dict[str, int] = {}
@@ -303,6 +307,9 @@ class Client:
                 return
             self._forward_stopped = True
             forwards = list(self._forward_clients.values())
+        with self._cloud_initial_condition:
+            self._cloud_initial_subscribed.clear()
+            self._cloud_initial_condition.notify_all()
 
         def stop_client(client):
             try:
@@ -1177,8 +1184,13 @@ class Client:
         client = self.__connect_to_growatt_server(client_id)
         if client is None:
             return
-        # No arbitrary packet TTL: the Growatt protocol's first response /
-        # configuration frames must not silently expire during Cloud DNS/TLS.
+        # The worker must not queue the first Cloud PUBLISH before the
+        # Cloud response SUBSCRIBE. The device/source callback is unaffected.
+        # Direct diagnostic/test callers keep the established immediate path.
+        if received_at is not None:
+            with self._cloud_initial_condition:
+                while not self._forward_stopped and client_id not in self._cloud_initial_subscribed:
+                    self._cloud_initial_condition.wait()
         if self._forward_stopped:
             return
         result = client.publish(topic, payload=payload, qos=qos, retain=retain)
@@ -1311,6 +1323,7 @@ class Client:
                 with self._cloud_subscription_lock:
                     if self._forward_stopped:
                         return
+                    self._cloud_initial_subscribed.discard(client_id)
                     epoch = self._cloud_subscription_epochs.get(client_id, 0) + 1
                     self._cloud_subscription_epochs[client_id] = epoch
                     self._clear_cloud_subscription_retry(client_id)
@@ -1340,6 +1353,10 @@ class Client:
                         self._schedule_cloud_subscription_retry(client_id, connected_client, epoch)
                     else:
                         self._watch_cloud_suback(client_id, connected_client, epoch, result)
+                        # A queued SUBSCRIBE (not SUBACK) precedes the first
+                        # PUBLISH. Broker acceptance is watched separately.
+                        self._cloud_initial_subscribed.add(client_id)
+                        self._cloud_initial_condition.notify_all()
 
             def on_cloud_subscribe(connected_client, _userdata, mid, reason_codes, _properties):
                 # Keep the validated session epoch and the entire state
@@ -1359,8 +1376,14 @@ class Client:
                     else:
                         self._clear_cloud_subscription_retry(client_id)
 
+            def on_cloud_disconnect(_cloud_client, _userdata, _flags, _reason_code, _properties):
+                with self._cloud_initial_condition:
+                    self._cloud_initial_subscribed.discard(client_id)
+                    self._cloud_initial_condition.notify_all()
+
             client.on_connect = on_cloud_connect
             client.on_subscribe = on_cloud_subscribe
+            client.on_disconnect = on_cloud_disconnect
             try:
                 client.connect(
                     self._forward_mqtt_config.host,
