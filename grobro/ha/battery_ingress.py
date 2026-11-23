@@ -1166,6 +1166,7 @@ class BatteryIngressHandler(BaseHTTPRequestHandler):
             self._send_json({"error": "Noch kein Raw MQTT Dump vorhanden"}, HTTPStatus.NOT_FOUND)
             return
 
+        headers_sent = False
         try:
             with open(path, "rb") as source:
                 length = os.fstat(source.fileno()).st_size
@@ -1179,6 +1180,7 @@ class BatteryIngressHandler(BaseHTTPRequestHandler):
                 self.send_header("Cache-Control", "no-store")
                 self.send_header("X-Content-Type-Options", "nosniff")
                 self.end_headers()
+                headers_sent = True
                 remaining = length
                 while remaining:
                     chunk = source.read(min(65536, remaining))
@@ -1188,9 +1190,10 @@ class BatteryIngressHandler(BaseHTTPRequestHandler):
                     remaining -= len(chunk)
         except OSError as exc:
             LOG.warning("Could not read raw MQTT dump (%s)", type(exc).__name__)
-            if not getattr(self, "_headers_buffer", None):
-                return
-            self._send_json({"error": "Raw MQTT Dump konnte nicht gelesen werden"}, HTTPStatus.BAD_GATEWAY)
+            if headers_sent:
+                self.close_connection = True
+            else:
+                self._send_json({"error": "Raw MQTT Dump konnte nicht gelesen werden"}, HTTPStatus.BAD_GATEWAY)
 
     def _send_json(self, payload: object, status: HTTPStatus = HTTPStatus.OK) -> None:
         body = json.dumps(payload, separators=(",", ":")).encode()
