@@ -168,3 +168,28 @@ def test_all_families_use_same_existing_ha_availability(device):
     observe_device_availability(device, True)
     assert get_device_inventory()[0]["connection_status"] == "online"
 
+
+def test_ha_mqtt_availability_success_is_mirrored_in_overview():
+    with patch("paho.mqtt.client.Client"):
+        target = ha.Client(model.MQTTConfig(host="localhost", port=1883))
+    try:
+        target._client.publish.return_value = (0, None)
+        target._Client__publish_availability("QMNTEST0000001", True)
+        assert get_device_inventory()[0]["connection_status"] == "online"
+        target._Client__publish_availability("QMNTEST0000001", False)
+        assert get_device_inventory()[0]["connection_status"] == "offline"
+    finally:
+        target.stop()
+
+
+def test_ha_mqtt_availability_rejection_does_not_mark_device_online():
+    with patch("paho.mqtt.client.Client"):
+        target = ha.Client(model.MQTTConfig(host="localhost", port=1883))
+    try:
+        observe_device("QMNTEST0000001")
+        target._client.publish.return_value = (1, None)
+        target._Client__publish_availability("QMNTEST0000001", True)
+        assert get_device_inventory()[0]["connection_status"] == "unknown"
+    finally:
+        target.stop()
+
