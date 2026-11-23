@@ -110,3 +110,13 @@ Bei der Prüfung des bisherigen Cloud-E2E-Tests zeigte sich, dass dessen Beobach
 **Teständerung im Branch:** `test_real_cloud_direct_forwarding_and_reconnect` setzt die Cloud-Policy ausdrücklich auf aktiv, benutzt ein durch den vorhandenen Growatt-Builder erzeugtes gültiges binäres Konfigurationslese-Telegramm und registriert einen separaten MQTT-Zeugen auf dem **Quellbroker** (Topic `s/33/<Device-ID>`). Geprüft wird die unveränderte Byte-Payload sowohl vor als auch nach Cloud-Reconnect. Der Cloud-Paho-`on_message`- und `on_subscribe`-Handler bleibt erhalten und wird nur zur Beobachtung umhüllt.
 
 **Offen:** Dieser Test ist im Repository geändert, aber mangels `paho-mqtt` und Mosquitto noch nicht lokal ausführbar. Er ersetzt keine echte Growatt-Cloud-Anmeldung; die vorhandene Quell- und Cloud-Dummy-Verbindung verwendet lokale Broker und simuliert die notwendige Protokollkommunikation.
+
+## Gesamtclient-Audit: SUBACK-vs-CONNACK-Sitzungswechsel (23.11.2026)
+
+**Fehler:** Im bereits eingeführten `on_cloud_subscribe` wurde nur die MID-Prüfung unter dem Subscription-RLock durchgeführt. Für einen abgelehnten SUBACK wurde die Sperre anschließend gelöst und die **aktuelle** Sitzungskennung erneut eingelesen, bevor ein Retry geplant wurde. Ein dazwischen liegender neuer CONNACK konnte somit einen Retry für eine bereits neu gestartete Sitzung auslösen.
+
+**Korrektur:** Die Validierung von `(Epoche, MID)`, das Löschen des alten SUBACK-Watchdogs und die Entscheidung über Subscription-Erfolg bzw. Retry laufen jetzt vollständig unter **demselben** RLock. Das hält den Zustand konsistent, bis der neue CONNACK seine Epoche registrieren kann.
+
+**Regressionstest:** `test_cloud_suback_retry_cannot_cross_reconnect_epoch` startet einen echten parallelen Reconnect-Callback exakt während der simulierten SUBACK-Auswertung. Der Reconnect muss bis zum abgeschlossenen alten Zustandsübergang warten und danach alle alten Retry-Timer löschen. Test noch nicht ausgeführt.
+
+**Testumgebung:** `pytest` und `pydantic` sind vorhanden, `paho-mqtt`, `crc` und `mosquitto` fehlen. Die vollständige Suite bzw. echte MQTT-E2E-Tests können damit hier nicht ausgeführt werden; isolierte Cloud-Queue-Tests sind nicht gleichwertig mit Cloud-Client-Tests.
