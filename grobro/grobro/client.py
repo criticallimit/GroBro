@@ -606,7 +606,15 @@ class Client:
         self._connection_failure_logged = False
         LOG.debug("Connected to GroBro MQTT server with result code %s", reason_code)
         self._smart_meter_state_cache.clear()
-        client.subscribe("c/#")
+        # Local rejection means no SUBACK will arrive; keep config reads
+        # disabled and report the problem instead of silently waiting.
+        try:
+            subscribe_result = client.subscribe("c/#")
+        except (OSError, RuntimeError, ValueError) as exc:
+            LOG.error("Could not subscribe to Growatt MQTT c/# (%s); retry on reconnect", type(exc).__name__)
+            return
+        if not publish_succeeded(subscribe_result):
+            LOG.error("Growatt MQTT rejected c/# subscription locally; retry on reconnect")
 
     @diagnostic_scope
     def __on_message(self, client, userdata, msg: MQTTMessage):
