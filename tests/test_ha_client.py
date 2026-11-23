@@ -551,6 +551,7 @@ class TestClientConfig:
         ha_client.handle_source_ready()
 
         ha_client.on_command.reset_mock()
+        ha_client.on_command.return_value = (0, None)
         ha_client.publish_input_register(HomeAssistantInputRegister(
             device_id=device, payload={"Ppv": 100},
         ))
