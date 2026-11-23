@@ -263,7 +263,12 @@ class Client:
         return getattr(self, "_bridge_availability_topic", f"{HA_BASE_TOPIC}/grobro/grobro-ha/availability")
 
     def __publish_offline_devices(self):
-        for device_id in tuple(self._config_cache):
+        # A device can have emitted live telemetry before its full config was
+        # cached. Include such devices when invalidating retained HA states.
+        from grobro.ha.device_inventory import get_device_inventory
+        known_ids = set(self._config_cache)
+        known_ids.update(item["device_id"] for item in get_device_inventory())
+        for device_id in sorted(known_ids):
             try:
                 self.__publish_availability(device_id, False)
             except Exception:
