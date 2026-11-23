@@ -776,6 +776,7 @@ class Client:
             mark_all_devices_offline()
             # Reconnection will clear and rebuild publication caches.
             self._bridge_online_pending = True
+            self._ha_mqtt_connected = False
         LOG.warning("Home Assistant MQTT disconnected; device states will recover on reconnect")
 
     def __on_connect_fail(self, client, userdata):
@@ -793,6 +794,7 @@ class Client:
                 self.__on_connect_fail(client, userdata)
                 return
             self._connection_failure_logged = False
+            self._ha_mqtt_connected = True
             self.__publish_bridge_online()
             self.__recover_after_home_assistant_restart(client)
         LOG.info(
@@ -1108,6 +1110,10 @@ class Client:
             arm_timeout(effective_device_timeout(self, device_id), device_id)
 
     def __publish_availability(self, device_id: str, online: bool):
+        # Paho can accept an outgoing publish into a local queue while offline.
+        # Never turn a device card green until the broker reconnects.
+        if getattr(self, "_ha_mqtt_connected", True) is False:
+            return False
         if online and getattr(self, "_bridge_online_pending", False):
             self.__publish_bridge_online()
 
