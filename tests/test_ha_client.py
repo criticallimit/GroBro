@@ -440,6 +440,22 @@ class TestClientConfig:
         finally:
             clear_device_inventory()
 
+    def test_gateway_derived_metadata_does_not_schedule_neo_config_reads(self, ha_client):
+        device = "QMN000ABC1D2E3FG"
+        cfg = DeviceConfig(serial_number=device, wifi_signal="-61")
+        with patch.object(ha_client, "_Client__refresh_config_if_needed") as refresh:
+            ha_client.set_derived_config(device, cfg)
+        refresh.assert_not_called()
+        assert ha_client._config_cache[device].wifi_signal == "-61"
+        assert device not in ha_client._config_refresh_started
+
+    def test_direct_neo_config_still_schedules_existing_config_refresh(self, ha_client):
+        device = "QMN000ABC1D2E3FG"
+        cfg = DeviceConfig(serial_number=device, wifi_signal="-61")
+        with patch.object(ha_client, "_Client__refresh_config_if_needed") as refresh:
+            ha_client.set_config(device, cfg)
+        refresh.assert_called_once_with(device)
+
     def test_set_config_unchanged(self, ha_client):
         cfg = DeviceConfig(serial_number="QMN000ABC1D2E3FG")
         ha_client._config_cache["QMN000ABC1D2E3FG"] = cfg
