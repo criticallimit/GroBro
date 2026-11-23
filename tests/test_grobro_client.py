@@ -1827,3 +1827,75 @@ def test_shutdown_releases_cloud_worker_waiting_for_first_subscription(client):
         finally:
             client.stop()
             worker.join(timeout=1)
+
+
+def test_cloud_offline_wait_logs_without_dropping_first_packet(client, caplog):
+    """Waiting for CONNACK diagnoses Cloud outage but preserves initial bytes."""
+    import threading
+    import time
+
+    forward = MagicMock()
+    forward.subscribe.return_value = (0, 109)
+    completed = threading.Event()
+    with patch("grobro.grobro.client.mqtt.Client", return_value=forward), patch(
+        "grobro.grobro.client.CLOUD_SUBSCRIPTION_WAIT_LOG_SECONDS", 0.05
+    ):
+        def send():
+            client._Client__publish_to_growatt_server(
+                "QMNTEST", "c/33/QMNTEST", b"first-cloud-config", 1, False,
+                received_at=time.monotonic(),
+            )
+            completed.set()
+
+        worker = threading.Thread(target=send, daemon=True)
+        worker.start()
+        try:
+            deadline = time.monotonic() + 1.0
+            while not forward.loop_start.called and time.monotonic() < deadline:
+                time.sleep(0.01)
+            assert forward.loop_start.called
+            assert not completed.wait(0.15)
+            assert "waiting for Growatt Cloud response subscription" in caplog.text
+            forward.publish.assert_not_called()
+            # A later successful CONNACK releases the original packet intact.
+            forward.on_connect(forward, None, None, 0, None)
+            assert completed.wait(1)
+            forward.publish.assert_called_once_with(
+                "c/33/QMNTEST", payload=b"first-cloud-config", qos=1, retain=False
+            )
+        finally:
+            client.stop()
+            worker.join(timeout=1)
+
+
+def test_cloud_offline_wait_exits_after_shutdown_without_publish(client):
+    """A shutdown wakes a Cloud worker even if no CONNACK was ever received."""
+    import threading
+    import time
+
+    forward = MagicMock()
+    finished = threading.Event()
+    with patch("grobro.grobro.client.mqtt.Client", return_value=forward), patch(
+        "grobro.grobro.client.CLOUD_SUBSCRIPTION_WAIT_LOG_SECONDS", 0.05
+    ):
+        def send():
+            client._Client__publish_to_growatt_server(
+                "QMNTEST", "c/33/QMNTEST", b"first-cloud-config", 1, False,
+                received_at=time.monotonic(),
+            )
+            finished.set()
+
+        worker = threading.Thread(target=send, daemon=True)
+        worker.start()
+        try:
+            deadline = time.monotonic() + 1.0
+            while not forward.loop_start.called and time.monotonic() < deadline:
+                time.sleep(0.01)
+            assert forward.loop_start.called
+            assert not finished.wait(0.1)
+            client.stop()
+            assert finished.wait(1)
+            forward.publish.assert_not_called()
+        finally:
+            client.stop()
+            worker.join(timeout=1)
