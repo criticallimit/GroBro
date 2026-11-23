@@ -1098,33 +1098,38 @@ class Client:
     def __publish_availability(self, device_id: str, online: bool):
         if online and getattr(self, "_bridge_online_pending", False):
             self.__publish_bridge_online()
-        availability = self._last_availability
-        if availability.get(device_id) is online:
-            return False
 
-        LOG.debug("Set device %s availability: %s", device_id, online)
-        result = self._client.publish(
-            f"{HA_BASE_TOPIC}/grobro/{device_id}/availability",
-            "online" if online else "offline",
-            retain=True,
-        )
-        if not publish_succeeded(result):
-            return False
-        # The primary availability topic has now been accepted by HA MQTT.
-        # The optional extra online sensor must not determine this UI state.
-        from grobro.ha.device_inventory import observe_device_availability
-        observe_device_availability(device_id, online)
-        if AVAILABILITY_SENSOR:
+        availability = self._last_availability
+        primary_changed = availability.get(device_id) is not online
+        if primary_changed:
+            LOG.debug("Set device %s availability: %s", device_id, online)
             result = self._client.publish(
-                f"{HA_BASE_TOPIC}/grobro/{device_id}/online",
-                "ON" if online else "OFF",
+                f"{HA_BASE_TOPIC}/grobro/{device_id}/availability",
+                "online" if online else "offline",
                 retain=True,
             )
             if not publish_succeeded(result):
                 return False
 
-        availability[device_id] = online
-        return True
+            # Track the primary device availability independently of the optional
+            # online entity. Do not republish it when only that entity needs retry.
+            availability[device_id] = online
+            from grobro.ha.device_inventory import observe_device_availability
+            observe_device_availability(device_id, online)
+
+        if AVAILABILITY_SENSOR:
+            optional_cache = getattr(self, "_last_online_sensor", None)
+            if optional_cache is None:
+                optional_cache = self._last_online_sensor = {}
+            if optional_cache.get(device_id) is not online:
+                result = self._client.publish(
+                    f"{HA_BASE_TOPIC}/grobro/{device_id}/online",
+                    "ON" if online else "OFF",
+                    retain=True,
+                )
+                if publish_succeeded(result):
+                    optional_cache[device_id] = online
+        return primary_changed
 
     def __detect_neo_pv_count(self, device_id: str, payload: dict) -> None:
         if not model.uses_dynamic_pv_count(device_id):
