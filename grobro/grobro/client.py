@@ -936,7 +936,7 @@ class Client:
                 # recognizing the suffix the generic parser reads ASCII serial
                 # bytes as an impossible Modbus block range.
                 embedded_id = noah_msg.get("device_id", "")
-                header_id = unscrambled[8:38].rstrip(b"\\x00").decode(
+                header_id = unscrambled[8:38].rstrip(b"\x00").decode(
                     "ascii", errors="ignore"
                 )
                 neo_embedded_suffix = (
