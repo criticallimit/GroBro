@@ -140,3 +140,13 @@ Ein Cloud-Disconnect setzt die Freigabe zurück. Ein neuer erfolgreicher CONNACK
 Drei neue Regressionstests für initiales SUBSCRIBE-before-PUBLISH, erneuten Reconnect und Shutdown-Wakeup sind hinzugefügt. Der bestehende reale MQTT-E2E-Test wurde auf den zeitgestempelten Worker-Pfad umgestellt. Die neuen Tests sind hier wegen fehlender Paho-, CRC- und Mosquitto-Abhängigkeiten noch nicht ausgeführt.
 
 Offenes Betriebsrisiko: Wenn eine erfolgreiche Cloud-Verbindung ausbleibt, wartet der Cloud-Worker unbeschränkt. Weitere Nachrichten werden bis zum festen Limit von 64 wartenden Paketen aufgenommen, danach verworfen; die lokale HA-Verarbeitung bleibt frei. Vor Merge echte längere Offline-Phasen und Broker-Reconnect prüfen.
+
+## Längerer Cloud-Ausfall: Diagnose und atomarer Shutdown (23.11.2026)
+
+Das erste angenommene Growatt-Telegramm bleibt erhalten, auch wenn ein CONNACK bzw. eine lokal akzeptierte Cloud-Subscription länger ausbleibt. Ausschließlich der separate Cloud-Worker wartet auf die Condition. Ein diagnostischer Wakeup alle 30 Sekunden protokolliert dann eine Warnung; er löst selbst keine Netzwerkabfrage aus und verwirft keine Telegramme.
+
+Zwei Regressionstests mit auf 50 ms verkürztem Diagnoseintervall überprüfen die Wiederaufnahme des ersten Pakets nach späterem CONNACK und den Shutdown ohne nachfolgenden Publish. Die vollständige Client-Suite ist in dieser Umgebung noch nicht ausführbar.
+
+Shutdown-Race erkannt und korrigiert: Bisher wurden Subscription-Timer gelöscht und erst danach das Stop-Flag gesetzt. Ein Paho-Callback konnte dazwischen erneut einen Timer registrieren. Nun wird _forward_stopped=True vor der Timer-Bereinigung im selben Condition-RLock gesetzt und wartende Worker sofort benachrichtigt.
+
+Verbleibende Grenze: Wenn Cloud nie wieder einen erfolgreichen CONNACK liefert, bleibt der Worker absichtlich wartend und die Warteschlange kann nach 64 weiteren Paketen überlaufen. Die Warnung diagnostiziert, behebt aber keine vollständige Transportstörung. Reale Paho/Mosquitto-Tests und Growatt-Cloud-Kompatibilität bleiben offen.
