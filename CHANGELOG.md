@@ -1,3 +1,15 @@
+# Better GroBro 3.3.20 — Differences from robertzaage/GroBro
+
+## User-relevant differences
+
+- Malformed or truncated Modbus register-block warnings now include sanitized structured diagnostics: protocol message type (two bytes at header offset 6), Modbus function, total packet size in bytes, and absolute block-start offset.
+- No serial numbers, raw payload bytes or credentials are added to warnings. Existing warnings retain their register ranges and byte counts.
+- No changes to actual Modbus data parsing, device command handling, MQTT communication, polling intervals or Wi-Fi measurements.
+- Added synthetic BZP4 malformed-block regression and a valid NEO input packet regression.
+- Eight structural checks passed. Full pytest and physical device verification pending.
+
+---
+
 # Better GroBro 3.3.19 — Differences from robertzaage/GroBro
 
 ## User-relevant differences
