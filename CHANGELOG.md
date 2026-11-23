@@ -1,3 +1,13 @@
+# Better GroBro 3.3.32 — Gateway-Metadaten lösen keine NEO-Konfigurationsabfragen aus
+
+- Korrigiert einen Folgefehler der Trennung zwischen direkter Gerätekommunikation und vom Gateway weitergereichten NEO-Metadaten.
+- Abgeleitete Gateway-Konfigurationen aktualisieren weiterhin die Geräteinformationen und das Discovery-Verhalten, starten aber keinen vollständigen NEO-Konfigurationslesevorgang mehr.
+- Direkte Konfigurations- und Messmeldungen sowie die bestehende Wiederherstellung nach MQTT-Neuverbindungen behalten ihren bisherigen Abfrageweg.
+- Zwei neue Regressionstests prüfen, dass abgeleitete Gateway-Metadaten keine Abfragen starten und direkte Konfigurationsmeldungen weiterhin den normalen Refresh nutzen.
+- Keine neuen Timer, Hintergrunddienste, Dauerlogs oder Performance-Tests. Quellcode kontrolliert, vollständige pytest- und HA-Praxistests noch nicht ausgeführt.
+
+---
+
 # Better GroBro 3.3.31 — Gateway-Metadaten nicht als NEO-Online-Meldung behandeln
 
 - Korrigiert eine falsche Online-Erkennung: Bei einer NEO-/PTQ-Zuordnung können ShineWeLink-/RAQ-Gateway-Meldungen Metadaten und WLAN-Werte für einen NEO aktualisieren, obwohl der NEO selbst ausgeschaltet ist.
