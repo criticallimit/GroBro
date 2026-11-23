@@ -114,34 +114,35 @@ def test_restored_device_is_not_considered_online_without_live_telemetry():
     observe_wifi_signal("QMNTEST0000001", -59)
     item = get_device_inventory()[0]
     assert item["connection_status"] == "unknown"
-    assert item["last_telemetry_seconds"] is None
+    assert item["last_activity_seconds"] is None
 
 
-@pytest.mark.parametrize("device,age,expected", [
-    ("QMNTEST0000001", 0, "online"),
-    ("QMNTEST0000001", 300, "online"),
-    ("QMNTEST0000001", 400, "stale"),
-    ("QMNTEST0000001", 721, "offline"),
-    ("0PVPTEST000001", 10, "online"),
-    ("0PVPTEST000001", 30, "stale"),
-    ("0PVPTEST000001", 61, "offline"),
-])
-def test_status_uses_live_telemetry_age_without_night_assumptions(device, age, expected):
+def test_existing_availability_events_drive_ingress_status():
+    from grobro.ha.device_inventory import observe_device_activity, observe_device_offline
+
+    observe_device("QMNTEST0000001")
     with patch("grobro.ha.device_inventory.time.monotonic", return_value=1000.0):
-        observe_telemetry(device, {"bat_1_soc_pct": 25})
-    with patch("grobro.ha.device_inventory.time.monotonic", return_value=1000.0 + age):
+        observe_device_activity("QMNTEST0000001")
+    with patch("grobro.ha.device_inventory.time.monotonic", return_value=1010.0):
         item = get_device_inventory()[0]
-    assert item["connection_status"] == expected
-    assert item["last_telemetry_seconds"] == age
+    assert item["connection_status"] == "online"
+    assert item["last_activity_seconds"] == 10
+    observe_device_offline("QMNTEST0000001")
+    item = get_device_inventory()[0]
+    assert item["connection_status"] == "offline"
+    assert item["last_activity_seconds"] >= 0
 
 
-def test_wifi_updates_and_cached_inventory_do_not_refresh_offline_device():
-    with patch("grobro.ha.device_inventory.time.monotonic", return_value=1000.0):
-        observe_telemetry("QMNTEST0000001", {"wifi_signal_strength": -59})
-    with patch("grobro.ha.device_inventory.time.monotonic", return_value=2000.0):
-        observe_device("QMNTEST0000001")
-        observe_wifi_signal("QMNTEST0000001", -58)
-        assert get_device_inventory()[0]["connection_status"] == "offline"
-        observe_telemetry("QMNTEST0000001", {"bat_1_soc_pct": 21})
-        assert get_device_inventory()[0]["connection_status"] == "online"
+def test_wifi_and_cached_telemetry_do_not_override_existing_offline_status():
+    from grobro.ha.device_inventory import observe_device_activity, observe_device_offline
+
+    device = "QMNTEST0000001"
+    observe_device_activity(device)
+    observe_device_offline(device)
+    observe_device(device)
+    observe_wifi_signal(device, -58)
+    observe_telemetry(device, {"bat_1_soc_pct": 21})
+    assert get_device_inventory()[0]["connection_status"] == "offline"
+    observe_device_activity(device)
+    assert get_device_inventory()[0]["connection_status"] == "online"
 
