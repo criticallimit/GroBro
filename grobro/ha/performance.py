@@ -163,7 +163,7 @@ def _should_publish_state(client, device_id: str, payload_json: str, *, commit: 
 
 def clear_device_publish_cache(client, device_id: str) -> None:
     """Republish the first live measurement after this device was offline."""
-    for cache_name in ("_state_publish_cache", "_last_state_payload"):
+    for cache_name in ("_state_publish_cache", "_last_state_payload", "_smart_meter_state_cache"):
         cache = getattr(client, cache_name, None)
         if cache is not None:
             cache.pop(device_id, None)
