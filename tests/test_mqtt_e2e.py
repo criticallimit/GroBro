@@ -422,6 +422,8 @@ def test_real_cloud_direct_forwarding_and_reconnect(tmp_path, monkeypatch):
         probe.publish(f"s/{device}", b"command", qos=1).wait_for_publish(timeout=5)
         assert cloud_reply.wait(5), "initial Cloud response subscription missing"
         cloud_reply.clear()
+        cloud_resubscribed = threading.Event()
+        forward.on_subscribe = lambda *_args: cloud_resubscribed.set()
         disconnected = threading.Event()
         original = forward.on_disconnect
         def on_disconnect(*args):
@@ -432,8 +434,8 @@ def test_real_cloud_direct_forwarding_and_reconnect(tmp_path, monkeypatch):
         forward.socket().shutdown(socket.SHUT_RDWR)
         assert disconnected.wait(5)
         assert _wait_until(forward.is_connected)
-        # MQTT clean sessions need the response subscription again after
-        # reconnect, even when outgoing Cloud publishes already work.
+        # Wait for the broker SUBACK instead of racing CONNECT vs subscribe.
+        assert cloud_resubscribed.wait(5), "Cloud response SUBACK missing after reconnect"
         probe.publish(f"s/{device}", b"after-reconnect", qos=1).wait_for_publish(timeout=5)
         assert cloud_reply.wait(5), "Cloud response subscription was lost on reconnect"
         source._Client__publish_to_growatt_server(device, topic, b"second", 0, False)
