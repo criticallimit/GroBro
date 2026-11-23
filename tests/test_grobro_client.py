@@ -247,6 +247,7 @@ class TestClientOnMessage:
     def test_wifi_source_is_logged_for_tlv_and_direct_read(self, client, caplog):
         from grobro.model.device_config import DeviceConfig
 
+        caplog.set_level("INFO", logger=grobro_client.LOG.name)
         client._publish_tlv_config_states(
             "QMN000ABC1D2E3FG", DeviceConfig(wifi_signal="-61"),
         )
