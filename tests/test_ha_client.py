@@ -759,6 +759,38 @@ class TestClientOnMessage:
         write_call = ha_client.on_command.call_args_list[0][0][0]
         assert write_call.value == 1
 
+    def test_rejected_neo_switch_write_does_not_request_readback_or_publish_state(self, ha_client):
+        from grobro.model.modbus_message import GrowattModbusFunction
+
+        device = "QMN000ABC1D2E3FG"
+        msg = _msg(f"homeassistant/switch/grobro/{device}/inverter_power/set", b"ON")
+        ha_client.on_command.return_value = (4, None)
+        ha_client._client.publish.reset_mock()
+
+        ha_client._client.on_message(None, None, msg)
+
+        ha_client.on_command.assert_called_once()
+        write = ha_client.on_command.call_args.args[0]
+        assert write.function == GrowattModbusFunction.PRESET_SINGLE_REGISTER
+        assert not any(
+            "/inverter_power/get" in call.args[0]
+            for call in ha_client._client.publish.call_args_list
+        )
+
+    def test_accepted_neo_switch_write_keeps_readback(self, ha_client):
+        from grobro.model.modbus_message import GrowattModbusFunction
+
+        device = "QMN000ABC1D2E3FG"
+        msg = _msg(f"homeassistant/switch/grobro/{device}/inverter_power/set", b"OFF")
+        ha_client.on_command.return_value = (0, None)
+
+        ha_client._client.on_message(None, None, msg)
+
+        assert ha_client.on_command.call_count == 2
+        commands = [call.args[0] for call in ha_client.on_command.call_args_list]
+        assert commands[0].function == GrowattModbusFunction.PRESET_SINGLE_REGISTER
+        assert commands[1].function == GrowattModbusFunction.READ_SINGLE_REGISTER
+
     def test_switch_set_off(self, ha_client):
         msg = _msg("homeassistant/switch/grobro/QMN000ABC1D2E3FG/output_power_limit/set", b"OFF")
         ha_client._client.on_message(None, None, msg)
