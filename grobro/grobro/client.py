@@ -214,6 +214,7 @@ class Client:
     on_config: Callable[[str, model.DeviceConfig], None]
     on_input_register: Callable[HomeAssistantInputRegister, None]
     on_holding_register_input: Callable[HomeAssistantHoldingRegisterInput, None]
+    on_derived_config = None
     on_config_read_response = None
     on_config_register_value = None
     on_smart_meter = None
@@ -724,7 +725,8 @@ class Client:
                                 ptq_config.sw_version = config.sw_version
                             if getattr(config, "wifi_signal", None) is not None:
                                 ptq_config.wifi_signal = config.wifi_signal
-                            self.on_config(ptq_serial, ptq_config)
+                            callback = self.on_derived_config or self.on_config
+                            callback(ptq_serial, ptq_config)
                             LOG.info(
                                 "Detected NEO inverter %s behind ShineWeLink %s",
                                 ptq_serial,
@@ -822,7 +824,8 @@ class Client:
                                         serial_number=mapped_neo,
                                         wifi_signal=str(value),
                                     )
-                                    self.on_config(mapped_neo, neo_wifi_config)
+                                    callback = self.on_derived_config or self.on_config
+                                    callback(mapped_neo, neo_wifi_config)
                         except Exception as exc:
                             LOG.warning("Could not update device metadata for %s register %s (%s)", cfg["device_id"], register_no, type(exc).__name__)
 
