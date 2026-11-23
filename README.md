@@ -16,7 +16,7 @@ Better GroBro builds on [Robert Zaage's GroBro](https://github.com/robertzaage/G
 
 ---
 
-## Better GroBro 3.3.29
+## Better GroBro 3.3.30
 
 ### What Better GroBro offers
 
