@@ -1155,12 +1155,22 @@ class Client:
         payload: bytes,
         qos: int,
         retain: bool,
+        *,
+        received_at: float | None = None,
     ) -> None:
-        # Match upstream GroBro: hand each live packet directly to Paho.
-        # Better GroBro does not keep a backlog or replay failed packets.
+        # Keep direct forwarding semantics for explicit callers. Queued
+        # forwards additionally carry their device-receive timestamp.
         client = self.__connect_to_growatt_server(client_id)
-        if client is not None:
-            client.publish(topic, payload=payload, qos=qos, retain=retain)
+        if client is None:
+            return
+        if received_at is not None:
+            from grobro.grobro.cloud_dispatch import MAX_CLOUD_MESSAGE_AGE_SECONDS
+            if time.monotonic() - received_at > MAX_CLOUD_MESSAGE_AGE_SECONDS:
+                # A slow Cloud connect must not forward an obsolete reading.
+                return
+        if self._forward_stopped:
+            return
+        client.publish(topic, payload=payload, qos=qos, retain=retain)
 
     # Preserve the upstream per-device Cloud MQTT handshake, but never hold
     # the shutdown lock during synchronous DNS/TLS/connect operations.
