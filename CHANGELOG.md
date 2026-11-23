@@ -1,3 +1,13 @@
+# Better GroBro 3.3.33 — Keine automatischen Vollabfragen für inaktive Geräte nach Growatt-MQTT-Reconnect
+
+- Der Wiederanlauf nach Bestätigung der Growatt-MQTT-Subscription (`c/#`) startet Konfigurationslesesequenzen nur noch für Geräte, deren Live-Aktivität während der laufenden Better-GroBro-Sitzung bereits registriert wurde.
+- Gespeicherte, aber aktuell inaktive Geräte wie ein ausgeschalteter NEO werden in dieser Wiederanlaufphase nicht allein aufgrund ihrer gespeicherten Konfiguration abgefragt. Sobald wieder echte Gerätetelemetrie eintrifft, gilt der bisherige automatische Konfigurations-Refresh.
+- Die normale Availability-Erkennung, manueller Read-All, direkte Gerätetelegramme und die MQTT-Subscription bleiben unverändert.
+- Zwei Regressionstests ergänzt. Kein Performance-Test, keine weiteren Hintergrundprozesse, Timer oder Dauerlogs.
+- Quellcode und Verknüpfungen kontrolliert; vollständige Python-Tests und HA-Praxistest stehen aus.
+
+---
+
 # Better GroBro 3.3.32 — Gateway-Metadaten lösen keine NEO-Konfigurationsabfragen aus
 
 - Korrigiert einen Folgefehler der Trennung zwischen direkter Gerätekommunikation und vom Gateway weitergereichten NEO-Metadaten.
