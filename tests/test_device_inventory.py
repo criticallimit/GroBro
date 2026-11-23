@@ -96,6 +96,7 @@ def test_overview_uses_the_same_temperature_validation_as_ha(tmp_path, monkeypat
     monkeypatch.chdir(tmp_path)
     with patch("paho.mqtt.client.Client"):
         target = ha.Client(model.MQTTConfig(host="localhost", port=1883))
+        target._ha_mqtt_connected = True  # Simulate Paho CONNACK for runtime tests
     target._client.publish.return_value = (0, None)
     try:
         target.publish_input_register(SimpleNamespace(
@@ -172,6 +173,7 @@ def test_all_families_use_same_existing_ha_availability(device):
 def test_ha_mqtt_availability_success_is_mirrored_in_overview():
     with patch("paho.mqtt.client.Client"):
         target = ha.Client(model.MQTTConfig(host="localhost", port=1883))
+        target._ha_mqtt_connected = True  # Simulate Paho CONNACK for runtime tests
     try:
         target._client.publish.return_value = (0, None)
         target._Client__publish_availability("QMNTEST0000001", True)
@@ -185,6 +187,7 @@ def test_ha_mqtt_availability_success_is_mirrored_in_overview():
 def test_ha_mqtt_availability_rejection_does_not_mark_device_online():
     with patch("paho.mqtt.client.Client"):
         target = ha.Client(model.MQTTConfig(host="localhost", port=1883))
+        target._ha_mqtt_connected = True  # Simulate Paho CONNACK for runtime tests
     try:
         observe_device("QMNTEST0000001")
         target._client.publish.return_value = (1, None)
@@ -213,6 +216,7 @@ def test_ha_mqtt_disconnection_clears_overview_online_status():
 
     with patch("paho.mqtt.client.Client"):
         target = ha.Client(model.MQTTConfig(host="localhost", port=1883))
+        target._ha_mqtt_connected = True  # Simulate Paho CONNACK for runtime tests
     try:
         observe_device_availability("QMNTEST0000001", True)
         target._Client__on_disconnect(target._client, None, None, None, None)
@@ -228,6 +232,7 @@ def test_offline_ha_mqtt_queue_does_not_falsely_restore_online_card():
 
     with patch("paho.mqtt.client.Client"):
         target = ha.Client(model.MQTTConfig(host="localhost", port=1883))
+        target._ha_mqtt_connected = True  # Simulate Paho CONNACK for runtime tests
     try:
         device = "QMNTEST0000001"
         target._client.publish.return_value = (0, None)
