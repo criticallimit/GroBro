@@ -118,32 +118,35 @@ def test_restored_device_is_not_considered_online_without_live_telemetry():
 
 
 def test_existing_availability_events_drive_ingress_status():
-    from grobro.ha.device_inventory import observe_device_activity, observe_device_offline
+    from grobro.ha.device_inventory import observe_device_activity, observe_device_availability
 
     observe_device("QMNTEST0000001")
     with patch("grobro.ha.device_inventory.time.monotonic", return_value=1000.0):
         observe_device_activity("QMNTEST0000001")
     with patch("grobro.ha.device_inventory.time.monotonic", return_value=1010.0):
         item = get_device_inventory()[0]
-    assert item["connection_status"] == "online"
+    # Receiving telemetry alone is not proof that publishing HA availability succeeded.
+    assert item["connection_status"] == "unknown"
     assert item["last_activity_seconds"] == 10
-    observe_device_offline("QMNTEST0000001")
-    item = get_device_inventory()[0]
-    assert item["connection_status"] == "offline"
-    assert item["last_activity_seconds"] >= 0
+    observe_device_availability("QMNTEST0000001", True)
+    assert get_device_inventory()[0]["connection_status"] == "online"
+    observe_device_availability("QMNTEST0000001", False)
+    assert get_device_inventory()[0]["connection_status"] == "offline"
 
 
 def test_wifi_and_cached_telemetry_do_not_override_existing_offline_status():
-    from grobro.ha.device_inventory import observe_device_activity, observe_device_offline
+    from grobro.ha.device_inventory import observe_device_activity, observe_device_availability
 
     device = "QMNTEST0000001"
     observe_device_activity(device)
-    observe_device_offline(device)
+    observe_device_availability(device, False)
     observe_device(device)
     observe_wifi_signal(device, -58)
     observe_telemetry(device, {"bat_1_soc_pct": 21})
     assert get_device_inventory()[0]["connection_status"] == "offline"
     observe_device_activity(device)
+    assert get_device_inventory()[0]["connection_status"] == "offline"
+    observe_device_availability(device, True)
     assert get_device_inventory()[0]["connection_status"] == "online"
 
 
@@ -151,14 +154,17 @@ def test_wifi_and_cached_telemetry_do_not_override_existing_offline_status():
     "0PVPTEST000001", "QMNTEST0000001", "0HVRTEST000001",
 ])
 def test_all_families_use_same_existing_ha_availability(device):
-    from grobro.ha.device_inventory import observe_device_activity, observe_device_offline
+    from grobro.ha.device_inventory import observe_device_activity, observe_device_availability
 
     observe_device(device)
     assert get_device_inventory()[0]["connection_status"] == "unknown"
     observe_device_activity(device)
+    assert get_device_inventory()[0]["connection_status"] == "unknown"
+    observe_device_availability(device, True)
     assert get_device_inventory()[0]["connection_status"] == "online"
-    observe_device_offline(device)
+    observe_device_availability(device, False)
     assert get_device_inventory()[0]["connection_status"] == "offline"
     observe_device_activity(device)
+    observe_device_availability(device, True)
     assert get_device_inventory()[0]["connection_status"] == "online"
 
