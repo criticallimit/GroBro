@@ -163,11 +163,13 @@ def test_successful_subscription_ack_does_not_trigger_retry(clients):
 
 @pytest.mark.parametrize(("device_id", "register_no", "expected_timeout"), [
     ("QMNTEST", 76, 10),
+    ("0PVPTEST", 76, 10),
+    ("0HVRTEST", 76, 10),
     ("QMNTEST", 4, 60),
-    ("0PVPTEST", 76, 60),
-    ("0HVRTEST", 76, 60),
+    ("0PVPTEST", 4, 60),
+    ("0HVRTEST", 4, 60),
 ])
-def test_only_neo_wifi_single_read_has_shorter_timeout(clients, device_id, register_no, expected_timeout):
+def test_shared_config_read_timeout_for_neo_noah_nexa(clients, device_id, register_no, expected_timeout):
     from collections import deque
 
     _, target = clients
@@ -180,3 +182,20 @@ def test_only_neo_wifi_single_read_has_shorter_timeout(clients, device_id, regis
     assert schedule.call_args.args[0] == expected_timeout
     assert schedule.call_args.args[1] == target._Client__config_read_timeout
     target.on_config_read.assert_called_once_with(device_id, register_no)
+
+
+@pytest.mark.parametrize("device_id", ["QMNTEST", "0PVPTEST", "0HVRTEST"])
+def test_shared_wifi_timeout_continues_queue_without_device_specific_logic(clients, device_id):
+    from collections import deque
+
+    _, target = clients
+    target.config_reads_ready = lambda: True
+    target.on_config_read = MagicMock(return_value=(0, None))
+    target._config_read_queues[device_id] = deque([76, 4])
+    with patch.object(target, "_Client__start_config_read_timer") as schedule:
+        target._Client__kickoff_next_config_read(device_id)
+        target._Client__config_read_timeout(device_id, 76)
+
+    assert [call.args[1] for call in target.on_config_read.call_args_list] == [76, 4]
+    assert [call.args[0] for call in schedule.call_args_list] == [10, 60]
+    assert target._config_read_inflight[device_id] == 4
