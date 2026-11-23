@@ -1,3 +1,12 @@
+# Better GroBro 3.3.42 — Telemetriegeräte beim HA-MQTT-Wiederanlauf ebenfalls offline setzen
+
+- Berücksichtigt beim Offline-Reset zusätzlich Geräte aus dem bestehenden Ingress-Inventar, auch wenn noch keine vollständige Gerätekonfiguration im Cache liegt.
+- Führt Konfigurationscache und Geräteinventar ohne Duplikate zusammen; bestehender Wiederanlauf und MQTT-Abfrageintervalle bleiben unverändert.
+- Regressionstest für ein NEO-Gerät mit Live-Erkennung, aber ohne gespeicherten Konfigurationseintrag.
+- Keine neuen Timer, Hintergrundprozesse oder regelmäßigen Abfragen. Vollständiger pytest-Lauf und Home-Assistant-Praxistest stehen aus.
+
+---
+
 # Better GroBro 3.3.41 — Bridge-Online muss vor Geräte-Online angenommen sein
 
 - Verhindert, dass ein Gerät als online veröffentlicht wird, solange der Home-Assistant-MQTT-Client die Bridge-Online-Veröffentlichung abgelehnt hat.
