@@ -440,6 +440,32 @@ class TestClientConfig:
         finally:
             clear_device_inventory()
 
+    def test_source_reconnect_resets_neo_power_read_guard_without_probing(self, ha_client):
+        device = "QMN000ABC1D2E3FG"
+        ha_client._config_cache[device] = DeviceConfig(serial_number=device)
+        ha_client._neo_inverter_power_read_requested.add(device)
+        ha_client.on_command.reset_mock()
+
+        ha_client.handle_source_ready()
+
+        assert device not in ha_client._neo_inverter_power_read_requested
+        ha_client.on_command.assert_not_called()
+        assert device not in ha_client._config_refresh_started
+
+    def test_next_live_neo_packet_can_retry_power_read_after_source_reconnect(self, ha_client):
+        from grobro.model.growatt_registers import HomeAssistantInputRegister
+        device = "QMN000ABC1D2E3FG"
+        ha_client._config_cache[device] = DeviceConfig(serial_number=device)
+        ha_client._neo_inverter_power_read_requested.add(device)
+        ha_client.handle_source_ready()
+
+        ha_client.on_command.reset_mock()
+        ha_client.publish_input_register(HomeAssistantInputRegister(
+            device_id=device, payload={"Ppv": 100},
+        ))
+        ha_client.on_command.assert_called()
+        assert device in ha_client._neo_inverter_power_read_requested
+
     def test_reconnect_ignores_stale_activity_using_device_timeout(self, ha_client):
         from grobro.ha.timer_runtime import effective_device_timeout
         device = "QMN000ABC1D2E3FG"
