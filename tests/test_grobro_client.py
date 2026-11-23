@@ -1488,3 +1488,103 @@ def test_cloud_suback_after_shutdown_is_ignored(client, caplog):
     with caplog.at_level("ERROR"):
         callback(forward, None, 1, [128], None)
     assert "rejected response subscription" not in caplog.text
+
+
+def test_cloud_suback_retries_with_backoff_and_stops_after_success(client):
+    """Retry is event-driven, not a permanent poller, and uses at most one timer."""
+    timers = []
+
+    class FakeTimer:
+        def __init__(self, delay, callback):
+            self.delay, self.callback, self.daemon = delay, callback, False
+            self.cancelled = False
+            timers.append(self)
+
+        def start(self):
+            pass
+
+        def cancel(self):
+            self.cancelled = True
+
+    forward = MagicMock()
+    forward.is_connected.return_value = True
+    with patch("grobro.grobro.client.threading.Timer", FakeTimer), patch(
+        "grobro.grobro.client.mqtt.Client", return_value=forward
+    ):
+        client._Client__connect_to_growatt_server("QMNTEST")
+        forward.on_connect(forward, None, None, 0, None)
+        forward.on_subscribe(forward, None, 1, [128], None)
+        assert len(timers) == 1
+        assert timers[0].delay == 10
+        forward.on_subscribe(forward, None, 2, [128], None)
+        assert len(timers) == 2
+        assert timers[0].cancelled
+        assert timers[1].delay == 20
+
+        # A successful broker SUBACK eliminates all pending retry work.
+        forward.on_subscribe(forward, None, 3, [0], None)
+        assert timers[1].cancelled
+        assert client._cloud_subscription_timers == {}
+        assert client._cloud_subscription_failures == {}
+
+
+def test_cloud_retry_from_old_session_is_ignored_after_reconnect(client):
+    timers = []
+
+    class FakeTimer:
+        def __init__(self, delay, callback):
+            self.callback, self.daemon = callback, False
+            self.cancelled = False
+            timers.append(self)
+
+        def start(self):
+            pass
+
+        def cancel(self):
+            self.cancelled = True
+
+    forward = MagicMock()
+    forward.is_connected.return_value = True
+    with patch("grobro.grobro.client.threading.Timer", FakeTimer), patch(
+        "grobro.grobro.client.mqtt.Client", return_value=forward
+    ):
+        client._Client__connect_to_growatt_server("QMNTEST")
+        forward.on_connect(forward, None, None, 0, None)
+        forward.on_subscribe(forward, None, 1, [128], None)
+        pending = timers[0]
+        count_before = forward.subscribe.call_count
+        forward.on_connect(forward, None, None, 0, None)
+        assert pending.cancelled
+        pending.callback()
+        assert forward.subscribe.call_count == count_before + 1
+
+
+def test_cloud_subscription_retry_after_shutdown_does_nothing(client):
+    timers = []
+
+    class FakeTimer:
+        def __init__(self, delay, callback):
+            self.callback, self.daemon = callback, False
+            self.cancelled = False
+            timers.append(self)
+
+        def start(self):
+            pass
+
+        def cancel(self):
+            self.cancelled = True
+
+    forward = MagicMock()
+    forward.is_connected.return_value = True
+    with patch("grobro.grobro.client.threading.Timer", FakeTimer), patch(
+        "grobro.grobro.client.mqtt.Client", return_value=forward
+    ):
+        client._Client__connect_to_growatt_server("QMNTEST")
+        forward.on_connect(forward, None, None, 0, None)
+        forward.on_subscribe(forward, None, 1, [128], None)
+        pending = timers[0]
+        count_before = forward.subscribe.call_count
+        client.stop()
+        assert pending.cancelled
+        pending.callback()
+        assert forward.subscribe.call_count == count_before
