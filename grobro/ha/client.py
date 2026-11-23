@@ -1155,7 +1155,10 @@ class Client:
         if not getattr(self, "_ha_mqtt_connected", False):
             return False
         if online and getattr(self, "_bridge_online_pending", False):
-            self.__publish_bridge_online()
+            # Do not publish a device as online before bridge availability
+            # has been accepted by the MQTT client.
+            if not self.__publish_bridge_online():
+                return False
 
         availability = self._last_availability
         primary_changed = availability.get(device_id) is not online
