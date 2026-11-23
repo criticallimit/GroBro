@@ -1,3 +1,15 @@
+# Better GroBro 3.3.17 — Differences from robertzaage/GroBro
+
+## User-relevant differences
+
+- Full device configuration TLV packets now validate update interval R4 and Wi-Fi signal R76 *before* merging them into cached device metadata. Previously rejected values could still overwrite the metadata cache while being withheld from the Home Assistant state publication.
+- Invalid or placeholder R4/R76 values in partial packets are omitted and cannot erase last known valid cached readings. Other legitimate device metadata still passes through unchanged.
+- No new device commands, polling, broker changes or timeout modifications. Existing direct register response handling and diagnostic source logging are retained.
+- Added parameterized regression scenarios for NEO, NOAH and NEXA plus a preservation test for previous valid values.
+- Structural checks passed; full pytest and physical device tests remain pending.
+
+---
+
 # Better GroBro 3.3.16 — Differences from robertzaage/GroBro
 
 ## User-relevant differences
