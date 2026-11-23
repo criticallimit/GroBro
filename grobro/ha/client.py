@@ -1152,7 +1152,7 @@ class Client:
     def __publish_availability(self, device_id: str, online: bool):
         # Paho can accept an outgoing publish into a local queue while offline.
         # Never turn a device card green until the broker reconnects.
-        if getattr(self, "_ha_mqtt_connected", True) is False:
+        if not getattr(self, "_ha_mqtt_connected", False):
             return False
         if online and getattr(self, "_bridge_online_pending", False):
             self.__publish_bridge_online()
