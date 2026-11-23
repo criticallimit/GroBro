@@ -1,3 +1,12 @@
+# Better GroBro 3.3.41 — Bridge-Online muss vor Geräte-Online angenommen sein
+
+- Verhindert, dass ein Gerät als online veröffentlicht wird, solange der Home-Assistant-MQTT-Client die Bridge-Online-Veröffentlichung abgelehnt hat.
+- Nutzt den bestehenden Wiederholungsweg bei der nächsten regulären Geräteaktivität; kein zusätzlicher Timer und keine neuen MQTT-Abfragen.
+- Regressionstest simuliert erst abgelehnten, dann angenommenen Bridge-Publish und kontrolliert die Geräte-Online-Anzeige.
+- Statische Prüfung der Änderung; vollständiger pytest-Lauf und Praxistest in Home Assistant stehen weiterhin aus. Eine erfolgreiche Publish-Annahme ist keine MQTT-Zustellbestätigung.
+
+---
+
 # Better GroBro 3.3.40 — Beim Start keine falsche Online-Freigabe vor HA-MQTT-CONNACK
 
 - Initialisiert den Home-Assistant-MQTT-Verbindungsstatus ausdrücklich als getrennt. Bis zur erfolgreichen Broker-Bestätigung (CONNACK) können zwischengespeicherte MQTT-Publishes ein Gerät nicht als Online markieren.
