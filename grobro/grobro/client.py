@@ -1205,11 +1205,28 @@ class Client:
                     return
                 # Cloud subscriptions are session-scoped; a reconnect may
                 # create a clean session and lose the original subscription.
-                result = connected_client.subscribe(f"+/{client_id}")
+                try:
+                    result = connected_client.subscribe(f"+/{client_id}")
+                except (OSError, RuntimeError, ValueError) as exc:
+                    LOG.warning(
+                        "%s: could not subscribe to Growatt Cloud (%s)",
+                        _device_label(client_id), type(exc).__name__,
+                    )
+                    return
                 if not publish_succeeded(result):
                     LOG.warning("%s: Growatt Cloud subscription rejected locally", _device_label(client_id))
 
+            def on_cloud_subscribe(_connected_client, _userdata, _mid, reason_codes, _properties):
+                # Paho accepting subscribe() does not prove the Cloud broker
+                # granted the response channel. Check the actual SUBACK.
+                if not self._forward_stopped and subscription_rejected(reason_codes):
+                    LOG.error(
+                        "%s: Growatt Cloud broker rejected response subscription",
+                        _device_label(client_id),
+                    )
+
             client.on_connect = on_cloud_connect
+            client.on_subscribe = on_cloud_subscribe
             try:
                 client.connect(
                     self._forward_mqtt_config.host,
