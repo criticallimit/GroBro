@@ -221,3 +221,29 @@ def test_ha_mqtt_disconnection_clears_overview_online_status():
     finally:
         target.stop()
 
+
+def test_offline_ha_mqtt_queue_does_not_falsely_restore_online_card():
+    from grobro.ha.device_inventory import observe_device_availability
+    from types import SimpleNamespace
+
+    with patch("paho.mqtt.client.Client"):
+        target = ha.Client(model.MQTTConfig(host="localhost", port=1883))
+    try:
+        device = "QMNTEST0000001"
+        target._client.publish.return_value = (0, None)
+        observe_device_availability(device, True)
+        target._Client__on_disconnect(target._client, None, None, None, None)
+        assert get_device_inventory()[0]["connection_status"] == "offline"
+        target._client.publish.reset_mock()
+        # Paho may report a queued publish as accepted while not connected.
+        assert target._Client__publish_availability(device, True) is False
+        assert get_device_inventory()[0]["connection_status"] == "offline"
+        target._client.publish.assert_not_called()
+
+        # Simulate a broker reconnect; subsequent availability can be emitted.
+        target._ha_mqtt_connected = True
+        target._last_availability.clear()
+        assert target._Client__publish_availability(device, True) is True
+        assert get_device_inventory()[0]["connection_status"] == "online"
+    finally:
+        target.stop()
