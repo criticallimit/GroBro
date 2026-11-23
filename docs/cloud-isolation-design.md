@@ -102,3 +102,11 @@ Im Branch werden beide Callbacks nur noch mit Beobachtern **umhüllt**: Erst wir
 Die willkürlich eingeführte 5-Sekunden-TTL ist aus dem Prototyp entfernt ([Cloud-Dispatcher](../grobro/grobro/cloud_dispatch.py), [Cloud-Client](../grobro/grobro/client.py)). Ein Telegramm, das bereits zur Cloud-Weiterleitung akzeptiert wurde, wird daher nicht allein wegen einer langsamen Erstverbindung verworfen. Topic, Binär-Payload, QoS und Retain bleiben unverändert. Der vorhandene Test für den spät ausgeführten Cloud-Publish wurde auf **Erhaltung des ersten Konfigurationstelegramms** umgestellt.
 
 Die Cloud-Warteschlange bleibt auf 64 *wartende* Elemente begrenzt; ein bereits laufender Versand zählt nicht dazu. Bei Überlauf werden neue Cloud-Telegramme abgelehnt, bei Shutdown wird der Rest verworfen. Das schützt lokale Verarbeitung und RAM, ist aber eine sichtbare Abweichung vom synchron blockierenden Upstream und muss bei echter Cloud-Störung gemessen werden.
+
+## E2E-Cloud-Rückkanal: tatsächliche Broker-Zustellung (23.11.2026)
+
+Bei der Prüfung des bisherigen Cloud-E2E-Tests zeigte sich, dass dessen Beobachtung auf `forward.on_message` allein nicht beweist, dass das Paket von `__on_message_forward_client` tatsächlich zum **Quellbroker** gelangt. Ohne ausdrücklich aktivierte Cloud-Policy kann der produktive Rückkanal den Empfang richtigerweise filtern und der bisherige Beobachter trotzdem grün werden.
+
+**Teständerung im Branch:** `test_real_cloud_direct_forwarding_and_reconnect` setzt die Cloud-Policy ausdrücklich auf aktiv, benutzt ein durch den vorhandenen Growatt-Builder erzeugtes gültiges binäres Konfigurationslese-Telegramm und registriert einen separaten MQTT-Zeugen auf dem **Quellbroker** (Topic `s/33/<Device-ID>`). Geprüft wird die unveränderte Byte-Payload sowohl vor als auch nach Cloud-Reconnect. Der Cloud-Paho-`on_message`- und `on_subscribe`-Handler bleibt erhalten und wird nur zur Beobachtung umhüllt.
+
+**Offen:** Dieser Test ist im Repository geändert, aber mangels `paho-mqtt` und Mosquitto noch nicht lokal ausführbar. Er ersetzt keine echte Growatt-Cloud-Anmeldung; die vorhandene Quell- und Cloud-Dummy-Verbindung verwendet lokale Broker und simuliert die notwendige Protokollkommunikation.
