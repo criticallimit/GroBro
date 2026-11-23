@@ -1,3 +1,12 @@
+# Better GroBro 3.3.23 — Emergency startup syntax fix
+
+- Fixed a blocking SyntaxError in `grobro/grobro/client.py` introduced in 3.3.22: literal backslash-n escape sequences had accidentally been written into a function call instead of real newlines.
+- Restored syntactically ordinary multiline invocation of `_publish_config_state`, retaining the intended distinction between compound config packets and single-register messages.
+- Re-fetched the committed code and verified that the erroneous literal escape sequence is gone, no literal backslash-n remains in the module, and the revised call occupies separate lines.
+- Full Python compilation and pytest could not be executed locally because the GitHub repository is inaccessible from the test environment. Home Assistant startup still requires verification.
+
+---
+
 # Better GroBro 3.3.22 — Differences from robertzaage/GroBro
 
 ## User-relevant differences
