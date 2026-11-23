@@ -432,7 +432,9 @@ def test_real_cloud_direct_forwarding_and_reconnect(tmp_path, monkeypatch):
         probe.loop_start()
         assert subscribed.wait(5)
         source = grobro.Client(MQTTConfig(host=host, port=port), MQTTConfig(host=host, port=forward_port))
-        source._Client__publish_to_growatt_server(device, topic, b"first", 0, False)
+        source._Client__publish_to_growatt_server(
+            device, topic, b"first", 0, False, received_at=time.monotonic()
+        )
         assert _wait_until(lambda: received == [b"first"])
         forward = source._forward_clients[f"forward_client_{device}"]
         # Check the reverse Cloud -> device subscription, not only the
@@ -482,8 +484,12 @@ def test_real_cloud_direct_forwarding_and_reconnect(tmp_path, monkeypatch):
         assert cloud_reply.wait(5), "Cloud response subscription was lost on reconnect"
         assert source_reply.wait(5), "Cloud response not forwarded after reconnect"
         assert source_received[-1] == reply_packet
-        source._Client__publish_to_growatt_server(device, topic, b"second", 0, False)
-        source._Client__publish_to_growatt_server(device, topic, b"third", 0, False)
+        source._Client__publish_to_growatt_server(
+            device, topic, b"second", 0, False, received_at=time.monotonic()
+        )
+        source._Client__publish_to_growatt_server(
+            device, topic, b"third", 0, False, received_at=time.monotonic()
+        )
         assert _wait_until(lambda: received == [b"first", b"second", b"third"])
         assert not hasattr(source, "_forward_pending")
     finally:
