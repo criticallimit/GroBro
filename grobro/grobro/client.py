@@ -1204,7 +1204,11 @@ class Client:
 
             def retry():
                 with self._cloud_subscription_lock:
-                    if self._forward_stopped or self._cloud_subscription_epochs.get(device_id) != epoch:
+                    if (
+                        self._forward_stopped
+                        or self._cloud_subscription_epochs.get(device_id) != epoch
+                        or self._cloud_subscription_timers.get(device_id) is not timer
+                    ):
                         return
                     self._cloud_subscription_timers.pop(device_id, None)
                 if not cloud_client.is_connected():
@@ -1259,6 +1263,7 @@ class Client:
                         self._forward_stopped
                         or self._cloud_subscription_pending.get(device_id) != (epoch, mid)
                         or self._cloud_subscription_epochs.get(device_id) != epoch
+                        or self._cloud_subscription_ack_timers.get(device_id) is not timer
                     ):
                         return
                     self._cloud_subscription_pending.pop(device_id, None)
