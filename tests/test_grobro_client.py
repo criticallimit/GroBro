@@ -230,7 +230,7 @@ class TestClientOnMessage:
         # Full TLV packets (340) must update HA state but never complete a
         # pending single-register config read.
         with patch("grobro.grobro.client.parser.unscramble",
-                   return_value=bytes.fromhex("00 01 01 54 00 00 00 00")), patch(
+                   return_value=bytes.fromhex("00 01 00 07 01 54 00 00")), patch(
             "grobro.grobro.client.parser.find_config_offset", return_value=0
         ), patch("grobro.grobro.client.parser.parse_config_type", return_value=config):
             client._client.on_message(None, None, wire)
