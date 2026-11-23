@@ -1,3 +1,12 @@
+# Better GroBro 3.3.40 — Beim Start keine falsche Online-Freigabe vor HA-MQTT-CONNACK
+
+- Initialisiert den Home-Assistant-MQTT-Verbindungsstatus ausdrücklich als getrennt. Bis zur erfolgreichen Broker-Bestätigung (CONNACK) können zwischengespeicherte MQTT-Publishes ein Gerät nicht als Online markieren.
+- Die Availability-Prüfung verwendet bei einem fehlenden Verbindungswert ebenfalls den sicheren Standard „getrennt“. Erfolgreiche Verbindung und bestehende Wiederherstellung bleiben unverändert.
+- Regressionstests für den noch nicht verbundenen Startzustand und den fehlgeschlagenen ersten Verbindungsversuch ergänzt; Runtime-Test-Fixtures simulieren jetzt ausdrücklich eine bestehende Verbindung.
+- Kein zusätzlicher Timer, Hintergrundprozess, Performance-Test oder Dauerlog. Quelltext statisch geprüft; vollständige pytest-Ausführung und Home-Assistant-Praxistest stehen aus.
+
+---
+
 # Better GroBro 3.3.39 — Abgelehnter Home-Assistant-MQTT-Reconnect meldet Geräte nicht online
 
 - Verhindert einen fehlerhaften Verbindungszustand bei vom Broker abgelehntem HA-MQTT-Reconnect. Ein früheres internes „verbunden“-Kennzeichen wird nun ausdrücklich zurückgesetzt.
