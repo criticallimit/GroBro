@@ -27,6 +27,7 @@ def initialize_instance_state(client) -> None:
     client._device_timers = {}
     client._device_last_seen = {}
     client._device_timer_lock = Lock()
+    client._ha_mqtt_connected = False
     client._last_availability = {}
     client._last_online_sensor = {}
     client._config_read_queues = {}
