@@ -52,19 +52,35 @@ class GrowattModbusBlock(BaseModel):
 
             start, end = _BLOCK_HEADER.unpack_from(buffer, offset)
             if end < start:
-                LOG.warning("Invalid register block range: %s..%s", start, end)
+                message_type = struct.unpack_from(">H", buffer, 6)[0] if buffer_len >= 8 else None
+                modbus_function = buffer[7] if buffer_len >= 8 else None
+                LOG.warning(
+                    "Invalid register block range %s..%s "
+                    "(message_type=%s function=%s packet_bytes=%s block_offset=%s)",
+                    start, end,
+                    f"0x{message_type:04X}" if message_type is not None else "unknown",
+                    modbus_function if modbus_function is not None else "unknown",
+                    buffer_len, offset,
+                )
                 return None
 
             register_count = end - start + 1
             expected_size = _BLOCK_HEADER.size + register_count * 2
             available = buffer_len - offset
             if available < expected_size:
+                message_type = struct.unpack_from(">H", buffer, 6)[0] if buffer_len >= 8 else None
+                modbus_function = buffer[7] if buffer_len >= 8 else None
                 LOG.warning(
-                    "Truncated register block %s..%s: need %s bytes, got %s",
+                    "Truncated register block %s..%s: need %s bytes, got %s "
+                    "(message_type=%s function=%s packet_bytes=%s block_offset=%s)",
                     start,
                     end,
                     expected_size,
                     available,
+                    f"0x{message_type:04X}" if message_type is not None else "unknown",
+                    modbus_function if modbus_function is not None else "unknown",
+                    buffer_len,
+                    offset,
                 )
                 return None
 
