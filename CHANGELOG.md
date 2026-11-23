@@ -1,3 +1,12 @@
+# Better GroBro 3.3.36 — Messwerte nach Offline-/Online-Wechsel erneut veröffentlichen
+
+- Korrigiert einen Zustands-Cache-Fehler: Nach erfolgreicher Offline-Verfügbarkeit blieben zuletzt gesendete Messwert-Caches erhalten; identische erste Messwerte nach dem Wiedereinschalten konnten daher ohne erneute MQTT-State-Veröffentlichung unterdrückt werden.
+- Leert beim bestätigten Offline-Übergang ausschließlich die Telemetrie-/Holding-Veröffentlichungs-Caches des betroffenen Geräts. Das erste nächste echte Messpaket wird selbst bei gleichen Werten erneut veröffentlicht; weitere identische Pakete werden normal unterdrückt.
+- Andere Geräte, Discovery, MQTT-Abfrageintervalle, Timeouts und NEO-Wiederanlauf bleiben unverändert. Keine zusätzlichen Timer, Hintergrundprüfungen oder Dauerlogs.
+- Regressionstests für einen Offline-/Online-Zyklus und die Trennung von NOAH-/NEO-Geräte-Caches ergänzt. Quelltext geprüft; vollständige Python-Tests und Home-Assistant-Praxistest noch ausstehend.
+
+---
+
 # Better GroBro 3.3.35 — NEO-Leistungszustand nach Growatt-MQTT-Reconnect erneut abfragbar
 
 - Der bisherige Merker für die einmalige NEO-Leistungszustandsabfrage wird beim erfolgreichen Growatt-Quellbroker-Wiederanlauf zurückgesetzt, da eine vor dem Verbindungsabbruch gesendete Abfrage verloren gegangen sein kann.
