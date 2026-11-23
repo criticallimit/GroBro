@@ -766,21 +766,11 @@ function renderOverviewDevices(){
     const name=document.createElement("strong");name.textContent=item.display_name||"UNKNOWN";
     const serial=document.createElement("div");serial.className="device-serial";serial.textContent=item.device_id||"";
     const online=document.createElement("div");online.className="online-line";
-    const status=["online","stale","offline"].includes(item.connection_status)?item.connection_status:"unknown";
+    const status=item.connection_status==="online"?"online":"offline";
     online.classList.add("status-"+status);
-    const age=Number(item.last_activity_seconds);
-    const hasAge=item.last_activity_seconds!==null&&item.last_activity_seconds!==undefined&&Number.isFinite(age);
-    const ageText=hasAge
-      ? (age<60 ? l({de:"vor "+Math.round(age)+" s",en:Math.round(age)+" s ago",fr:"il y a "+Math.round(age)+" s",es:"hace "+Math.round(age)+" s",nl:Math.round(age)+" s geleden"})
-        : l({de:"vor "+Math.round(age/60)+" Min.",en:Math.round(age/60)+" min ago",fr:"il y a "+Math.round(age/60)+" min",es:"hace "+Math.round(age/60)+" min",nl:Math.round(age/60)+" min geleden"}))
-      : "";
-    const statusText={
-      online:l({de:"Online",en:"Online",fr:"En ligne",es:"En línea",nl:"Online"}),
-      stale:l({de:"Keine aktuellen Daten",en:"No recent data",fr:"Pas de données récentes",es:"Sin datos recientes",nl:"Geen recente gegevens"}),
-      offline:l({de:"Offline",en:"Offline",fr:"Hors ligne",es:"Desconectado",nl:"Offline"}),
-      unknown:l({de:"Noch keine Live-Daten",en:"No live data yet",fr:"Pas encore de données",es:"Sin datos en directo",nl:"Nog geen livegegevens"})
-    }[status];
-    online.textContent=statusText+(ageText?" · "+ageText:"");
+    online.textContent=status==="online"
+      ? l({de:"Online",en:"Online",fr:"En ligne",es:"En línea",nl:"Online"})
+      : l({de:"Offline",en:"Offline",fr:"Hors ligne",es:"Desconectado",nl:"Offline"});
     body.append(name,serial,online);
 
     const wifi=document.createElement("div");wifi.className="wifi-box";
