@@ -134,3 +134,28 @@ def test_failed_bridge_online_publish_is_retried_on_live_device(clients, failure
         assert len(online) == 2
         assert all(call.args[1] == "online" and call.kwargs == {"qos": 1, "retain": True} for call in online)
         assert target._last_availability["QMNTEST"] is True
+
+
+def test_broker_rejected_subscription_is_retried_on_next_device_activity(clients):
+    _, target = clients
+    target._client.subscribe.return_value = (0, 23)
+    target._Client__subscribe_commands(target._client)
+    assert not target._command_subscription_pending
+
+    # SUBACK rejection is distinct from subscribe() being accepted locally.
+    target._Client__on_subscribe(target._client, None, 23, [0x80], None)
+    assert target._command_subscription_pending
+    target._client.subscribe.reset_mock()
+
+    with patch.object(target, "_Client__reset_device_timer"):
+        target._Client__refresh_device_activity("QMNTEST")
+    target._client.subscribe.assert_called_once()
+    assert not target._command_subscription_pending
+
+
+def test_successful_subscription_ack_does_not_trigger_retry(clients):
+    _, target = clients
+    target._client.subscribe.return_value = (0, 24)
+    target._Client__subscribe_commands(target._client)
+    target._Client__on_subscribe(target._client, None, 24, [0, 0], None)
+    assert not target._command_subscription_pending
