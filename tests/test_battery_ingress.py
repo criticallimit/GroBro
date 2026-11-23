@@ -609,3 +609,14 @@ def test_current_energy_card_uses_two_decimal_places():
     )
     sensor = discovery["cmps"][f"grobro_{device_id}_battery_stored_energy_kwh"]
     assert sensor["suggested_display_precision"] == 2
+
+
+def test_ingress_log_download_uses_current_session_log_api():
+    """The export button must save real session data, not the display placeholder."""
+    html = battery_ingress._INDEX_HTML
+    assert 'id="log-download"' in html
+    assert 'id="log-download").addEventListener("click"' in html
+    assert 'const response=await fetch(apiUrl("api/logs"),{cache:"no-store"});' in html
+    assert 'new Blob([data.logs||""],{type:"text/plain;charset=utf-8"})' in html
+    assert 'anchor.download="Better-GroBro-Protokoll-"+timestamp+".txt"' in html
+    assert 'if(!data.marker_found)throw new Error' in html
