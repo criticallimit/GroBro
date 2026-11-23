@@ -1398,11 +1398,18 @@ class Client:
             if inflight != register_no:
                 return
 
-            LOG.info(
-                "%s did not answer the Better GroBro request for %s; continuing with the next setting",
-                _device_label(device_id),
-                _config_register_label(device_id, register_no),
-            )
+            if register_no == 76:
+                LOG.info(
+                    "%s: no direct reply to Wi-Fi Signal Strength (register 76) within 10 seconds; "
+                    "a separately received or retained Wi-Fi value may still be displayed",
+                    _device_label(device_id),
+                )
+            else:
+                LOG.info(
+                    "%s: no direct reply to %s before timeout; continuing with next setting",
+                    _device_label(device_id),
+                    _config_register_label(device_id, register_no),
+                )
 
             self._config_read_inflight.pop(device_id, None)
             self._config_read_timers.pop(device_id, None)
