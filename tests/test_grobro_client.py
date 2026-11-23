@@ -1679,3 +1679,47 @@ def test_cloud_queue_shutdown_during_failed_send_leaves_no_retry_state():
     finally:
         release.set()
         queue.stop()
+
+
+def test_cloud_suback_retry_cannot_cross_reconnect_epoch(client):
+    """A new CONNACK must not split MID validation from retry scheduling."""
+    import threading
+
+    _FakeCloudTimer.instances = []
+    forward = MagicMock()
+    forward.subscribe.side_effect = [(0, 81), (0, 82)]
+    reconnect_attempting = threading.Event()
+    reconnect_done = threading.Event()
+    thread_holder = []
+
+    def inspect_suback(_reason_codes):
+        # Start reconnect at the exact point after MID was validated.
+        # Its on_connect must wait for this callback's state transition.
+        def reconnect():
+            reconnect_attempting.set()
+            forward.on_connect(forward, None, None, 0, None)
+            reconnect_done.set()
+
+        thread = threading.Thread(target=reconnect, daemon=True)
+        thread_holder.append(thread)
+        thread.start()
+        assert reconnect_attempting.wait(1)
+        assert not reconnect_done.wait(0.05)
+        return True
+
+    with patch("grobro.grobro.client.threading.Timer", _FakeCloudTimer), patch(
+        "grobro.grobro.client.mqtt.Client", return_value=forward
+    ):
+        client._Client__connect_to_growatt_server("QMNTEST")
+        forward.on_connect(forward, None, None, 0, None)
+        try:
+            with patch("grobro.grobro.client.subscription_rejected", side_effect=inspect_suback):
+                forward.on_subscribe(forward, None, 81, [128], None)
+            assert reconnect_done.wait(2)
+            assert client._cloud_subscription_epochs["QMNTEST"] == 2
+            assert client._cloud_subscription_pending["QMNTEST"] == (2, 82)
+            assert client._cloud_subscription_timers == {}
+            assert client._cloud_subscription_failures == {}
+        finally:
+            for thread in thread_holder:
+                thread.join(timeout=1)
