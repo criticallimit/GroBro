@@ -12,7 +12,7 @@ Bislang löst `grobro/grobro/client.py::__on_message` den synchronen Cloud-Conne
 2. Der Cloud-Worker startet **erst bei tatsächlich aktivierter Cloud-Weiterleitung**. Bei Cloud aus entsteht kein zusätzlicher Netzwerk-Thread.
 3. Es gibt **einen** Daemon-Worker, eine begrenzte FIFO-Warteschlange (höchstens 64 noch nicht bearbeitete Telegramme) und ein Zeitlimit von 5 Sekunden. Die Frische wird sowohl vor dem Aufruf als auch unmittelbar vor dem Cloud-Publish nach ggf. langsamem Connect geprüft.
 4. Ist die Queue voll, werden neue Cloud-Telegramme verworfen und es erfolgt eine begrenzte Warnung. Nach einem Verbindungsfehler werden für dieselbe Device-ID 10 Sekunden lang keine erneuten Cloud-Verbindungsversuche gestartet. Keine unbeschränkte Warteschlange, kein Aufholen älterer Daten.
-5. Der Worker benutzt weiterhin den bisherigen per-Gerät-Cloud-Client und die originale `connect -> subscribe -> loop_start`-Reihenfolge.
+5. Der Worker benutzt weiterhin den bisherigen Cloud-MQTT-Client pro Gerät. Die Subscription auf `+/<Geräte-ID>` erfolgt jetzt bei **jedem erfolgreichen CONNACK**, damit sie bei einer neuen Session nach Reconnect wieder besteht. Dies ist eine gezielte Abweichung von der einmaligen initialen Subscription im Upstream.
 6. `stop()` leert zunächst die Cloud-Queue; Cloud-Connect wird nicht mehr unter der gemeinsamen Shutdown-Sperre durchgeführt. Ein Cloud-DNS-/TLS-Aufruf kann als Daemon noch auslaufen, ohne die lokale Beendigung aufzuhalten.
 
 ## Offene Risiken vor Merge
@@ -45,3 +45,11 @@ Der relevante Upstream-Quellpfad in `robertzaage/GroBro/grobro/grobro/client.py`
 **Neuer Sicherungstest:** der Cloud-Queue-Pfad wahrt Byte-Inhalt, Topic, QoS/Retain und FIFO-Reihenfolge für mehrere Geräte. Der asynchrone Cloud-Worker erkennt jetzt auch `MQTT_ERR_NO_CONN` bzw. andere lokale Publish-Ablehnungen ohne Exception und aktiviert den gerätespezifischen Cooldown.
 
 **Ungeklärt vor Merge:** tatsächliche Cloud-Anmeldung und erste Konfigurationsnachricht gegen einen echten Growatt-Cloud-Endpunkt validieren; die neue Verfalls-/Überlaufpolitik gegenüber dem Upstream als bewusste Verhaltensänderung freigeben oder so anpassen, dass initiale protokollwichtige Telegramme nicht verloren gehen. Der Test mit lokalem Mosquitto kann das Cloud-Anmeldeprotokoll nicht belegen. Bis dahin keine Produktivübernahme.
+
+## Cloud-Rückkanal nach Reconnect (neuer Befund)
+
+Der ursprüngliche Code abonnierte `+/<Geräte-ID>` nur während `__connect_to_growatt_server`. Bei einem Reconnect mit neuer/sauberer MQTT-Session kann dieses Subscription verloren sein, auch wenn das erneute Cloud-Publish weiterhin funktioniert. Im Branch liegt das Subscribe nun im `on_connect`-Callback des Cloud-Paho-Clients und wird auf jedem erfolgreichen CONNACK wiederholt. Abgelehnte Verbindungen oder ein bereits gestoppter Client abonnieren nichts.
+
+- **Unit-Test:** aufeinanderfolgende erfolgreiche Cloud-CONNACKs erzeugen erneute Subscription; abgelehnter CONNACK und Shutdown nicht.
+- **Real-MQTT-Test:** `tests/test_mqtt_e2e.py::test_real_cloud_direct_forwarding_and_reconnect` prüft jetzt zusätzlich Empfang auf dem Cloud-Rückantwort-Topic unmittelbar vor und nach dem Reconnect; nach Reconnect wird explizit auf SUBACK gewartet.
+- **Rest-Risiko:** Ein erfolgreicher Subscribe-Aufruf bestätigt nicht die spätere Broker-Autorisierung; ein abgelehnter SUBACK ist aktuell nur durch die externe Testprüfung erkennbar, noch nicht als Cloud-Status im Produktionscode nachgeführt.
