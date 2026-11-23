@@ -1899,3 +1899,38 @@ def test_cloud_offline_wait_exits_after_shutdown_without_publish(client):
         finally:
             client.stop()
             worker.join(timeout=1)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="known cloud dispatcher head-of-line blocking across devices; release blocker",
+)
+def test_cloud_stalled_device_does_not_block_other_device():
+    """One device waiting indefinitely for CONNACK currently starves all devices."""
+    import threading
+    from grobro.grobro.cloud_dispatch import CloudForwardQueue
+
+    stalled = threading.Event()
+    release = threading.Event()
+    second_sent = threading.Event()
+
+    def sender(device_id, topic, payload, qos, retain, *, received_at):
+        if device_id == "QMNSTALLED":
+            stalled.set()
+            assert release.wait(2), "blocked Cloud sender was not released"
+        elif device_id == "0PVPREADY":
+            second_sent.set()
+
+    queue = CloudForwardQueue(sender)
+    try:
+        assert queue.submit("QMNSTALLED", "c/33/QMNSTALLED", b"initial", 1, False)
+        assert stalled.wait(1)
+        assert queue.submit("0PVPREADY", "c/33/0PVPREADY", b"ready", 1, False)
+        # Independent devices should make progress without dropping the
+        # first packet of the stalled device. Single-worker design fails.
+        assert second_sent.wait(0.2)
+    finally:
+        release.set()
+        queue.stop()
+        if queue._thread:
+            queue._thread.join(timeout=2)
