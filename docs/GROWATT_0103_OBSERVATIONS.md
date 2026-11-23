@@ -68,3 +68,22 @@ Independent parsing of all three `0x0103` frames from the latest 932-record capt
 The bytes 169:181 in NEO type `0x0104` messages do **not** decode as a calendar timestamp; the time-field interpretation is specific to the observed type `0x0103` layout.
 
 These observations do not yet justify an HA sensor: the system already has device/system time via config R31, and it is unclear whether the timestamp always reflects actual device or subordinate inverter time across firmware variants. Keep this as documented protocol knowledge pending further fixtures.
+
+## Exact byte comparison: NEO identity and time-bearing 0x0103 messages
+
+The latest uploaded raw capture contains **932** valid JSONL records and exactly **three** `0x0103` packets (one NOAH, two NEO). The two NEO packets are 585 bytes each, received at 17:37:30.997 and 17:45:13.361 local time on 2026-11-23.
+
+A **full byte-by-byte comparison** of both NEO frames shows exactly **eight changed bytes** (zero-indexed offsets): `170, 172, 174, 176, 178, 180, 583, 584`. The first six form the 16-bit big-endian timestamp fields beginning at offset 169, as identified above. Offsets 583–584 are the two trailing packet bytes (likely a checksum; not independently verified). **Every other byte is identical** in these two samples, including the full 169-byte prefix, all bytes 181–582 and the readable identity fields.
+
+Observed printable substrings in the *NEO* decoded `0x0103` payload (zero-indexed start positions; not validated field definitions):
+- `GJ1.0` around offset **97** (with a preceding `#` at offset 96).
+- `GJAA` at offset **103**.
+- `PV Inverter` within a space-padded string starting at offset **147**.
+- `GJAA06xx` at offset **243**.
+- Repeated, zero-padded NEO serial suffix at offset **335**.
+
+These strings are observed raw ASCII markers, **not yet proven** firmware version, hardware identifier or model attributes. The NOAH frame has different text areas, including `1PBFU` at offset 192, an ASCII numeric sequence at offset 203 and a second full serial at offset 500; do not map NEO offsets onto NOAH.
+
+The user changed the NEO output power limit to 72% and back to 100% at about 17:51, **after both** NEO `0x0103` samples. Therefore, the unchanged data portions of these two earlier frames cannot rule out a setting field in later `0x0103` packets. An explicitly separate `0x0105` holding-register-3 response already carries those observed 72/100 values. Further captures before/after the change are required to confirm any duplicate encoding in `0x0103`.
+
+**Action:** Keep decoding speculative fields disabled. Do not alter active Home Assistant entities or add periodic queries solely for this investigation.
