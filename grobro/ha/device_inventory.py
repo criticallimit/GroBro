@@ -154,7 +154,7 @@ def get_device_inventory() -> list[dict[str, object]]:
             # Mirror the same status used by Home Assistant device availability.
             copy["connection_status"] = copy.pop("_availability", "unknown")
             last = copy.pop("_last_activity_monotonic", None)
-            copy["last_telemetry_seconds"] = (
+            copy["last_activity_seconds"] = (
                 round(max(0.0, time.monotonic() - last)) if last is not None else None
             )
             if "batteries" in copy:
