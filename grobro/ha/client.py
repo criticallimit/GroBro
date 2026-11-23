@@ -1013,6 +1013,14 @@ class Client:
                 )
             )
 
+            if not publish_succeeded(write_result):
+                LOG.warning(
+                    "%s: MQTT rejected the write for %s; skipping readback",
+                    _device_label(device_id),
+                    cmd_name,
+                )
+                return
+
             LOG.debug(
                 "Triggering read-after-write for Command %s register %s",
                 cmd_name,
