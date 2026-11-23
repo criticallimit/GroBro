@@ -51,6 +51,7 @@ def wire_clients(ha_client, grobro_client) -> None:
     grobro_client.on_input_register = ha_client.publish_input_register
     grobro_client.on_holding_register_input = ha_client.publish_holding_register_input
     grobro_client.on_config = ha_client.set_config
+    grobro_client.on_derived_config = ha_client.set_derived_config
     grobro_client.on_config_read_response = ha_client.handle_config_read_response
     grobro_client.on_config_register_value = ha_client.publish_config_register_value
     grobro_client.on_smart_meter = ha_client.publish_smart_meter
