@@ -1256,6 +1256,7 @@ class BatteryIngressHandler(BaseHTTPRequestHandler):
         try:
             # Disk-backed temporary file: no 40 MB HTTP/ZIP payload in RAM.
             with tempfile.TemporaryFile() as archive:
+                archived_files = 0
                 with zipfile.ZipFile(archive, mode="w", compression=zipfile.ZIP_DEFLATED, compresslevel=1) as zipped:
                     for name, path in paths:
                         try:
@@ -1268,10 +1269,14 @@ class BatteryIngressHandler(BaseHTTPRequestHandler):
                                         break
                                     target.write(block)
                                     remaining -= len(block)
+                            archived_files += 1
                         except FileNotFoundError:
                             # Rotation can remove an older backup between the
                             # directory scan and opening the file.
                             LOG.info("Raw MQTT dump segment rotated during ZIP export: %s", name)
+                if not archived_files:
+                    self._send_json({"error": "Noch kein Raw MQTT Dump vorhanden"}, HTTPStatus.NOT_FOUND)
+                    return
                 length = archive.tell()
                 archive.seek(0)
                 self.send_response(HTTPStatus.OK)
