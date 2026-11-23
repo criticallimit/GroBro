@@ -244,10 +244,6 @@ class TestClientOnMessage:
         assert published[f"homeassistant/config/grobro/{device_id}/76/get"] == -61
         client.on_config_read_response.assert_not_called()
 
-    @pytest.mark.parametrize(("interval", "wifi"), [
-        ("1280", "-61"), ("garbage", "-61"), ("10", "0"),
-        ("10", "not-a-number"), (None, None),
-    ])
     def test_wifi_source_is_logged_for_tlv_and_direct_read(self, client, caplog):
         from grobro.model.device_config import DeviceConfig
 
@@ -270,6 +266,10 @@ class TestClientOnMessage:
         assert "MQTT rejected Home Assistant config state" in caplog.text
         assert "Wi-Fi signal -61 dBm received via register response" not in caplog.text
 
+    @pytest.mark.parametrize(("interval", "wifi"), [
+        ("1280", "-61"), ("garbage", "-61"), ("10", "0"),
+        ("10", "not-a-number"), (None, None),
+    ])
     def test_tlv_config_rejects_invalid_or_missing_state_values(self, client, interval, wifi):
         from grobro.model.device_config import DeviceConfig
 
