@@ -72,6 +72,8 @@ def build_discovery_payload(
             ),
             **ha_data,
         }
+        if platform == "sensor" and component.get("device_class") == "temperature":
+            component["suggested_display_precision"] = 1
         if platform != "sensor":
             component["command_topic"] = (
                 f"{base_topic}/{entry['topic_root']}/grobro/"
@@ -136,6 +138,8 @@ def build_discovery_payload(
                 else {}
             ),
         }
+        if component["device_class"] == "temperature":
+            component["suggested_display_precision"] = 1
         # Prefer Home Assistant's device-class icon where our configured icon
         # only duplicates the native default. Keep semantic icons such as
         # solar-power, power-plug, battery-sync and other explicit UI hints.
