@@ -1367,10 +1367,10 @@ class Client:
             # Arm before sending: a fast/synchronous response may already start
             # the next read and must not have its timer overwritten afterward.
             try:
-                # Some NEO firmware does not answer a standalone R76 Wi-Fi
-                # read. Do not stall the whole per-device config queue for 60s.
-                # Keep all other devices/registers at their existing timeout.
-                read_timeout = 10 if model.is_family(device_id, "neo") and register_no == 76 else 60
+                # Wi-Fi RSSI is optional telemetry on all device families.
+                # A missing standalone R76 response must not block the common
+                # config queue for a full minute, regardless of device family.
+                read_timeout = 10 if register_no == 76 else 60
                 self.__start_config_read_timer(
                     read_timeout, self.__config_read_timeout,
                     self._config_read_timers, device_id, register_no,
