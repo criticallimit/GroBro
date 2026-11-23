@@ -471,8 +471,36 @@ class Client:
             self._config_write_readback_timers[key] = timer
             timer.start()
 
+    @staticmethod
+    def _validated_config_measurement(device_id: str, register_no: int, value):
+        """Validate shared R4/R76 HA values without guessing unit conversions.
+
+        R4 is configured in minutes in HA; do not treat larger numbers as
+        seconds or project them into the number entity. RSSI uses signed dBm.
+        Other registers keep their existing protocol handling.
+        """
+        limits = {4: (0, 60), 76: (-120, -1)}
+        if register_no not in limits:
+            return value
+        try:
+            number = int(str(value).strip())
+        except (TypeError, ValueError):
+            LOG.debug("Ignoring non-numeric config state for %s R%s",
+                      _device_label(device_id), register_no)
+            return None
+        low, high = limits[register_no]
+        if not low <= number <= high:
+            LOG.debug("Ignoring out-of-range config state for %s R%s",
+                      _device_label(device_id), register_no)
+            return None
+        return number
+
     def _publish_config_state(self, device_id: str, register_no: int, value, *, retain: bool) -> None:
         """Publish one validated config value by the same HA path for any wire format."""
+        checked = self._validated_config_measurement(device_id, register_no, value)
+        if checked is None:
+            return
+        value = checked
         if callable(self.on_config_register_value):
             self.on_config_register_value(device_id, register_no, value, retain=retain)
         else:
@@ -488,9 +516,9 @@ class Client:
         known = _known_registers_for_device(device_id)
         if known is None:
             return
-        for name, attribute, minimum, maximum in (
-            ("data_interval", "data_interval", 0, 60),
-            ("wifi_signal_strength", "wifi_signal", -120, -1),
+        for name, attribute in (
+            ("data_interval", "data_interval"),
+            ("wifi_signal_strength", "wifi_signal"),
         ):
             definition = known.config_registers.get(name)
             if definition is None or not definition.homeassistant.publish:
@@ -498,13 +526,10 @@ class Client:
             raw = getattr(config, attribute, None)
             if raw is None:
                 continue
-            try:
-                value = int(str(raw).strip())
-            except (TypeError, ValueError):
-                LOG.debug("Ignoring invalid TLV value for %s %s", _device_label(device_id), name)
-                continue
-            if not minimum <= value <= maximum:
-                LOG.debug("Ignoring out-of-range TLV value for %s %s", _device_label(device_id), name)
+            value = self._validated_config_measurement(
+                device_id, definition.growatt.register_no, raw,
+            )
+            if value is None:
                 continue
             try:
                 self._publish_config_state(device_id, definition.growatt.register_no, value, retain=True)
@@ -718,8 +743,13 @@ class Client:
                                             cfg["device_id"],
                                             register_no,
                                         )
-                                        break
+                                        value = None
                                 break
+
+                    if value is None:
+                        # A malformed TLV must not hide other entries in the
+                        # same response, particularly R76 Wi-Fi signal.
+                        continue
 
                     metadata_field = {
                         "software_version": "sw_version",
