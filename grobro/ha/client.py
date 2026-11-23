@@ -682,7 +682,8 @@ class Client:
         # Let the next live NEO telemetry retry it through the existing path.
         from grobro.ha.neo_power_runtime import clear_neo_inverter_power_read_cache
         clear_neo_inverter_power_read_cache(self)
-        # Stored device metadata alone does not prove the device is powered.
+        # Stored metadata alone does not prove recent MQTT communication.
+        # NEO inverter-power switching is independent of device connectivity.
         # Fresh device traffic triggers the regular automatic refresh later.
         for device_id in tuple(self._config_cache):
             if self.__has_recent_device_activity(device_id):
