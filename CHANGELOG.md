@@ -1,3 +1,16 @@
+# Better GroBro 3.3.15 — Differences from robertzaage/GroBro
+
+## User-relevant differences
+
+- Log received valid Wi-Fi signal (R76) in INFO with dBm measurement and source: direct register response or full device configuration telegram.
+- Log HA MQTT local publication acceptance separately from device reception. This is not confirmation that Home Assistant has processed the update.
+- Clarify R76 timeout: only the direct read has not received a matching reply within 10 seconds; separately received or MQTT-retained Wi-Fi values may still be shown.
+- No changes to the device protocol, broker configuration, queue timeouts, Wi-Fi request frequency, or existing controls.
+- Added targeted logging regression tests and restored the existing parametrized test association.
+- Structural checks passed; automated pytest and real-device verification pending.
+
+---
+
 # Better GroBro 3.3.14 — Differences from robertzaage/GroBro
 
 ## User-relevant differences
