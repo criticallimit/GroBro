@@ -358,6 +358,30 @@ class TestClientLifecycle:
         ha_client.publish_input_register(state)
         assert state_count() == 2
 
+    def test_rejected_offline_publish_preserves_state_cache_and_retries(self, ha_client):
+        from grobro.model.growatt_registers import HomeAssistantInputRegister
+
+        device = "QMN000ABC1D2E3FG"
+        ha_client.publish_input_register(HomeAssistantInputRegister(
+            device_id=device, payload={"Ppv": 123},
+        ))
+        assert device in ha_client._last_state_payload
+        assert device in ha_client._state_publish_cache
+
+        # Simulate rejection of the primary offline availability publication.
+        ha_client._client.publish.return_value = (4, None)
+        assert ha_client._Client__publish_availability(device, False) is False
+        assert ha_client._last_availability[device] is True
+        assert device in ha_client._last_state_payload
+        assert device in ha_client._state_publish_cache
+
+        # Existing mechanism retries; invalidate caches only after acceptance.
+        ha_client._client.publish.return_value = (0, None)
+        assert ha_client._Client__publish_availability(device, False) is True
+        assert ha_client._last_availability[device] is False
+        assert device not in ha_client._last_state_payload
+        assert device not in ha_client._state_publish_cache
+
     def test_same_telemetry_is_republished_after_ha_birth(self, ha_client):
         from grobro.model.growatt_registers import HomeAssistantInputRegister
 
