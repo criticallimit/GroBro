@@ -1,3 +1,16 @@
+# Better GroBro 3.3.18 — Differences from robertzaage/GroBro
+
+## User-relevant differences
+
+- NEO Modbus messages now enter the preliminary write-ack decoder only for Modbus function 6. Previously all NEO messages were parsed twice, producing duplicate truncated-block warnings for a single malformed packet.
+- The standard Modbus decoder remains active once for telemetry and other messages; valid NEO function-6 acknowledgements retain their existing handling.
+- Added regression coverage for single-pass non-write decoding and the NEO write-ack path.
+- The underlying malformed frame whose register-range bytes resemble ASCII 'BZP4' has not yet been identified from raw packets. No speculative protocol offset change has been made.
+- No new MQTT polls, timeouts or changes to WLAN state processing.
+- Structural checks passed. Full pytest and real-device checks pending.
+
+---
+
 # Better GroBro 3.3.17 — Differences from robertzaage/GroBro
 
 ## User-relevant differences
