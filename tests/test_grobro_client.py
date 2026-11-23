@@ -1327,8 +1327,8 @@ def test_cloud_shutdown_does_not_wait_for_ongoing_cloud_connect(client):
             worker.join(timeout=1)
 
 
-def test_delayed_cloud_connect_discards_expired_queued_packet(client):
-    """An expired packet must not be published after a slow Cloud connect."""
+def test_delayed_cloud_connect_preserves_first_packet(client):
+    """Cloud connect latency must not silently discard a first Growatt frame."""
     import time
 
     forward = MagicMock()
@@ -1337,10 +1337,12 @@ def test_delayed_cloud_connect_discards_expired_queued_packet(client):
         client, "_Client__connect_to_growatt_server", return_value=forward
     ):
         client._Client__publish_to_growatt_server(
-            "QMNTEST", "c/33/QMNTEST", b"stale", 0, False,
+            "QMNTEST", "c/33/QMNTEST", b"initial-config", 1, False,
             received_at=timestamp,
         )
-    forward.publish.assert_not_called()
+    forward.publish.assert_called_once_with(
+        "c/33/QMNTEST", payload=b"initial-config", qos=1, retain=False
+    )
 
 
 def test_failed_cloud_connection_has_per_device_retry_cooldown():
