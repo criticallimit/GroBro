@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+import time
 from grobro.ha.battery_position import _serials_from_payload
 from grobro.model.device_family import get_device_family
 
@@ -86,6 +87,9 @@ def observe_telemetry(device_id: str, payload: dict, max_bat: int = 1) -> None:
                 "display_name": family.display_name if family else "UNKNOWN",
             }
         item["batteries"] = batteries
+        # Only fresh input-register telemetry proves that a device is currently active.
+        # Merely restoring saved config or receiving an old Wi-Fi value does not.
+        item["_last_telemetry_monotonic"] = time.monotonic()
         for key in (
             "bat_sysstate",
             "charging_discharging",
@@ -131,6 +135,27 @@ def get_device_inventory() -> list[dict[str, object]]:
         snapshot = []
         for item in _DEVICES.values():
             copy = dict(item)
+            last = copy.pop("_last_telemetry_monotonic", None)
+            if last is None:
+                copy["connection_status"] = "unknown"
+                copy["last_telemetry_seconds"] = None
+            else:
+                age = max(0.0, time.monotonic() - last)
+                copy["last_telemetry_seconds"] = round(age)
+                # NEO reports about every 5 min, while NOAH reports about every 5 s.
+                # Neither status depends on PV production, time of day, or cached values.
+                family = copy.get("family")
+                if family == "neo":
+                    stale_after, offline_after = 360, 720
+                elif family == "noah":
+                    stale_after, offline_after = 20, 60
+                else:
+                    stale_after, offline_after = 360, 720
+                copy["connection_status"] = (
+                    "online" if age <= stale_after
+                    else "stale" if age <= offline_after
+                    else "offline"
+                )
             if "batteries" in copy:
                 copy["batteries"] = [dict(battery) for battery in copy["batteries"]]
             snapshot.append(copy)
