@@ -1,3 +1,13 @@
+# Better GroBro 3.3.35 — NEO-Leistungszustand nach Growatt-MQTT-Reconnect erneut abfragbar
+
+- Der bisherige Merker für die einmalige NEO-Leistungszustandsabfrage wird beim erfolgreichen Growatt-Quellbroker-Wiederanlauf zurückgesetzt, da eine vor dem Verbindungsabbruch gesendete Abfrage verloren gegangen sein kann.
+- Keine zusätzliche Sofort-Abfrage: Erst das nächste echte NEO-Telegramm verwendet den bestehenden Weg zur erneuten einmaligen Abfrage des Leistungszustands. Ein ausgeschalteter NEO bleibt unbehelligt.
+- Regressionstest für das Zurücksetzen ohne sofortigen MQTT-Befehl sowie für die erneute Anfrage bei echter NEO-Telemetrie ergänzt.
+- Der vorherige Wiederanlauf-Test verwendet jetzt eine deterministische monotone Uhr statt eines veralteten festen Aktivitätszeitpunkts.
+- Keine neuen Timer, Dauerlogs, Hintergrundprozesse oder Performance-Tests; vollständiger Python-Testlauf und Live-HA-Prüfung stehen aus.
+
+---
+
 # Better GroBro 3.3.34 — Einheitliche Wiederanlaufprüfung für aktive Geräte
 
 - Nach Growatt-MQTT- und Home-Assistant-Wiederanlauf werden automatische Konfigurationsabfragen nur für Geräte geplant, deren letzte direkte Aktivität noch innerhalb des bereits vorhandenen Geräte-Timeouts liegt.
