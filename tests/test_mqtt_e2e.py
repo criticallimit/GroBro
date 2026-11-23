@@ -487,12 +487,16 @@ def test_two_broker_reconnect_republishes_same_payload_for_multiple_families(tmp
         ]
         for device, fixture in devices:
             transmitter.publish(f"c/33/{device}", (DATA_DIR / fixture).read_bytes(), qos=1).wait_for_publish(timeout=5)
+        initial_states = {}
         for device, _fixture in devices:
             topic = f"homeassistant/grobro/{device}/state"
             assert _wait_until(lambda topic=topic: topic in seen), f"initial state missing for {device}"
             assert _wait_until(
                 lambda device=device: seen.get(f"homeassistant/grobro/{device}/availability") == b"online"
             )
+            with seen_lock:
+                initial_states[device] = seen[topic]
+            assert json.loads(initial_states[device]), f"empty device state for {device}"
 
         # Both brokers remain running. Reconnect the independent bridge
         # transports, then send identical readings to verify cache reset.
@@ -507,11 +511,21 @@ def test_two_broker_reconnect_republishes_same_payload_for_multiple_families(tmp
         target._client.reconnect()
         source._client.reconnect()
         assert _wait_until(lambda: target._ha_mqtt_connected and source.config_reads_ready())
+
+        # A broker reconnection must invalidate previous device availability,
+        # without inventing device activity before fresh telegrams arrive.
+        for device, _fixture in devices:
+            availability = f"homeassistant/grobro/{device}/availability"
+            assert _wait_until(lambda availability=availability: seen.get(availability) == b"offline"), (
+                f"device incorrectly remained online before live data resumed: {device}"
+            )
+
         for device, fixture in devices:
             transmitter.publish(f"c/33/{device}", (DATA_DIR / fixture).read_bytes(), qos=1).wait_for_publish(timeout=5)
         for device, _fixture in devices:
             topic = f"homeassistant/grobro/{device}/state"
             assert _wait_until(lambda topic=topic: topic in seen), f"unchanged state was lost after reconnect: {device}"
+            assert seen[topic] == initial_states[device], f"replayed state differs from original: {device}"
             assert _wait_until(
                 lambda device=device: seen.get(f"homeassistant/grobro/{device}/availability") == b"online"
             )
