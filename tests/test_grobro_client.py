@@ -960,6 +960,22 @@ class TestClientOnMessage:
         assert raq_call[0][0] == "RAQ0TEST01"
         assert ptq_call[0][0].startswith("PTQ")
 
+    def test_gateway_wifi_uses_derived_config_callback_when_available(self, client):
+        client.on_derived_config = MagicMock()
+        client._ptq_for_raq["RAQTEST"] = "PTQTEST"
+        data = b"\\x00" * 6 + b"\\x01\\x19" + b"\\x00" * 32
+        with patch("grobro.grobro.client.parser.unscramble", return_value=data), patch(
+            "grobro.grobro.client.parser.parse_config_message",
+            return_value={"device_id": "RAQTEST", "register_no": 76, "value": "-61"},
+        ):
+            client._client.on_message(None, None, _msg("c/33/RAQTEST", b"wire"))
+        client.on_config.assert_called_once()
+        assert client.on_config.call_args.args[0] == "RAQTEST"
+        client.on_derived_config.assert_called_once()
+        derived_id, derived_config = client.on_derived_config.call_args.args
+        assert derived_id == "PTQTEST"
+        assert derived_config.wifi_signal == "-61"
+
     def test_gateway_wifi_readback_updates_mapped_inverter_without_redirecting_reads(self, client):
         client._ptq_for_raq["RAQTEST"] = "PTQTEST"
         client.send_config_read_message("RAQTEST", 76)
