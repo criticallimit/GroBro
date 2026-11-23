@@ -209,6 +209,7 @@ class Client:
         self._client.on_message = self.__on_message
         self._client.on_connect = self.__on_connect
         self._client.on_connect_fail = self.__on_connect_fail
+        self._client.on_disconnect = self.__on_disconnect
         self._client.on_subscribe = self.__on_subscribe
         self._client.connect_async(mqtt_config.host, mqtt_config.port, 60)
 
@@ -765,6 +766,17 @@ class Client:
             self._subscription_failure_logged = True
         else:
             self._subscription_failure_logged = False
+
+    def __on_disconnect(self, client, userdata, disconnect_flags, reason_code, properties):
+        """Do not show devices online while the HA MQTT transport is down."""
+        with runtime_lock(self):
+            if getattr(self, "_stopped", False):
+                return
+            from grobro.ha.device_inventory import mark_all_devices_offline
+            mark_all_devices_offline()
+            # Reconnection will clear and rebuild publication caches.
+            self._bridge_online_pending = True
+        LOG.warning("Home Assistant MQTT disconnected; device states will recover on reconnect")
 
     def __on_connect_fail(self, client, userdata):
         if self._stopped or getattr(self, "_connection_failure_logged", False):
