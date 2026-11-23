@@ -743,6 +743,35 @@ class TestClientOnMessage:
                 msg.retain,
             )
 
+    def test_neo_non_write_message_is_parsed_only_once(self, client):
+        # Regression: NEO function-4 data previously called generic parser
+        # twice, duplicating a single malformed register-block warning.
+        msg = _msg("c/33/QMN000ABC1D2E3FG", b"wire")
+        decoded = bytes.fromhex("00 01 00 07 00 00 01 04") + b"\x00" * 80
+        with patch("grobro.grobro.client.parser.unscramble", return_value=decoded), patch(
+            "grobro.grobro.client.GrowattModbusMessage.parse_grobro", return_value=None,
+        ) as parse:
+            client._client.on_message(None, None, msg)
+        parse.assert_called_once_with(decoded)
+
+    def test_neo_single_register_write_still_uses_ack_path(self, client):
+        from grobro.model.modbus_message import (
+            GrowattModbusMessage, GrowattModbusFunction, GrowattModbusWriteAck,
+        )
+        msg = _msg("c/33/QMN000ABC1D2E3FG", b"wire")
+        decoded = bytes.fromhex("00 01 00 07 00 00 01 06") + b"\x00" * 80
+        ack_message = GrowattModbusMessage(
+            unknown=1, device_id="QMN000ABC1D2E3FG",
+            function=GrowattModbusFunction.PRESET_SINGLE_REGISTER,
+            register_blocks=[],
+            write_ack=GrowattModbusWriteAck(register_no=0, status=0, value=1),
+        )
+        with patch("grobro.grobro.client.parser.unscramble", return_value=decoded), patch(
+            "grobro.grobro.client.GrowattModbusMessage.parse_grobro", return_value=ack_message,
+        ) as parse:
+            client._client.on_message(None, None, msg)
+        parse.assert_called_once_with(decoded)
+
     def test_noah_type0103(self, client):
         data = (Path(DATA_DIR) / "NoahType0103_HoldingRegs.bin").read_bytes()
         msg = _msg("c/33/0PVP0000TEST0001", data)
