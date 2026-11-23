@@ -1723,3 +1723,107 @@ def test_cloud_suback_retry_cannot_cross_reconnect_epoch(client):
         finally:
             for thread in thread_holder:
                 thread.join(timeout=1)
+
+
+def test_first_queued_cloud_publish_waits_until_subscribe_is_queued(client):
+    """Cloud PUBLISH must not overtake the first response SUBSCRIBE."""
+    import threading
+    import time
+
+    forward = MagicMock()
+    forward.subscribe.return_value = (0, 94)
+    callback_done = threading.Event()
+    with patch("grobro.grobro.client.mqtt.Client", return_value=forward):
+        def send():
+            client._Client__publish_to_growatt_server(
+                "QMNTEST", "c/33/QMNTEST", b"first-config", 1, False,
+                received_at=time.monotonic(),
+            )
+            callback_done.set()
+
+        worker = threading.Thread(target=send, daemon=True)
+        worker.start()
+        try:
+            # The worker has connected, but Paho has not delivered CONNACK.
+            deadline = time.monotonic() + 1
+            while not forward.loop_start.called and time.monotonic() < deadline:
+                time.sleep(0.01)
+            assert forward.loop_start.called
+            assert not callback_done.wait(0.05)
+            forward.publish.assert_not_called()
+            forward.on_connect(forward, None, None, 0, None)
+            assert callback_done.wait(1)
+            assert forward.mock_calls.index(call.subscribe("+/QMNTEST")) < next(
+                i for i, entry in enumerate(forward.mock_calls)
+                if entry[0] == "publish"
+            )
+            forward.publish.assert_called_once_with(
+                "c/33/QMNTEST", payload=b"first-config", qos=1, retain=False
+            )
+        finally:
+            client.stop()
+            worker.join(timeout=1)
+
+
+def test_queued_cloud_publish_resumes_after_reconnect_subscription(client):
+    import threading
+    import time
+
+    forward = MagicMock()
+    forward.subscribe.side_effect = [(0, 95), (0, 96)]
+    with patch("grobro.grobro.client.mqtt.Client", return_value=forward):
+        client._Client__connect_to_growatt_server("QMNTEST")
+        forward.on_connect(forward, None, None, 0, None)
+        forward.on_disconnect(forward, None, None, 0, None)
+        sent = threading.Event()
+
+        def send():
+            client._Client__publish_to_growatt_server(
+                "QMNTEST", "c/33/QMNTEST", b"after-reconnect", 0, False,
+                received_at=time.monotonic(),
+            )
+            sent.set()
+
+        worker = threading.Thread(target=send, daemon=True)
+        worker.start()
+        try:
+            assert not sent.wait(0.05)
+            forward.publish.assert_not_called()
+            forward.on_connect(forward, None, None, 0, None)
+            assert sent.wait(1)
+            assert forward.subscribe.call_count == 2
+            forward.publish.assert_called_once()
+        finally:
+            client.stop()
+            worker.join(timeout=1)
+
+
+def test_shutdown_releases_cloud_worker_waiting_for_first_subscription(client):
+    import threading
+    import time
+
+    forward = MagicMock()
+    with patch("grobro.grobro.client.mqtt.Client", return_value=forward):
+        finished = threading.Event()
+
+        def send():
+            client._Client__publish_to_growatt_server(
+                "QMNTEST", "c/33/QMNTEST", b"initial", 0, False,
+                received_at=time.monotonic(),
+            )
+            finished.set()
+
+        worker = threading.Thread(target=send, daemon=True)
+        worker.start()
+        try:
+            deadline = time.monotonic() + 1
+            while not forward.loop_start.called and time.monotonic() < deadline:
+                time.sleep(0.01)
+            assert forward.loop_start.called
+            assert not finished.wait(0.05)
+            client.stop()
+            assert finished.wait(1)
+            forward.publish.assert_not_called()
+        finally:
+            client.stop()
+            worker.join(timeout=1)
