@@ -611,6 +611,79 @@ def test_current_energy_card_uses_two_decimal_places():
     assert sensor["suggested_display_precision"] == 2
 
 
+def test_ingress_raw_dump_download_returns_exact_jsonl_bytes(tmp_path, monkeypatch):
+    dump_dir = tmp_path / "custom-raw"
+    dump_dir.mkdir()
+    payload = b'{"topic":"c/33/TEST","payload_base64":"AQID"}\\n'.replace(b"\\\\n", b"\\n")
+    (dump_dir / "messages.jsonl").write_bytes(payload)
+    monkeypatch.setattr(
+        battery_ingress, "get_addon_options",
+        lambda: {"options": {"DUMP_DIR": str(dump_dir), "DUMP_MESSAGES": True}},
+    )
+    server = start_battery_ingress_server(0)
+    try:
+        _, port = server.server_address
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/raw-dump", timeout=3) as response:
+            assert response.status == 200
+            assert response.headers["Content-Type"] == "application/x-ndjson"
+            assert "attachment;" in response.headers["Content-Disposition"]
+            assert response.read() == payload
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_ingress_raw_dump_missing_returns_404(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        battery_ingress, "get_addon_options",
+        lambda: {"options": {"DUMP_DIR": str(tmp_path)}},
+    )
+    server = start_battery_ingress_server(0)
+    try:
+        _, port = server.server_address
+        try:
+            urllib.request.urlopen(f"http://127.0.0.1:{port}/api/raw-dump", timeout=3)
+            assert False, "expected HTTP 404"
+        except urllib.error.HTTPError as exc:
+            assert exc.code == 404
+            assert "Noch kein Raw MQTT Dump" in json.load(exc)["error"]
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_ingress_raw_dump_rejects_symlink_escape(tmp_path, monkeypatch):
+    dump_dir = tmp_path / "dump"
+    dump_dir.mkdir()
+    secret = tmp_path / "secret.txt"
+    secret.write_text("do not expose")
+    (dump_dir / "messages.jsonl").symlink_to(secret)
+    monkeypatch.setattr(
+        battery_ingress, "get_addon_options",
+        lambda: {"options": {"DUMP_DIR": str(dump_dir)}},
+    )
+    server = start_battery_ingress_server(0)
+    try:
+        _, port = server.server_address
+        try:
+            urllib.request.urlopen(f"http://127.0.0.1:{port}/api/raw-dump", timeout=3)
+            assert False, "symlink escape must be rejected"
+        except urllib.error.HTTPError as exc:
+            assert exc.code == 404
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_ingress_raw_dump_button_uses_download_api():
+    html = battery_ingress._INDEX_HTML
+    assert 'id="raw-dump-download"' in html
+    assert 'apiUrl("api/raw-dump")' in html
+    assert 'id("raw-dump-download")' not in html
+    assert 'document.getElementById("raw-dump-download").addEventListener' in html
+    assert 'Better-GroBro-Raw-MQTT-' in html
+
+
 def test_ingress_log_download_uses_current_session_log_api():
     """The export button must save real session data, not the display placeholder."""
     html = battery_ingress._INDEX_HTML
