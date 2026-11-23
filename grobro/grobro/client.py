@@ -1189,8 +1189,23 @@ class Client:
         # Direct diagnostic/test callers keep the established immediate path.
         if received_at is not None:
             with self._cloud_initial_condition:
+                last_warning = time.monotonic()
                 while not self._forward_stopped and client_id not in self._cloud_initial_subscribed:
-                    self._cloud_initial_condition.wait()
+                    # Bounded wait solely for diagnostics. Do not expire or
+                    # replay the opaque first Growatt protocol frame.
+                    self._cloud_initial_condition.wait(timeout=30.0)
+                    now = time.monotonic()
+                    if (
+                        not self._forward_stopped
+                        and client_id not in self._cloud_initial_subscribed
+                        and now - last_warning >= 30.0
+                    ):
+                        LOG.warning(
+                            "%s: waiting for Growatt Cloud response subscription; "
+                            "local MQTT remains active",
+                            _device_label(client_id),
+                        )
+                        last_warning = now
         if self._forward_stopped:
             return
         result = client.publish(topic, payload=payload, qos=qos, retain=retain)
