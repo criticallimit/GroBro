@@ -813,3 +813,35 @@ def test_ingress_raw_dump_archive_button_keeps_existing_download():
     assert 'apiUrl("api/raw-dump-archive")' in html
     assert 'document.getElementById("raw-dump-archive-download").addEventListener' in html
     assert 'document.getElementById("raw-dump-download").addEventListener' in html
+
+
+def test_ingress_raw_dump_archive_returns_404_if_all_segments_rotate_away(tmp_path, monkeypatch):
+    """A rotation between directory scan and open must not return an empty ZIP."""
+    source = tmp_path / "messages.jsonl"
+    source.write_bytes(b"old\n")
+    original_isfile = battery_ingress.os.path.isfile
+
+    def disappear_after_check(path):
+        exists = original_isfile(path)
+        if exists and str(path).endswith("messages.jsonl"):
+            source.unlink()
+        return exists
+
+    monkeypatch.setattr(battery_ingress.os.path, "isfile", disappear_after_check)
+    monkeypatch.setattr(
+        battery_ingress, "get_addon_options",
+        lambda: {"options": {"DUMP_DIR": str(tmp_path)}},
+    )
+    server = start_battery_ingress_server(0)
+    try:
+        _, port = server.server_address
+        try:
+            urllib.request.urlopen(
+                f"http://127.0.0.1:{port}/api/raw-dump-archive", timeout=3
+            )
+            assert False, "expected 404 instead of empty ZIP"
+        except urllib.error.HTTPError as exc:
+            assert exc.code == 404
+    finally:
+        server.shutdown()
+        server.server_close()
