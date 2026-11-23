@@ -811,6 +811,7 @@ class TestClientOnMessage:
                 msg.payload,
                 msg.qos,
                 msg.retain,
+                received_at=pytest.approx(monotonic(), abs=2),
             )
 
     def test_neo_non_write_message_is_parsed_only_once(self, client):
@@ -1235,7 +1236,7 @@ def test_slow_cloud_forward_does_not_block_local_processing(client):
     data = (DATA_DIR / "NeoConfigTLV_340.bin").read_bytes()
     message = _msg("c/33/QMN000ABC1D2E3FG", data)
 
-    def stalled_cloud(*_args):
+    def stalled_cloud(*_args, **_kwargs):
         entered_cloud.set()
         release_cloud.wait(3)
 
@@ -1262,8 +1263,8 @@ def test_cloud_forward_queue_bounds_backlog_and_drops_stale_packets():
     release = threading.Event()
     delivered = []
 
-    def sender(*args):
-        delivered.append(args)
+    def sender(*args, **kwargs):
+        delivered.append((args, kwargs))
         entered.set()
         release.wait(2)
 
@@ -1310,3 +1311,49 @@ def test_cloud_shutdown_does_not_wait_for_ongoing_cloud_connect(client):
         finally:
             release.set()
             worker.join(timeout=1)
+
+
+def test_delayed_cloud_connect_discards_expired_queued_packet(client):
+    """An expired packet must not be published after a slow Cloud connect."""
+    import time
+
+    forward = MagicMock()
+    timestamp = time.monotonic() - 20
+    with patch.object(
+        client, "_Client__connect_to_growatt_server", return_value=forward
+    ):
+        client._Client__publish_to_growatt_server(
+            "QMNTEST", "c/33/QMNTEST", b"stale", 0, False,
+            received_at=timestamp,
+        )
+    forward.publish.assert_not_called()
+
+
+def test_failed_cloud_connection_has_per_device_retry_cooldown():
+    """A broken Cloud broker must not be reconnected for each queued telegram."""
+    import threading
+    import time
+    from grobro.grobro.cloud_dispatch import CloudForwardQueue
+
+    attempted = threading.Event()
+    tries = []
+
+    def unavailable(*args, **_kwargs):
+        tries.append(args[0])
+        attempted.set()
+        raise OSError("cloud offline")
+
+    queue = CloudForwardQueue(unavailable)
+    try:
+        assert queue.submit("QMNTEST", "c/33/QMNTEST", b"first", 0, False)
+        assert attempted.wait(1)
+        assert queue.submit("QMNTEST", "c/33/QMNTEST", b"second", 0, False)
+        time.sleep(0.1)
+        assert tries == ["QMNTEST"]
+        assert queue.submit("0PVPTEST", "c/33/0PVPTEST", b"third", 0, False)
+        deadline = time.monotonic() + 2
+        while len(tries) < 2 and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert tries == ["QMNTEST", "0PVPTEST"]
+    finally:
+        queue.stop()
