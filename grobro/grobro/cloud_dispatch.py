@@ -75,11 +75,18 @@ class CloudForwardQueue:
                 # initial config frames nor later messages have a proven TTL.
                 # Do not discard an otherwise accepted message by age.
                 self._sender(*args, received_at=created)
-                self._retry_after.pop(device_id, None)
+                with self._condition:
+                    if not self._stopped:
+                        self._retry_after.pop(device_id, None)
             except Exception as exc:
-                # A disconnected Cloud endpoint must not cause one connection
-                # attempt for every queued device packet.
-                self._retry_after[device_id] = time.monotonic() + 10.0
+                # A completed network operation can race stop(). Never
+                # resurrect retry state after the queue was shut down.
+                with self._condition:
+                    if self._stopped:
+                        return
+                    # A disconnected Cloud endpoint must not cause one connect
+                    # attempt for every queued device packet.
+                    self._retry_after[device_id] = time.monotonic() + 10.0
                 LOG.error("Could not forward device data to Growatt Cloud (%s)", exc)
 
     def stop(self) -> None:
