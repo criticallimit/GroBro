@@ -10,14 +10,14 @@ Bislang löst `grobro/grobro/client.py::__on_message` den synchronen Cloud-Conne
 
 1. Die lokale MQTT-Eingangsverarbeitung übergibt optionale Cloud-Telegramme nur an `CloudForwardQueue`; sie ruft weder DNS noch TLS auf.
 2. Der Cloud-Worker startet **erst bei tatsächlich aktivierter Cloud-Weiterleitung**. Bei Cloud aus entsteht kein zusätzlicher Netzwerk-Thread.
-3. Es gibt **einen** Daemon-Worker, eine begrenzte FIFO-Warteschlange (höchstens 64 noch nicht bearbeitete Telegramme) und ein Zeitlimit von 5 Sekunden. Die Frische wird sowohl vor dem Aufruf als auch unmittelbar vor dem Cloud-Publish nach ggf. langsamem Connect geprüft.
+3. Es gibt **einen** Daemon-Worker und eine begrenzte FIFO-Warteschlange (höchstens 64 wartende Telegramme). **Kein pauschales Nachrichtenalter-Limit**: Der ursprüngliche Growatt-Cloud-Forwarder definiert keine TTL für erste Konfigurations-/Anmeldetelegramme.
 4. Ist die Queue voll, werden neue Cloud-Telegramme verworfen und es erfolgt eine begrenzte Warnung. Nach einem Verbindungsfehler werden für dieselbe Device-ID 10 Sekunden lang keine erneuten Cloud-Verbindungsversuche gestartet. Keine unbeschränkte Warteschlange, kein Aufholen älterer Daten.
 5. Der Worker benutzt weiterhin den bisherigen Cloud-MQTT-Client pro Gerät. Die Subscription auf `+/<Geräte-ID>` erfolgt jetzt bei **jedem erfolgreichen CONNACK**, damit sie bei einer neuen Session nach Reconnect wieder besteht. Dies ist eine gezielte Abweichung von der einmaligen initialen Subscription im Upstream.
 6. `stop()` leert zunächst die Cloud-Queue; Cloud-Connect wird nicht mehr unter der gemeinsamen Shutdown-Sperre durchgeführt. Ein Cloud-DNS-/TLS-Aufruf kann als Daemon noch auslaufen, ohne die lokale Beendigung aufzuhalten.
 
 ## Offene Risiken vor Merge
 
-- Der **erste** bereits vom Worker übernommene Telegrammversand kann nach einem langsamen, synchronen `connect()` noch verzögert stattfinden. Das Queue-Alterslimit prüft derzeit nur **vor** diesem Aufruf. Für eine strikte Frischegarantie wäre eine weitere Prüfung unmittelbar vor `publish()` erforderlich.
+- Bei langsamem Cloud-Connect kann ein bereits vom Worker übernommenes Telegramm verspätet an die Cloud gelangen. Das entspricht eher der bisherigen synchronen Weiterleitung als ein unbelegtes TTL-Verwerfen, kann jedoch nach Wiederherstellung zu verzögerten Messwerten führen. Überlauf und Shutdown bleiben explizite Verlustfälle.
 - Ein einzelner Worker bewahrt FIFO über alle Geräte, blockiert aber Cloud-Verarbeitung anderer Geräte, wenn die Cloud-Verbindung eines Geräts hängt. Die lokale MQTT-Verarbeitung ist davon isoliert. Mehr Worker wären nur mit begrenzter und nachweisbar korrekt geordneter Nebenläufigkeit sinnvoll.
 - Bei Überlauf/Shutdown werden **Cloud-Telegramme** verworfen, keine lokalen HA-Telegramme. Das ist eine beabsichtigte Abwägung gegen Rückstau.
 - TLS-Zertifikatsverhalten bleibt zunächst exakt wie vorher; Sicherheitsmigration separat testen.
@@ -31,7 +31,7 @@ Bislang löst `grobro/grobro/client.py::__on_message` den synchronen Cloud-Conne
 - [ ] Neuer Test: blockierte Cloud verhindert **nicht** lokale Verarbeitung eines gültigen Gerätetelegramms.
 - [ ] Neuer Test: Cloud-Queue begrenzt und leert Rückstau bei Stop.
 - [ ] Neuer Test: Shutdown wartet nicht auf blockierenden Cloud-Connect.
-- [ ] Neue Tests: Paket während Cloud-Connect veraltet; wiederholter Cloud-Connect-Fehler löst je Gerät nur einen Versuch im Cooldown aus.
+- [ ] Neue Tests: Erstes Paket bleibt trotz langsamen Cloud-Connect erhalten; wiederholter Cloud-Connect-Fehler löst je Gerät nur einen Versuch im Cooldown aus.
 - [ ] Bestehende echte MQTT-E2E-Suite einschließlich Cloud-Reconnect erfolgreich.
 - [ ] Zwei Geräte über denselben Quellbroker; Cloud-Verbindung eines Geräts langsam, lokale HA-Telemetrie beider Geräte ohne Verzögerung.
 - [ ] Zusätzliche CPU-, RAM- und Thread-Last unter Cloud aus / Cloud an messen.
@@ -40,11 +40,11 @@ Bislang löst `grobro/grobro/client.py::__on_message` den synchronen Cloud-Conne
 
 ## Upstream-Kompatibilitätsabgleich (23.11.2026)
 
-Der relevante Upstream-Quellpfad in `robertzaage/GroBro/grobro/grobro/client.py` gibt **jede erlaubte eingehende Growatt-Nachricht** mit unverändertem MQTT-Topic, Byte-Payload, QoS und Retain unmittelbar an den Cloud-Client weiter; die Cloud-Verbindung wird beim ersten Telegramm synchron erzeugt. Aus diesem Code ist **nicht ableitbar**, dass das erste Paket ein bestimmter Konfigurationstyp sein muss. Folglich kann derzeit weder bestätigt noch ausgeschlossen werden, dass die 5-Sekunden-Verfallsregel initiale für die Cloud wichtige Nachrichten verwirft.
+Der relevante Upstream-Quellpfad in `robertzaage/GroBro/grobro/grobro/client.py` gibt **jede erlaubte eingehende Growatt-Nachricht** mit unverändertem MQTT-Topic, Byte-Payload, QoS und Retain unmittelbar an den Cloud-Client weiter; die Cloud-Verbindung wird beim ersten Telegramm synchron erzeugt. Aus diesem Code ist **nicht ableitbar**, dass das erste Paket ein bestimmter Konfigurationstyp sein muss. Der Prototyp hatte anfangs eine unbelegte Fünf-Sekunden-Verfallsregel, die inzwischen wieder entfernt wurde. Das vermeidet gerade den möglichen Verlust initialer Protokollnachrichten aufgrund des Connect-Alters.
 
 **Neuer Sicherungstest:** der Cloud-Queue-Pfad wahrt Byte-Inhalt, Topic, QoS/Retain und FIFO-Reihenfolge für mehrere Geräte. Der asynchrone Cloud-Worker erkennt jetzt auch `MQTT_ERR_NO_CONN` bzw. andere lokale Publish-Ablehnungen ohne Exception und aktiviert den gerätespezifischen Cooldown.
 
-**Ungeklärt vor Merge:** tatsächliche Cloud-Anmeldung und erste Konfigurationsnachricht gegen einen echten Growatt-Cloud-Endpunkt validieren; die neue Verfalls-/Überlaufpolitik gegenüber dem Upstream als bewusste Verhaltensänderung freigeben oder so anpassen, dass initiale protokollwichtige Telegramme nicht verloren gehen. Der Test mit lokalem Mosquitto kann das Cloud-Anmeldeprotokoll nicht belegen. Bis dahin keine Produktivübernahme.
+**Ungeklärt vor Merge:** tatsächliche Cloud-Anmeldung und erste Konfigurationsnachricht gegen einen echten Growatt-Cloud-Endpunkt validieren; die **Pufferüberlauf-/Shutdown-Politik** gegenüber dem Upstream als bewusste Verhaltensänderung prüfen. Der Test mit lokalem Mosquitto kann das Cloud-Anmeldeprotokoll nicht belegen. Bis dahin keine Produktivübernahme.
 
 ## Cloud-Rückkanal nach Reconnect (neuer Befund)
 
@@ -89,10 +89,16 @@ Der Empfang des Broker-SUBACK kann bei einem `subscribe()`-Aufruf vom Paho-Netzw
 
 **Regressionstest:** `test_cloud_suback_racing_subscribe_mid_registration_is_not_lost` startet aus dem simulierten Subscribe-Aufruf einen separaten Bestätigungs-Thread und weist nach, dass der passende SUBACK den Watchdog beendet, ohne einen falschen Retry zu planen. Ein direkt reentrant im gleichen Thread ausgeführter künstlicher `on_subscribe`-Aufruf gehört nicht zum regulären Paho-Callback-Modell; dieser Sonderfall ist nicht Gegenstand des Nachweises.
 
-**Freigabe unverändert:** Keine vollständige pytest-Ausführung und keine echten Broker-/Growatt-Cloud-Tests. Die Cloud-Queue mit fünf Sekunden Verfallsregel hat weiterhin eine ungeklärte Kompatibilitätsgrenze. Kein Merge nach `main` und kein Release.
+**Freigabe unverändert:** Keine vollständige pytest-Ausführung und keine echten Broker-/Growatt-Cloud-Tests. Die Fünf-Sekunden-Verfallsregel wurde entfernt; die Auswirkungen des begrenzten Puffers bei Cloud-Störungen bleiben zu testen. Kein Merge nach `main` und kein Release.
 
 ## Prüfung vorhandener E2E-Tests: keine Callback-Verfälschung (23.11.2026)
 
 Die E2E-Prüfung des Cloud-Reconnects hatte bei der Erweiterung um den Rückkanal die produktiven Paho-Callbacks `forward.on_message` und `forward.on_subscribe` überschrieben. Dadurch wurden lediglich Mess-Ereignisse gesetzt; der tatsächliche Cloud→Gerät-Forwarding-Handler sowie die neue MID-/SUBACK-Verarbeitung wurden im Test umgangen. Das ist ein **Testdesign-Fehler**, keine belegte Störung im produktiven Code.
 
 Im Branch werden beide Callbacks nur noch mit Beobachtern **umhüllt**: Erst wird der originale Handler aufgerufen, dann werden Beobachtungsereignisse gesetzt. Die SUBACK-Beobachtung prüft den Reason-Code über die vorhandene Helper-Funktion `subscription_rejected`. Damit bleibt der reale E2E-Test näher an der produktiven Pipeline. Der Test ist noch nicht ausgeführt; zunächst ist weiterhin ein echter Mosquitto-Testaufbau erforderlich.
+
+## Protokollschutz für erste Telegramme (23.11.2026)
+
+Die willkürlich eingeführte 5-Sekunden-TTL ist aus dem Prototyp entfernt ([Cloud-Dispatcher](../grobro/grobro/cloud_dispatch.py), [Cloud-Client](../grobro/grobro/client.py)). Ein Telegramm, das bereits zur Cloud-Weiterleitung akzeptiert wurde, wird daher nicht allein wegen einer langsamen Erstverbindung verworfen. Topic, Binär-Payload, QoS und Retain bleiben unverändert. Der vorhandene Test für den spät ausgeführten Cloud-Publish wurde auf **Erhaltung des ersten Konfigurationstelegramms** umgestellt.
+
+Die Cloud-Warteschlange bleibt auf 64 *wartende* Elemente begrenzt; ein bereits laufender Versand zählt nicht dazu. Bei Überlauf werden neue Cloud-Telegramme abgelehnt, bei Shutdown wird der Rest verworfen. Das schützt lokale Verarbeitung und RAM, ist aber eine sichtbare Abweichung vom synchron blockierenden Upstream und muss bei echter Cloud-Störung gemessen werden.
