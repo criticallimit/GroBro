@@ -440,6 +440,37 @@ class TestClientConfig:
         finally:
             clear_device_inventory()
 
+    def test_reconnect_ignores_stale_activity_using_device_timeout(self, ha_client):
+        from grobro.ha.timer_runtime import effective_device_timeout
+        device = "QMN000ABC1D2E3FG"
+        ha_client._config_cache[device] = DeviceConfig(
+            serial_number=device, data_interval="5",
+        )
+        timeout = effective_device_timeout(ha_client, device)
+        with patch("grobro.ha.client.time.monotonic", return_value=1000.0):
+            ha_client._device_last_seen[device] = 1000.0 - timeout - 1.0
+            with patch.object(ha_client, "_Client__refresh_config_if_needed") as refresh:
+                ha_client.handle_source_ready()
+            refresh.assert_not_called()
+
+            ha_client._device_last_seen[device] = 990.0
+            with patch.object(ha_client, "_Client__refresh_config_if_needed") as refresh:
+                ha_client.handle_source_ready()
+            refresh.assert_called_once_with(device)
+
+    def test_ha_restart_does_not_refresh_inactive_neo_config(self, ha_client):
+        sleeping_neo = "QMN000ABC1D2E3FG"
+        active_noah = "0PVP0000TEST0001"
+        ha_client._config_cache[sleeping_neo] = DeviceConfig(serial_number=sleeping_neo)
+        ha_client._config_cache[active_noah] = DeviceConfig(serial_number=active_noah)
+        with patch("grobro.ha.client.time.monotonic", return_value=1000.0):
+            ha_client._device_last_seen[active_noah] = 990.0
+            with patch.object(ha_client, "_Client__refresh_config_if_needed") as refresh, patch(
+                "grobro.ha.neo_power_runtime.schedule_known_neo_state_probe"
+            ):
+                ha_client._Client__recover_after_home_assistant_restart(ha_client._client)
+            refresh.assert_called_once_with(active_noah)
+
     def test_source_reconnect_skips_restored_offline_devices(self, ha_client):
         sleeping_neo = "QMN000ABC1D2E3FG"
         active_noah = "0PVP0000TEST0001"
