@@ -502,10 +502,13 @@ class Client:
             return
         value = checked
         if callable(self.on_config_register_value):
-            self.on_config_register_value(device_id, register_no, value, retain=retain)
+            result = self.on_config_register_value(device_id, register_no, value, retain=retain)
         else:
             topic = f"{HA_BASE_TOPIC}/config/grobro/{device_id}/{register_no}/get"
-            _publish_checked(self._client, topic, value, retain=retain)
+            result = _publish_checked(self._client, topic, value, retain=retain)
+        if not publish_succeeded(result):
+            LOG.warning("MQTT rejected Home Assistant config state for %s R%s",
+                        _device_label(device_id), register_no)
 
     def _publish_tlv_config_states(self, device_id: str, config: model.DeviceConfig) -> None:
         """Mirror safe, exposed TLV telemetry; do not acknowledge pending reads.
@@ -750,6 +753,15 @@ class Client:
                         # A malformed TLV must not hide other entries in the
                         # same response, particularly R76 Wi-Fi signal.
                         continue
+
+                    if register_no in (4, 76):
+                        value = self._validated_config_measurement(
+                            cfg["device_id"], register_no, value,
+                        )
+                        if value is None:
+                            # Reject invalid device metadata as well as HA state.
+                            # Continue processing other entries from this packet.
+                            continue
 
                     metadata_field = {
                         "software_version": "sw_version",
