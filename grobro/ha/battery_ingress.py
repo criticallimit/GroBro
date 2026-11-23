@@ -213,6 +213,10 @@ _INDEX_HTML = r"""<!doctype html>
     }
     .online-line { display:flex; align-items:center; gap:6px; margin-top:8px; color:#9ed3b1; font-size:12px; }
     .online-line::before { content:""; width:6px; height:6px; border-radius:50%; background:var(--ok); }
+    .online-line.status-stale { color:#e2bc79; }
+    .online-line.status-stale::before { background:#e2bc79; }
+    .online-line.status-offline,.online-line.status-unknown { color:#9ab0c0; }
+    .online-line.status-offline::before,.online-line.status-unknown::before { background:#718393; }
     .wifi-box {
       min-width:72px; width:72px; text-align:right; color:#afc2cf; font-size:11px;
     }
@@ -762,14 +766,29 @@ function renderOverviewDevices(){
     const name=document.createElement("strong");name.textContent=item.display_name||"UNKNOWN";
     const serial=document.createElement("div");serial.className="device-serial";serial.textContent=item.device_id||"";
     const online=document.createElement("div");online.className="online-line";
-    online.textContent=l({de:"Live erkannt",en:"Detected live",fr:"Détecté en direct",es:"Detectado en vivo",nl:"Live gedetecteerd"});
+    const status=["online","stale","offline"].includes(item.connection_status)?item.connection_status:"unknown";
+    online.classList.add("status-"+status);
+    const age=Number(item.last_telemetry_seconds);
+    const hasAge=item.last_telemetry_seconds!==null&&item.last_telemetry_seconds!==undefined&&Number.isFinite(age);
+    const ageText=hasAge
+      ? (age<60 ? l({de:"vor "+Math.round(age)+" s",en:Math.round(age)+" s ago",fr:"il y a "+Math.round(age)+" s",es:"hace "+Math.round(age)+" s",nl:Math.round(age)+" s geleden"})
+        : l({de:"vor "+Math.round(age/60)+" Min.",en:Math.round(age/60)+" min ago",fr:"il y a "+Math.round(age/60)+" min",es:"hace "+Math.round(age/60)+" min",nl:Math.round(age/60)+" min geleden"}))
+      : "";
+    const statusText={
+      online:l({de:"Online",en:"Online",fr:"En ligne",es:"En línea",nl:"Online"}),
+      stale:l({de:"Keine aktuellen Daten",en:"No recent data",fr:"Pas de données récentes",es:"Sin datos recientes",nl:"Geen recente gegevens"}),
+      offline:l({de:"Offline",en:"Offline",fr:"Hors ligne",es:"Desconectado",nl:"Offline"}),
+      unknown:l({de:"Noch keine Live-Daten",en:"No live data yet",fr:"Pas encore de données",es:"Sin datos en directo",nl:"Nog geen livegegevens"})
+    }[status];
+    online.textContent=statusText+(ageText?" · "+ageText:"");
     body.append(name,serial,online);
 
     const wifi=document.createElement("div");wifi.className="wifi-box";
     const bars=document.createElement("div");bars.className="wifi-bars";
     const rawSignalValue=item.wifi_signal_strength ?? item.wifi_signal ?? null;
     const rawSignal=Number(rawSignalValue);
-    const dbm=(Number.isFinite(rawSignal) && rawSignal<0 && rawSignal>=-120)?rawSignal:NaN;
+    // A cached RSSI does not prove connectivity after telemetry stops.
+    const dbm=(status==="online" && Number.isFinite(rawSignal) && rawSignal<0 && rawSignal>=-120)?rawSignal:NaN;
     let level=0;
     if(Number.isFinite(dbm)){
       level=dbm>=-55?4:dbm>=-65?3:dbm>=-75?2:1;
