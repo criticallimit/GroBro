@@ -476,10 +476,11 @@ class TestClientConfig:
         active_noah = "0PVP0000TEST0001"
         ha_client._config_cache[sleeping_neo] = DeviceConfig(serial_number=sleeping_neo)
         ha_client._config_cache[active_noah] = DeviceConfig(serial_number=active_noah)
-        ha_client._device_last_seen[active_noah] = 100.0
-
-        with patch.object(ha_client, "_Client__refresh_config_if_needed") as refresh:
-            ha_client.handle_source_ready()
+        # Use a deterministic monotonic clock: 990 is still fresh at 1000.
+        with patch("grobro.ha.client.time.monotonic", return_value=1000.0):
+            ha_client._device_last_seen[active_noah] = 990.0
+            with patch.object(ha_client, "_Client__refresh_config_if_needed") as refresh:
+                ha_client.handle_source_ready()
 
         refresh.assert_called_once_with(active_noah)
         assert sleeping_neo not in ha_client._config_read_queues
