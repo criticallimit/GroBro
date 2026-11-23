@@ -16,7 +16,7 @@ Better GroBro builds on [Robert Zaage's GroBro](https://github.com/robertzaage/G
 
 ---
 
-## Better GroBro 3.3.4
+## Better GroBro 3.3.5
 
 ### What Better GroBro offers
 
@@ -49,7 +49,7 @@ Better GroBro builds on [Robert Zaage's GroBro](https://github.com/robertzaage/G
 - More reliable “Read All” handling when replies are missing or a connection is interrupted
 - Devices become unavailable after the configured telemetry timeout, helping you recognize stale readings; their Home Assistant entities remain in place and become available again when data returns
 - Repeated identical telemetry avoids unnecessary MQTT state publications, while changed readings are still published
-- Automatic clock synchronization for supported devices twice a day, in addition to the existing manual sync control
+- Automatic clock synchronization for supported devices twice a day
 - Validation of NOAH/NEXA message lengths and register blocks before their readings are processed
 
 #### Easier troubleshooting
@@ -62,7 +62,7 @@ Better GroBro builds on [Robert Zaage's GroBro](https://github.com/robertzaage/G
 
 Better GroBro keeps GroBro's MQTT bridge, Home Assistant discovery, supported device controls and optional Growatt Cloud forwarding. Local operation without cloud forwarding remains possible.
 
-“Read All”, manual clock synchronization and automatic battery-count detection remain part of the familiar feature set. The improvements described above retain existing Better GroBro entity identifiers and command topics, keeping dashboards and automations connected to their entities.
+“Read All” and automatic battery-count detection remain part of the familiar feature set. The improvements described above retain existing Better GroBro entity identifiers and command topics, keeping dashboards and automations connected to their entities.
 
 ---
 
