@@ -1,3 +1,12 @@
+# Better GroBro 3.3.28 — HA MQTT broker-disconnect state handling
+
+- Added a Paho MQTT callback-v2 `on_disconnect` hook for the Home Assistant target broker. The Ingress device overview now displays Offline instead of stale Online when that MQTT transport is disconnected; the existing per-device HA MQTT availability and source-device timeouts remain unchanged.
+- Devices and battery assignments are not removed; the existing recovery mechanism rebuilds availability and device discovery after reconnect, without adding new polling or timers.
+- Tests cover broker disconnect and NOAH/NEO/NEXA overview status preservation/recovery; embedded UI JavaScript syntax and focused source checks passed.
+- Full Python compilation, pytest and Home Assistant integration tests are **not executed yet**; this is not a verified live release.
+
+---
+
 # Better GroBro 3.3.27 — MQTT availability retry correctness
 
 - Corrected handling when the primary retained device availability message succeeds but the optional separate `/online` sensor publish is rejected: the already accepted primary state is cached immediately and no longer repeatedly republished at every device activity.
