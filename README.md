@@ -16,7 +16,9 @@ Better GroBro builds on [Robert Zaage's GroBro](https://github.com/robertzaage/G
 
 ---
 
-## Better GroBro 3.3.43
+## Better GroBro 3.3.44
+
+**Neu in 3.3.44:** Der Protokoll-Reiter bietet zusätzlich zum bisherigen Raw-MQTT-Download einen ZIP-Export aller noch vorhandenen Dump-Segmente (aktuell und bis zu drei Rotationsdateien). Die Geräte-, MQTT- und Cloud-Kommunikation bleibt unverändert.
 
 ### What Better GroBro offers
 
