@@ -120,3 +120,13 @@ Bei der Prüfung des bisherigen Cloud-E2E-Tests zeigte sich, dass dessen Beobach
 **Regressionstest:** `test_cloud_suback_retry_cannot_cross_reconnect_epoch` startet einen echten parallelen Reconnect-Callback exakt während der simulierten SUBACK-Auswertung. Der Reconnect muss bis zum abgeschlossenen alten Zustandsübergang warten und danach alle alten Retry-Timer löschen. Test noch nicht ausgeführt.
 
 **Testumgebung:** `pytest` und `pydantic` sind vorhanden, `paho-mqtt`, `crc` und `mosquitto` fehlen. Die vollständige Suite bzw. echte MQTT-E2E-Tests können damit hier nicht ausgeführt werden; isolierte Cloud-Queue-Tests sind nicht gleichwertig mit Cloud-Client-Tests.
+
+## Noch nicht freigegeben: Reihenfolge erstes Cloud-SUBSCRIBE / erstes Geräte-PUBLISH (23.11.2026)
+
+**Neu identifiziertes Kompatibilitätsrisiko:** Das ursprüngliche GroBro ruft bei einer neuen Cloud-Verbindung nach synchronem `connect()` zuerst `subscribe(f"+/{device_id}")` auf, startet dann `loop_start()` und übergibt erst anschließend das erste Geräte-Paket an `publish()`. Im isolierten Entwicklungszweig wird das Abo dagegen erst im asynchronen Paho-`on_connect` eingerichtet; `__connect_to_growatt_server` kann nach `loop_start()` zurückkehren, bevor dieser Callback tatsächlich gelaufen ist. Das erste Cloud-PUBLISH könnte dadurch vor dem SUBSCRIBE in die MQTT-Ausgangswarteschlange gelangen.
+
+**Bewertung:** Diese Umordnung ist eine Protokolländerung und aktuell nicht durch vollständige Paho-/Broker-Tests gedeckt. Eine bloße Prüfung, dass später sowohl PUBLISH als auch SUBACK eintreffen, belegt die entscheidende ursprüngliche Reihenfolge nicht.
+
+**Freigabebedingung:** Vor Merge muss der Startpfad nachweislich `SUBSCRIBE queued before first PUBLISH` herstellen und zugleich die bereits ergänzte Subscription-Erneuerung auf jedem Reconnect erhalten. Die Lösung darf den lokalen Source-MQTT-Callback nicht blockieren und soll unnötige doppelte erste Subscriptions vermeiden. Dazu ein gezielter Paho-E2E-Test mit verzögertem CONNACK; die vorhandenen Mocktests müssen dazu konsistent angepasst werden. Noch keine Codeänderung für diesen Punkt vorgenommen, da ein ungetesteter Umbau an dieser Stelle eine weitere Regression erzeugen könnte.
+
+**Unabhängig verifizierbar:** Die bereits lokal vorhandene exakte Dispatcher-Version mit Git-Blob-Hash `398903c69317b29feea055436a84e6ea5aaccd20` wurde erneut isoliert getestet: `5 passed in 0.10s`. Das ist keine Cloud-Client-/Paho-Validierung.
