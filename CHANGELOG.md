@@ -1,3 +1,12 @@
+# Better GroBro 3.3.38 — Smart-Meter-Daten nach Geräte-Offline erneut veröffentlichen
+
+- Der bereits vorhandene gerätebezogene Cache-Reset bei bestätigter Offline-Meldung berücksichtigt jetzt auch den separaten Smart-Meter-Veröffentlichungs-Cache.
+- Nach der Rückkehr eines NOAH/NEXA werden identische Smart-Meter-Werte beim ersten echten neuen Eingang einmal erneut publiziert. Nachfolgende unveränderte Werte werden weiterhin unterdrückt; andere Geräte bleiben unberührt.
+- Bestehende Telemetrie-/Holding-Cache-Logik bleibt erhalten. Keine neuen Timer, Hintergrundprozesse, zusätzlichen MQTT-Abfragen, Dauerlogs oder Performance-Tests.
+- Ergänzte Regressionstests: Geräteisolation des Smart-Meter-Caches und Offline-/Online-Veröffentlichungsverhalten. Quellcode geprüft; vollständiger Python-Testlauf und HA-Praxistest noch offen.
+
+---
+
 # Better GroBro 3.3.37 — Keine überflüssige Rückleseabfrage nach abgelehnten Schaltbefehlen
 
 - Korrigiert die Holding-Register-Steuerung: Lehnt der lokale Growatt-MQTT-Client einen Schreibbefehl ab, wird nicht trotzdem sofort eine Rückleseabfrage für denselben Registerwert gesendet.
