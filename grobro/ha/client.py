@@ -797,6 +797,9 @@ class Client:
                 LOG.error("Home Assistant MQTT broker rejected a subscription; check broker permissions")
             self._subscription_failure_logged = True
         else:
+            # SUBACK confirms that HA command subscriptions were granted.
+            # Without clearing this flag every device packet re-subscribes.
+            self._command_subscription_pending = False
             self._subscription_failure_logged = False
 
     def __on_disconnect(self, client, userdata, disconnect_flags, reason_code, properties):
