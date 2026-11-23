@@ -94,3 +94,40 @@ def test_known_neo_states_are_probed_without_waiting_for_telemetry():
     assert request_known_neo_states(client) == 1
     assert len(commands) == 1
     assert commands[0].device_id == "QMNTEST"
+
+
+def test_known_neo_probe_waits_for_source_mqtt_readiness():
+    commands = []
+    ready = {"value": False}
+    client = SimpleNamespace(
+        on_command=lambda cmd: commands.append(cmd),
+        config_reads_ready=lambda: ready["value"],
+        _neo_inverter_power_read_requested=set(),
+        _config_cache={"QMNTEST": object()},
+    )
+
+    assert request_known_neo_states(client) == 0
+    assert commands == []
+    assert client._neo_inverter_power_read_requested == set()
+
+    ready["value"] = True
+    assert request_known_neo_states(client) == 1
+    assert len(commands) == 1
+    assert commands[0].device_id == "QMNTEST"
+
+
+def test_known_neo_probe_does_not_mark_attempted_if_readiness_check_fails():
+    def fail_readiness():
+        raise RuntimeError("source MQTT not ready")
+
+    commands = []
+    client = SimpleNamespace(
+        on_command=lambda cmd: commands.append(cmd),
+        config_reads_ready=fail_readiness,
+        _neo_inverter_power_read_requested=set(),
+        _config_cache={"QMNTEST": object()},
+    )
+
+    assert request_known_neo_states(client) == 0
+    assert not commands
+    assert not client._neo_inverter_power_read_requested
