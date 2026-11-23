@@ -145,9 +145,13 @@ class TestClientLifecycle:
         assert connected is forward
         factory.assert_called_once_with(client_id="QMNTEST", callback_api_version=grobro_client.mqtt.CallbackAPIVersion.VERSION2)
         assert [call[0] for call in forward.mock_calls] == [
-            "tls_set", "tls_insecure_set", "connect", "subscribe", "loop_start",
+            "tls_set", "tls_insecure_set", "connect", "loop_start",
         ]
         forward.connect.assert_called_once_with("forward.com", 7006, 60)
+        # Subscribing on CONNACK, not just initial connect(), protects clean
+        # sessions after reconnect. The callback is called by Paho's loop.
+        forward.subscribe.assert_not_called()
+        forward.on_connect(forward, None, None, 0, None)
         forward.subscribe.assert_called_once_with("+/QMNTEST")
         forward.tls_set.assert_called_once_with(cert_reqs=grobro_client.ssl.CERT_NONE)
         forward.tls_insecure_set.assert_called_once_with(True)
@@ -1163,6 +1167,8 @@ class TestClientForward:
             result = client._Client__connect_to_growatt_server("test-dev")
             assert result is fc
             fc.connect.assert_called_once_with("forward.com", 7006, 60)
+            fc.subscribe.assert_not_called()
+            fc.on_connect(fc, None, None, 0, None)
             fc.subscribe.assert_called_once_with("+/test-dev")
             fc.loop_start.assert_called_once()
 
@@ -1413,3 +1419,33 @@ def test_cloud_queue_preserves_binary_payload_qos_retain_and_fifo():
         assert received == packets
     finally:
         queue.stop()
+
+
+def test_cloud_reconnect_restores_cloud_to_device_subscription(client):
+    """Every successful cloud CONNACK must restore the response topic."""
+    forward = MagicMock()
+    with patch("grobro.grobro.client.mqtt.Client", return_value=forward):
+        client._Client__connect_to_growatt_server("QMNTEST")
+    callback = forward.on_connect
+    assert callable(callback)
+    forward.subscribe.assert_not_called()
+
+    callback(forward, None, None, 0, None)
+    callback(forward, None, None, 0, None)
+    assert forward.subscribe.call_count == 2
+    forward.subscribe.assert_any_call("+/QMNTEST")
+
+    forward.subscribe.reset_mock()
+    callback(forward, None, None, type("Denied", (), {"is_failure": True})(), None)
+    forward.subscribe.assert_not_called()
+
+
+def test_cloud_shutdown_does_not_resubscribe_on_late_connack(client):
+    forward = MagicMock()
+    with patch("grobro.grobro.client.mqtt.Client", return_value=forward):
+        client._Client__connect_to_growatt_server("QMNTEST")
+    callback = forward.on_connect
+    client.stop()
+    forward.subscribe.reset_mock()
+    callback(forward, None, None, 0, None)
+    forward.subscribe.assert_not_called()
