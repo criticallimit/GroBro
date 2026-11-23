@@ -803,6 +803,39 @@ class TestClientOnMessage:
             client._client.on_message(None, None, msg)
         parse.assert_called_once_with(decoded)
 
+    def test_neo_type0103_suffix_serial_skips_generic_modbus(self, client):
+        """Captured NEO packets may embed only 'BZP4N991ML' at offset 38."""
+        import struct
+        device_id = "QMN000BZP4N991ML"
+        serial = device_id.encode("ascii").ljust(30, b"\x00")
+        embedded = b"BZP4N991ML".ljust(16, b"\x00")
+        decoded = (
+            struct.pack(">HHHBB30s", 1, 7, 577, 1, 3, serial)
+            + embedded + bytes(585 - 38 - 16)
+        )
+        msg = _msg(f"c/33/{device_id}", b"wire")
+        with patch("grobro.grobro.client.parser.unscramble", return_value=decoded), patch(
+            "grobro.grobro.client.GrowattModbusMessage.parse_grobro"
+        ) as generic_parser:
+            client._client.on_message(None, None, msg)
+        generic_parser.assert_not_called()
+
+    def test_neo_type0103_other_serial_does_not_skip_generic_modbus(self, client):
+        """Only a suffix of the same verified serial is handled specially."""
+        import struct
+        device_id = "QMN000BZP4N991ML"
+        serial = device_id.encode("ascii").ljust(30, b"\x00")
+        decoded = (
+            struct.pack(">HHHBB30s", 1, 7, 577, 1, 3, serial)
+            + b"UNRELATED1".ljust(16, b"\x00") + bytes(585 - 38 - 16)
+        )
+        msg = _msg(f"c/33/{device_id}", b"wire")
+        with patch("grobro.grobro.client.parser.unscramble", return_value=decoded), patch(
+            "grobro.grobro.client.GrowattModbusMessage.parse_grobro", return_value=None,
+        ) as generic_parser:
+            client._client.on_message(None, None, msg)
+        generic_parser.assert_called_once_with(decoded)
+
     def test_noah_type0103(self, client):
         data = (Path(DATA_DIR) / "NoahType0103_HoldingRegs.bin").read_bytes()
         msg = _msg("c/33/0PVP0000TEST0001", data)
