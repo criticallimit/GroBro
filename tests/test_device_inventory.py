@@ -193,3 +193,31 @@ def test_ha_mqtt_availability_rejection_does_not_mark_device_online():
     finally:
         target.stop()
 
+
+def test_bridge_disconnect_marks_all_families_offline_without_erasing_inventory():
+    from grobro.ha.device_inventory import observe_device_availability, mark_all_devices_offline
+
+    devices = ("0PVPTEST000001", "QMNTEST0000001", "0HVRTEST000001")
+    for device in devices:
+        observe_device_availability(device, True)
+    mark_all_devices_offline()
+    snapshot = get_device_inventory()
+    assert {item["device_id"] for item in snapshot} == set(devices)
+    assert all(item["connection_status"] == "offline" for item in snapshot)
+    observe_device_availability("QMNTEST0000001", True)
+    assert next(item for item in get_device_inventory() if item["family"] == "neo")["connection_status"] == "online"
+
+
+def test_ha_mqtt_disconnection_clears_overview_online_status():
+    from grobro.ha.device_inventory import observe_device_availability
+
+    with patch("paho.mqtt.client.Client"):
+        target = ha.Client(model.MQTTConfig(host="localhost", port=1883))
+    try:
+        observe_device_availability("QMNTEST0000001", True)
+        target._Client__on_disconnect(target._client, None, None, None, None)
+        assert get_device_inventory()[0]["connection_status"] == "offline"
+        assert target._bridge_online_pending is True
+    finally:
+        target.stop()
+
