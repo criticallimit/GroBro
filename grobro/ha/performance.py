@@ -161,6 +161,19 @@ def _should_publish_state(client, device_id: str, payload_json: str, *, commit: 
     return True
 
 
+def clear_device_publish_cache(client, device_id: str) -> None:
+    """Republish the first live measurement after this device was offline."""
+    for cache_name in ("_state_publish_cache", "_last_state_payload"):
+        cache = getattr(client, cache_name, None)
+        if cache is not None:
+            cache.pop(device_id, None)
+    holding = getattr(client, "_last_holding_state", None)
+    if holding is not None:
+        for key in tuple(holding):
+            if key[0] == device_id:
+                holding.pop(key, None)
+
+
 def _clear_state_publish_cache(client) -> None:
     cache = getattr(client, "_state_publish_cache", None)
     if cache is not None:
