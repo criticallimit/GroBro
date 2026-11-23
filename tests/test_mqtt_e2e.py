@@ -432,3 +432,95 @@ def test_real_cloud_direct_forwarding_and_reconnect(tmp_path, monkeypatch):
             source.stop()
         probe.disconnect()
         probe.loop_stop()
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(
+    not os.getenv("E2E_MQTT_TARGET_PORT") or not os.getenv("E2E_MQTT_HOST"),
+    reason="requires source and target local MQTT brokers",
+)
+def test_two_broker_reconnect_republishes_same_payload_for_multiple_families(tmp_path, monkeypatch):
+    """Verify cross-family HA recovery using identical real device frames."""
+    host = os.environ["E2E_MQTT_HOST"]
+    source_port = int(os.environ["E2E_MQTT_PORT"])
+    target_port = int(os.environ["E2E_MQTT_TARGET_PORT"])
+    if host not in ("127.0.0.1", "localhost", "::1"):
+        pytest.skip("refuse to run a simulated-device test against an external MQTT host")
+    assert source_port != target_port
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("MQTT_CLIENT_SUFFIX", "recover-" + uuid.uuid4().hex[:10])
+
+    cfg_source = MQTTConfig(host=host, port=source_port)
+    cfg_target = MQTTConfig(host=host, port=target_port)
+    seen = {}
+    seen_lock = threading.Lock()
+    listening = threading.Event()
+
+    observer = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
+    transmitter = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
+    observer.on_connect = lambda client, *_args: client.subscribe("homeassistant/#")
+    observer.on_subscribe = lambda *_args: listening.set()
+
+    def record(_client, _userdata, message):
+        with seen_lock:
+            seen[message.topic] = bytes(message.payload)
+
+    observer.on_message = record
+    target = source = None
+    try:
+        observer.connect(host, target_port, 60)
+        observer.loop_start()
+        assert listening.wait(5)
+        transmitter.connect(host, source_port, 60)
+        transmitter.loop_start()
+
+        target = ha.Client(cfg_target)
+        source = grobro.Client(cfg_source, cfg_source)
+        wire_clients(target, source)
+        target.start()
+        source.start()
+        assert _wait_until(lambda: target._ha_mqtt_connected and source.config_reads_ready())
+
+        devices = [
+            ("QMN000ABC1D2E3FG", "NeoReadInputRegisters.bin"),
+            ("0PVP0000TEST0001", "NoahReadInputRegisters_0-124.bin"),
+        ]
+        for device, fixture in devices:
+            transmitter.publish(f"c/33/{device}", (DATA_DIR / fixture).read_bytes(), qos=1).wait_for_publish(timeout=5)
+        for device, _fixture in devices:
+            topic = f"homeassistant/grobro/{device}/state"
+            assert _wait_until(lambda topic=topic: topic in seen), f"initial state missing for {device}"
+            assert _wait_until(
+                lambda device=device: seen.get(f"homeassistant/grobro/{device}/availability") == b"online"
+            )
+
+        # Both brokers remain running. Reconnect the independent bridge
+        # transports, then send identical readings to verify cache reset.
+        target._client.disconnect()
+        assert _wait_until(lambda: not target._ha_mqtt_connected)
+        source._client.disconnect()
+        assert _wait_until(lambda: not source.config_reads_ready())
+        with seen_lock:
+            for device, _fixture in devices:
+                seen.pop(f"homeassistant/grobro/{device}/state", None)
+
+        target._client.reconnect()
+        source._client.reconnect()
+        assert _wait_until(lambda: target._ha_mqtt_connected and source.config_reads_ready())
+        for device, fixture in devices:
+            transmitter.publish(f"c/33/{device}", (DATA_DIR / fixture).read_bytes(), qos=1).wait_for_publish(timeout=5)
+        for device, _fixture in devices:
+            topic = f"homeassistant/grobro/{device}/state"
+            assert _wait_until(lambda topic=topic: topic in seen), f"unchanged state was lost after reconnect: {device}"
+            assert _wait_until(
+                lambda device=device: seen.get(f"homeassistant/grobro/{device}/availability") == b"online"
+            )
+    finally:
+        if source is not None:
+            source.stop()
+        if target is not None:
+            target.stop()
+        transmitter.disconnect()
+        transmitter.loop_stop()
+        observer.disconnect()
+        observer.loop_stop()
