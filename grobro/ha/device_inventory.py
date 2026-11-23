@@ -56,6 +56,13 @@ def observe_device_offline(device_id: str) -> None:
     observe_device_availability(device_id, False)
 
 
+def mark_all_devices_offline() -> None:
+    """Reflect a disconnected HA MQTT bridge without losing device inventory."""
+    with _LOCK:
+        for item in _DEVICES.values():
+            item["_availability"] = "offline"
+
+
 def observe_wifi_signal(device_id: str, value) -> None:
     """Store the latest Wi-Fi signal value from device configuration."""
     device_id = str(device_id).strip()
