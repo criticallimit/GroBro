@@ -46,9 +46,25 @@ The same capture contains multiple 585-byte NEO messages with type `0x0104`, all
 
 The user confirmed changing both the NEO update interval and output power limit from 100% to 72% during the observation period. Correlation with the raw packets gives two independent, defensible findings:
 
-- The only varying fields in the two NEO `0x0103` samples at offsets **170:182** decode as six big-endian 16-bit integers: **2022-01-01 00:00:00** and **2026-11-23 17:45:11** respectively. The second corresponds to the actual reception at 17:45:13 local time. They are a device date/time structure, **not** an output-power percentage. The two trailing changed bytes are presumed trailer/checksum and have not been independently validated.
+- The only varying fields in the two NEO `0x0103` samples at offsets **169:181** (Python slice; 12 bytes) decode as six big-endian 16-bit integers: **2022-01-01 00:00:00** and **2026-11-23 17:45:11** respectively. The second corresponds to the actual reception at 17:45:13 local time. They are a device date/time structure, **not** an output-power percentage. The two trailing changed bytes are presumed trailer/checksum and have not been independently validated. **Correction:** a previous offset report had said 170:182; the true block begins at the odd byte offset **169**, verified directly against the decoded message bytes.
 - NEO `0x0105` responses explicitly report **holding register 3** separately: value **72** at 17:51:36 and 17:51:46 local time, and **100** at 17:51:53. The interpretation of register 3 as NEO output-power limit matches `grobro/model/growatt_neo_registers.json`. The data do not establish why the final response returned to 100, and no assertion should be made that the setting persisted at 72.
 - NEO configuration `0x0119` replies for register 4 returned **10** at 17:51:30 and **5** at 17:52:00; these demonstrate separate changes of the reporting interval, not a field inside `0x0103`.
 - The two NEO `0x0103` samples both **predate** the 17:51 register-3 responses and cannot establish whether the 72% setting would ever appear in a later `0x0103` frame.
 
 **Decision:** No new Home Assistant mapping for `0x0103` based on this comparison. Continue distinguishing `0x0103` device-information/time structure, `0x0105` holding-register responses, and `0x0119` configuration values.
+
+## Cross-device date/time verification and format difference
+
+Independent parsing of all three `0x0103` frames from the latest 932-record capture establishes a six-field date/time area at **byte offsets 169–180 inclusive** (12 bytes, big-endian 16-bit fields):
+
+| Device | Captured local time | Raw six 16-bit values at 169:181 | Interpretation |
+|---|---|---|---|
+| NOAH | 2026-11-23 17:21:00 | `26,11,23,17,20,57` | 2026-11-23 17:20:57 **if** year 26 means 2000+26 |
+| NEO first | 2026-11-23 17:37:30 | `2022,1,1,0,0,0` | 2022-01-01 00:00:00 (likely unsynchronised/default clock) |
+| NEO later | 2026-11-23 17:45:13 | `2026,11,23,17,45,11` | 2026-11-23 17:45:11 |
+
+**Confirmed:** field positions and interpretation as calendar components strongly agree with both real capture times and the NEO default-to-current transition. **Device-family difference:** NOAH apparently encodes year as an offset from 2000, whereas NEO uses the full year; that difference must not be hidden by a shared decoder assumption.
+
+The bytes 169:181 in NEO type `0x0104` messages do **not** decode as a calendar timestamp; the time-field interpretation is specific to the observed type `0x0103` layout.
+
+These observations do not yet justify an HA sensor: the system already has device/system time via config R31, and it is unclear whether the timestamp always reflects actual device or subordinate inverter time across firmware variants. Keep this as documented protocol knowledge pending further fixtures.
