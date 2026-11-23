@@ -258,6 +258,18 @@ class TestClientOnMessage:
         assert "Wi-Fi signal -61 dBm received via device configuration telegram" in caplog.text
         assert "Wi-Fi signal -62 dBm received via register response" in caplog.text
 
+    def test_missing_mqtt_publish_status_does_not_claim_acceptance(self, client, caplog):
+        caplog.set_level("INFO", logger=grobro_client.LOG.name)
+        # An HA runtime shutdown guard returns None without publishing.
+        client.on_config_register_value = MagicMock(return_value=None)
+        client._publish_config_state(
+            "QMN000ABC1D2E3FG", 76, -61,
+            retain=True, source="register response",
+        )
+        assert "Wi-Fi signal -61 dBm received via register response" in caplog.text
+        assert "HA MQTT publish not confirmed" in caplog.text
+        assert "HA MQTT publish accepted" not in caplog.text
+
     def test_rejected_wifi_publish_does_not_claim_acceptance(self, client, caplog):
         client.on_config_register_value = MagicMock(return_value=(4, None))
         client._publish_config_state(
