@@ -300,8 +300,11 @@ def test_device_offline_cache_clear_is_isolated_and_republishes_unchanged_values
         assert _should_publish_state(client, device, '{"power":500}')
         assert _should_publish_holding_state(client, device, "inverter_power", "ON")
 
+    client._smart_meter_state_cache = {a: "meter state", b: "meter state"}
     clear_device_publish_cache(client, a)
 
+    assert a not in client._smart_meter_state_cache
+    assert client._smart_meter_state_cache[b] == "meter state"
     assert _should_serialize_state(client, a, payload)
     assert _should_publish_state(client, a, '{"power":500}')
     assert _should_publish_holding_state(client, a, "inverter_power", "ON")
