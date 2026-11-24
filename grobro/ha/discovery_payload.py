@@ -76,6 +76,12 @@ def build_discovery_payload(
             # Keep the user's chosen setting visible while the device
             # processes it. Subsequent real state_topic updates still apply.
             component["optimistic"] = True
+        if platform == "switch" and entry["name"] == "inverter_power" and model.is_family(device_id, "neo"):
+            # Inverter off is a valid visible switch state even if NEO has
+            # stopped reporting. Other entities still follow device availability.
+            # The bridge itself must remain connected for control to be available.
+            component["availability"] = [{"topic": bridge_topic}]
+            component["availability_mode"] = "all"
         if platform != "sensor":
             component["command_topic"] = (
                 f"{base_topic}/{entry['topic_root']}/grobro/"
