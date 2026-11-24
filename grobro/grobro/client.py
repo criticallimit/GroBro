@@ -28,6 +28,7 @@ from grobro.grobro.builder import (
     scramble,
 )
 from grobro.grobro.cloud_policy import CloudForwardingPolicy
+from grobro.grobro import cloud_status
 from grobro.grobro.diagnostic_io import DiagnosticWriter, diagnostic_scope
 from grobro.grobro.raw_dump import dump_message_jsonl
 from grobro.grobro.register_debug import (
@@ -254,6 +255,7 @@ class Client:
         self._forward_clients: dict[str, mqtt.Client] = {}
         self._forward_lifecycle_lock = threading.RLock()
         self._forward_stopped = False
+        cloud_status.clear()
         self._diagnostic_writer = DiagnosticWriter()
         self._ptq_for_raq: dict[str, str] = {}
         self._gateway_dirty = set()
@@ -323,6 +325,7 @@ class Client:
         finally:
             with self._forward_lifecycle_lock:
                 self._forward_clients.clear()
+            cloud_status.clear()
             with self._pending_config_lock:
                 for timer in self._config_write_readback_timers.values():
                     timer.cancel()
@@ -1120,6 +1123,7 @@ class Client:
                 )
                 return
 
+            cloud_status.received()
             # Cloud configuration filtering belongs in the Cloud -> device path.
             cloud_msg_type = struct.unpack_from(">H", unscrambled, 6)[0]
 
@@ -1167,7 +1171,15 @@ class Client:
         # Better GroBro does not keep a backlog or replay failed packets.
         client = self.__connect_to_growatt_server(client_id)
         if client is not None:
-            client.publish(topic, payload=payload, qos=qos, retain=retain)
+            result = client.publish(topic, payload=payload, qos=qos, retain=retain)
+            rc = getattr(result, "rc", None)
+            if rc is None:
+                try:
+                    rc = result[0]
+                except (TypeError, IndexError, KeyError):
+                    rc = None
+            if rc == mqtt.MQTT_ERR_SUCCESS:
+                cloud_status.sent()
 
     # Setup Growatt MQTT broker using Robert Zaage's synchronous sequence.
     def __connect_to_growatt_server(self, client_id):
@@ -1184,6 +1196,19 @@ class Client:
                 client.tls_set(cert_reqs=ssl.CERT_NONE)
                 client.tls_insecure_set(True)
                 client.on_message = self.__on_message_forward_client
+
+                def on_cloud_connect(_client, _userdata, _flags, reason_code, _properties):
+                    if not getattr(reason_code, "is_failure", reason_code != 0):
+                        cloud_status.connected(client_id)
+                    else:
+                        cloud_status.disconnected(client_id)
+
+                def on_cloud_disconnect(_client, _userdata, _flags, _reason_code, _properties):
+                    cloud_status.disconnected(client_id)
+
+                client.on_connect = on_cloud_connect
+                client.on_disconnect = on_cloud_disconnect
+                cloud_status.connecting(client_id)
                 try:
                     client.connect(
                         self._forward_mqtt_config.host,
@@ -1195,6 +1220,7 @@ class Client:
                     if isinstance(started, int) and started != mqtt.MQTT_ERR_SUCCESS:
                         raise RuntimeError(f"Cloud MQTT loop could not start: {started}")
                 except Exception:
+                    cloud_status.disconnected(client_id)
                     try:
                         client.disconnect()
                     except Exception:
