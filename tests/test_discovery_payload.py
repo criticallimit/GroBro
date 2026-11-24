@@ -84,7 +84,16 @@ def test_slot_mode_select_is_optimistic_but_keeps_hardware_state_topic(family_ke
     assert entity["options"] == ["Load First", "Battery First", "Smart Mode"]
     power = components[f"grobro_{serial}_cmd_slot1_power"]
     assert power["platform"] == "number"
-    assert "optimistic" not in power
+    assert power["optimistic"] is True
+    assert power["state_topic"] == f"ha-test/number/grobro/{serial}/slot1_power/get"
+    assert power["command_topic"] == f"ha-test/number/grobro/{serial}/slot1_power/set"
+    enabled = components[f"grobro_{serial}_cmd_slot1_enabled"]
+    assert enabled["platform"] == "switch"
+    assert enabled["optimistic"] is True
+    assert enabled["state_topic"] == f"ha-test/switch/grobro/{serial}/slot1_enabled/get"
+    assert enabled["command_topic"] == f"ha-test/switch/grobro/{serial}/slot1_enabled/set"
+    time = components[f"grobro_{serial}_cmd_slot1_start_time"]
+    assert "optimistic" not in time
 
 
 @pytest.mark.parametrize("family_key", ["neo", "noah", "nexa"])
