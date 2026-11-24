@@ -445,7 +445,7 @@ class Client:
 
         return result
 
-    def _schedule_holding_readback(self, device_id: str, name: str, register_no: int) -> None:
+    def _schedule_holding_readback(self, device_id: str, name: str, register_no: int, *, delay: float = 3.0) -> None:
         """Verify an accepted write after device settling; coalesce rapid changes."""
         key = (device_id, register_no)
         with runtime_lock(self):
@@ -473,7 +473,7 @@ class Client:
                     except Exception:
                         LOG.exception("Could not request readback for %s setting %s", device_id, name)
 
-            timer = Timer(3.0, readback)
+            timer = Timer(delay, readback)
             timer.daemon = True
             self._holding_readback_timers[key] = timer
             timer.start()
@@ -1080,7 +1080,7 @@ class Client:
                     cmd_name,
                     pos.register_no,
                 )
-                self._schedule_holding_readback(device_id, cmd_name, pos.register_no)
+                self._schedule_holding_readback(device_id, cmd_name, pos.register_no, delay=5.0 if cmd_type == "select" else 3.0)
             else:
                 LOG.debug(
                     "Triggering immediate read-after-write for Command %s register %s",
