@@ -16,9 +16,13 @@ Better GroBro builds on [Robert Zaage's GroBro](https://github.com/robertzaage/G
 
 ---
 
+## Better GroBro 3.3.47
+
+**Neu in 3.3.47:** NOAH/NEXA-Zeitplanleistungen (`slot*_power`) werden wie andere schreibbare Einstellungen nach 3 Sekunden zurückgelesen. Der aktuelle Messwert `out_power` („Output Noah“) bleibt reine Telemetrie ohne zusätzliche Rücklesung.
+
 ## Better GroBro 3.3.46
 
-**Neu in 3.3.46:** Kontrollabfragen nach Schalt- und Einstellbefehlen erfolgen nach 3 Sekunden statt sofort. Für NOAH/NEXA `slot1_power` bis `slot9_power` entfällt die zusätzliche Kontrollabfrage vollständig; reguläre Gerätemeldungen bleiben bestehen.
+**Neu in 3.3.46:** Kontrollabfragen nach Schalt- und Einstellbefehlen erfolgen nach 3 Sekunden statt sofort.
 
 **Neu in 3.3.44:** Der Protokoll-Reiter bietet zusätzlich zum bisherigen Raw-MQTT-Download einen ZIP-Export aller noch vorhandenen Dump-Segmente (aktuell und bis zu drei Rotationsdateien). Die Geräte-, MQTT- und Cloud-Kommunikation bleibt unverändert.
 
