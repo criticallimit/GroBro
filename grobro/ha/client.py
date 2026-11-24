@@ -1072,15 +1072,15 @@ class Client:
                 )
                 return
 
-            # Switch and select controls need settling time before verification.
-            # Number and time controls retain their immediate read-after-write.
-            if cmd_type in {"switch", "select"}:
+            # Only on/off switches use delayed read-after-write.
+            # Selects, numbers and times use their original immediate readback.
+            if cmd_type == "switch":
                 LOG.debug(
                     "Scheduling delayed read-after-write for Command %s register %s",
                     cmd_name,
                     pos.register_no,
                 )
-                self._schedule_holding_readback(device_id, cmd_name, pos.register_no, delay=5.0 if cmd_type == "select" else 3.0)
+                self._schedule_holding_readback(device_id, cmd_name, pos.register_no)
             else:
                 LOG.debug(
                     "Triggering immediate read-after-write for Command %s register %s",
