@@ -108,6 +108,7 @@ def test_neo_inverter_switch_uses_bridge_availability_only():
     )
     switch = payload["cmps"][f"grobro_{serial}_cmd_inverter_power"]
     assert switch["platform"] == "switch"
+    assert switch["optimistic"] is False
     assert switch["availability"] == [{"topic": "ha-test/bridge/availability"}]
     assert switch["state_topic"] == f"ha-test/switch/grobro/{serial}/inverter_power/get"
     assert switch["command_topic"] == f"ha-test/switch/grobro/{serial}/inverter_power/set"
