@@ -1072,26 +1072,15 @@ class Client:
                 )
                 return
 
-            # NOAH/NEXA scheduled power settings need no extra read-after-write.
-            # Their regular device updates remain untouched. For all other
-            # writable controls, confirm the new state after device settling.
-            if (
-                cmd_type == "number"
-                and cmd_name.startswith("slot")
-                and cmd_name.endswith("_power")
-                and (
-                    model.is_family(device_id, "noah")
-                    or model.is_family(device_id, "nexa")
-                )
-            ):
-                LOG.debug("Skipping readback for %s scheduled power %s", device_id, cmd_name)
-            else:
-                LOG.debug(
-                    "Scheduling read-after-write for Command %s register %s",
-                    cmd_name,
-                    pos.register_no,
-                )
-                self._schedule_holding_readback(device_id, cmd_name, pos.register_no)
+            # Holding-register controls, including slot power, are verified
+            # after settling. Live Output Noah (out_power) is input telemetry
+            # and does not enter this command/readback path.
+            LOG.debug(
+                "Scheduling read-after-write for Command %s register %s",
+                cmd_name,
+                pos.register_no,
+            )
+            self._schedule_holding_readback(device_id, cmd_name, pos.register_no)
 
             # Some NEO firmware does not reliably answer a standalone read of
             # holding register 0. Mirror the accepted user command as retained
