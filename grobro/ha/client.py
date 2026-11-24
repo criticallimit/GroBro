@@ -1205,6 +1205,12 @@ class Client:
                 clear_device_publish_cache(self, device_id)
             from grobro.ha.device_inventory import observe_device_availability
             observe_device_availability(device_id, online)
+            if not online and model.is_family(device_id, "neo"):
+                # Present the NEO inverter control as OFF, not unavailable.
+                # This only publishes a retained HA state; it never sends
+                # an inverter command to the physical device.
+                from grobro.ha.neo_power_runtime import _publish_retained_switch_state
+                _publish_retained_switch_state(self, device_id, "OFF")
 
         if AVAILABILITY_SENSOR:
             optional_cache = getattr(self, "_last_online_sensor", None)
