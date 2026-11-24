@@ -1072,36 +1072,25 @@ class Client:
                 )
                 return
 
-            LOG.debug(
-                "Triggering read-after-write for Command %s register %s",
-                cmd_name,
-                pos.register_no,
-            )
-
-            # All writable holding-register controls can briefly report the
-            # previous value before a device applies the write. Verify after
-            # a short settling period instead of publishing stale readbacks.
+            # NOAH/NEXA scheduled power settings need no extra read-after-write.
+            # Their regular device updates remain untouched. For all other
+            # writable controls, confirm the new state after device settling.
             if (
-                model.is_family(device_id, "noah") or model.is_family(device_id, "nexa")
-            ) and cmd_type == "number" and (
-                cmd_name == "default_power"
-                or (cmd_name.startswith("slot") and cmd_name.endswith("_power"))
+                cmd_type == "number"
+                and cmd_name.startswith("slot")
+                and cmd_name.endswith("_power")
+                and (
+                    model.is_family(device_id, "noah")
+                    or model.is_family(device_id, "nexa")
+                )
             ):
-                # NOAH/NEXA standard and scheduled output-power settings
-                # keep their existing immediate readback.
-                try:
-                    read_result = self.on_command(
-                        make_modbus_command(
-                            device_id,
-                            GrowattModbusFunction.READ_SINGLE_REGISTER,
-                            pos.register_no,
-                        )
-                    )
-                    if not publish_succeeded(read_result):
-                        LOG.warning("MQTT rejected readback for %s setting %s", device_id, cmd_name)
-                except Exception:
-                    LOG.exception("Could not request readback for %s setting %s", device_id, cmd_name)
+                LOG.debug("Skipping readback for %s scheduled power %s", device_id, cmd_name)
             else:
+                LOG.debug(
+                    "Scheduling read-after-write for Command %s register %s",
+                    cmd_name,
+                    pos.register_no,
+                )
                 self._schedule_holding_readback(device_id, cmd_name, pos.register_no)
 
             # Some NEO firmware does not reliably answer a standalone read of
