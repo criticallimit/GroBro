@@ -1081,7 +1081,25 @@ class Client:
             # All writable holding-register controls can briefly report the
             # previous value before a device applies the write. Verify after
             # a short settling period instead of publishing stale readbacks.
-            self._schedule_holding_readback(device_id, cmd_name, pos.register_no)
+            if (
+                model.is_family(device_id, "noah") or model.is_family(device_id, "nexa")
+            ) and cmd_type == "number" and cmd_name.startswith("slot") and cmd_name.endswith("_power"):
+                # Timed power outputs apply immediately on NOAH/NEXA; unlike
+                # operating modes, their confirmation should not be delayed.
+                try:
+                    read_result = self.on_command(
+                        make_modbus_command(
+                            device_id,
+                            GrowattModbusFunction.READ_SINGLE_REGISTER,
+                            pos.register_no,
+                        )
+                    )
+                    if not publish_succeeded(read_result):
+                        LOG.warning("MQTT rejected readback for %s setting %s", device_id, cmd_name)
+                except Exception:
+                    LOG.exception("Could not request readback for %s setting %s", device_id, cmd_name)
+            else:
+                self._schedule_holding_readback(device_id, cmd_name, pos.register_no)
 
             # Some NEO firmware does not reliably answer a standalone read of
             # holding register 0. Mirror the accepted user command as retained
