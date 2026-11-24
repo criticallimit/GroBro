@@ -82,6 +82,11 @@ def build_discovery_payload(
             # The bridge itself must remain connected for control to be available.
             component["availability"] = [{"topic": bridge_topic}]
             component["availability_mode"] = "all"
+            # Optimistic MQTT switches have assumed_state=True, which Home
+            # Assistant renders as separate ON/OFF action icons. The NEO
+            # inverter control has a retained state topic, so use a normal
+            # two-state toggle instead.
+            component["optimistic"] = False
         if platform != "sensor":
             component["command_topic"] = (
                 f"{base_topic}/{entry['topic_root']}/grobro/"
