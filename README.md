@@ -16,6 +16,10 @@ Better GroBro builds on [Robert Zaage's GroBro](https://github.com/robertzaage/G
 
 ---
 
+## Better GroBro 3.3.51
+
+**Neu in 3.3.51:** Alle experimentellen Rückleseverzögerungen für Geräte-Bedienelemente entfernt. `switch`, `select`, `number` und `time` verwenden wieder die ursprüngliche unmittelbare Rücklesung nach dem Schreibbefehl (Verhalten wie 3.3.44). Die zusätzlich eingeführte Timer-Verwaltung und vorübergehende Select-Diagnoseprotokollierung wurden zurückgenommen.
+
 ## Better GroBro 3.3.50
 
 **Neu in 3.3.50:** Die erfolglose Verzögerung für `select` wurde zurückgenommen; Select-, Number- und Time-Befehle werden wie ursprünglich sofort zurückgelesen. Ein/Aus-Schalter (`switch`) bleiben bei 3 Sekunden. Neue gezielte INFO-Protokolle zeigen Zustandswechsel von Select-Entitäten, um die Quelle des Zurückspringens anhand echter Geräteantworten zu untersuchen.
