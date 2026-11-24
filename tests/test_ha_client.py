@@ -895,7 +895,7 @@ class TestClientOnMessage:
             ha_client._client.on_message(None, None, msg)
             assert ha_client.on_command.call_count == 1
             timer_class.assert_called_once()
-            assert timer_class.call_args.args[0] == 1.5
+            assert timer_class.call_args.args[0] == 2.0
             timer_class.call_args.args[1]()
         assert ha_client.on_command.call_count == 2
         write, read = [call.args[0] for call in ha_client.on_command.call_args_list]
@@ -918,7 +918,7 @@ class TestClientOnMessage:
             assert commands[0].register_no == 256
             assert commands[0].value == 1
             timer_class.assert_called_once()
-            assert timer_class.call_args.args[0] == 1.5
+            assert timer_class.call_args.args[0] == 2.0
             timer_class.return_value.start.assert_called_once()
             timer_class.call_args.args[1]()
         commands = [call.args[0] for call in ha_client.on_command.call_args_list]
