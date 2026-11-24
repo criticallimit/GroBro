@@ -865,6 +865,30 @@ class TestClientOnMessage:
         assert commands[0].function == GrowattModbusFunction.PRESET_SINGLE_REGISTER
         assert commands[1].function == GrowattModbusFunction.READ_SINGLE_REGISTER
 
+    @pytest.mark.parametrize(
+        "device,name",
+        [
+            ("0PVP0000TEST0001", "slot1_power"),
+            ("0PVP0000TEST0001", "default_power"),
+            ("0HVR1234567890", "slot1_power"),
+            ("0HVR1234567890", "default_power"),
+        ],
+    )
+    def test_noah_nexa_power_settings_read_back_immediately(self, ha_client, device, name):
+        msg = _msg(
+            f"homeassistant/number/grobro/{device}/{name}/set",
+            b"100",
+        )
+        ha_client.on_command.return_value = (0, None)
+        with patch("grobro.ha.client.Timer") as timer_class:
+            ha_client._client.on_message(None, None, msg)
+            timer_class.assert_not_called()
+        assert ha_client.on_command.call_count == 2
+        write, read = [call.args[0] for call in ha_client.on_command.call_args_list]
+        assert write.function == GrowattModbusFunction.PRESET_SINGLE_REGISTER
+        assert read.function == GrowattModbusFunction.READ_SINGLE_REGISTER
+        assert read.register_no == write.register_no
+
     def test_noah_slot_mode_readback_waits_until_after_write(self, ha_client):
         device = "0PVP0000TEST0001"
         msg = _msg(
