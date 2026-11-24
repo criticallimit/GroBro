@@ -242,6 +242,9 @@ class Client:
         try:
             with runtime_lock(self):
                 self._stopped = True
+                for timer in self._holding_readback_timers.values():
+                    timer.cancel()
+                self._holding_readback_timers.clear()
                 from grobro.ha.sensor_cache import flush
                 flush(self, force=True)
                 with self._config_read_lock, self._device_timer_lock:
