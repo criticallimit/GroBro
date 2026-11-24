@@ -442,6 +442,39 @@ class Client:
 
         return result
 
+    def _schedule_holding_readback(self, device_id: str, name: str, register_no: int) -> None:
+        """Verify an accepted write after device settling; coalesce rapid changes."""
+        key = (device_id, register_no)
+        with runtime_lock(self):
+            if self._stopped:
+                return
+            previous = self._holding_readback_timers.pop(key, None)
+            if previous is not None:
+                previous.cancel()
+
+            def readback():
+                with runtime_lock(self):
+                    if self._stopped or self._holding_readback_timers.get(key) is not timer:
+                        return
+                    self._holding_readback_timers.pop(key, None)
+                    try:
+                        result = self.on_command(
+                            make_modbus_command(
+                                device_id,
+                                GrowattModbusFunction.READ_SINGLE_REGISTER,
+                                register_no,
+                            )
+                        )
+                        if not publish_succeeded(result):
+                            LOG.warning("MQTT rejected readback for %s setting %s", device_id, name)
+                    except Exception:
+                        LOG.exception("Could not request readback for %s setting %s", device_id, name)
+
+            timer = Timer(1.5, readback)
+            timer.daemon = True
+            self._holding_readback_timers[key] = timer
+            timer.start()
+
     @guard_runtime
     def publish_input_register(self, state: HomeAssistantInputRegister):
         """Publish one telemetry packet through the optimized HA hot path."""
@@ -1042,33 +1075,10 @@ class Client:
                 pos.register_no,
             )
 
-            def read_after_write():
-                if getattr(self, "_stopped", False):
-                    return
-                try:
-                    self.on_command(
-                        make_modbus_command(
-                            device_id,
-                            GrowattModbusFunction.READ_SINGLE_REGISTER,
-                            pos.register_no,
-                        )
-                    )
-                except Exception:
-                    LOG.exception("Could not request readback for %s setting %s", device_id, cmd_name)
-
-            # NOAH schedule modes may still report the old value immediately
-            # after a write. Let the device apply it before verifying the state.
-            if (
-                cmd_type == "select"
-                and model.is_family(device_id, "noah")
-                and cmd_name.startswith("slot")
-                and cmd_name.endswith("_mode")
-            ):
-                timer = Timer(1.5, read_after_write)
-                timer.daemon = True
-                timer.start()
-            else:
-                read_after_write()
+            # All writable holding-register controls can briefly report the
+            # previous value before a device applies the write. Verify after
+            # a short settling period instead of publishing stale readbacks.
+            self._schedule_holding_readback(device_id, cmd_name, pos.register_no)
 
             # Some NEO firmware does not reliably answer a standalone read of
             # holding register 0. Mirror the accepted user command as retained
