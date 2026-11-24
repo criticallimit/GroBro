@@ -1035,6 +1035,13 @@ class Client:
                             continue
                         if register.homeassistant.type == "switch":
                             value = "ON" if value == 1 else "OFF"
+                        if register.homeassistant.type == "select":
+                            LOG.info(
+                                "SELECT TRACE device_response %s/%s register=%s function=%s reported=%r",
+                                _device_label(modbus_device_id), name,
+                                register.growatt.position.register_no,
+                                modbus_message.function, value,
+                            )
                         state.payload.append(
                             HomeAssistantHoldingRegisterValue(
                                 name=name,
