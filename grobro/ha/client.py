@@ -1072,15 +1072,32 @@ class Client:
                 )
                 return
 
-            # Holding-register controls, including slot power, are verified
-            # after settling. Live Output Noah (out_power) is input telemetry
-            # and does not enter this command/readback path.
-            LOG.debug(
-                "Scheduling read-after-write for Command %s register %s",
-                cmd_name,
-                pos.register_no,
-            )
-            self._schedule_holding_readback(device_id, cmd_name, pos.register_no)
+            # Only ON/OFF switches need settling time before verification.
+            # Select, number and time controls retain their original immediate
+            # read-after-write behavior.
+            if cmd_type == "switch":
+                LOG.debug(
+                    "Scheduling switch read-after-write for Command %s register %s",
+                    cmd_name,
+                    pos.register_no,
+                )
+                self._schedule_holding_readback(device_id, cmd_name, pos.register_no)
+            else:
+                LOG.debug(
+                    "Triggering immediate read-after-write for Command %s register %s",
+                    cmd_name,
+                    pos.register_no,
+                )
+                try:
+                    self.on_command(
+                        make_modbus_command(
+                            device_id,
+                            GrowattModbusFunction.READ_SINGLE_REGISTER,
+                            pos.register_no,
+                        )
+                    )
+                except Exception:
+                    LOG.exception("Could not request readback for %s setting %s", device_id, cmd_name)
 
             # Some NEO firmware does not reliably answer a standalone read of
             # holding register 0. Mirror the accepted user command as retained
