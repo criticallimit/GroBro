@@ -16,6 +16,10 @@ Better GroBro builds on [Robert Zaage's GroBro](https://github.com/robertzaage/G
 
 ---
 
+## Better GroBro 3.3.52
+
+**Neu in 3.3.52:** Gezielt einschaltbare Diagnose für `select`-Auswahlfelder: Mit `LOG_LEVEL: INFO` werden Schreibbefehl, Geräte-Registerantwort und tatsächlich veröffentlichter MQTT-Zustandswechsel unter `SELECT TRACE` protokolliert. Der Schalt- und Rückleseablauf bleibt unverändert (keine experimentellen Verzögerungen).
+
 ## Better GroBro 3.3.51
 
 **Neu in 3.3.51:** Alle experimentellen Rückleseverzögerungen für Geräte-Bedienelemente entfernt. `switch`, `select`, `number` und `time` verwenden wieder die ursprüngliche unmittelbare Rücklesung nach dem Schreibbefehl (Verhalten wie 3.3.44). Die zusätzlich eingeführte Timer-Verwaltung und vorübergehende Select-Diagnoseprotokollierung wurden zurückgenommen.
