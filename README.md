@@ -16,43 +16,9 @@ Better GroBro builds on [Robert Zaage's GroBro](https://github.com/robertzaage/G
 
 ---
 
-## Better GroBro 3.3.54
+## Current version
 
-**Neu in 3.3.54:** Die optimistische MQTT-Zustandsanzeige gilt jetzt neben `select` auch für `switch` und `number` (Schieberegler). Der zuvor konfigurierte `state_topic` bleibt bei allen erhalten: echte Geräteantworten können den Zustand weiterhin korrigieren. Keine zusätzliche Rückleseverzögerung; Uhrzeit- und Messwert-Entitäten bleiben unverändert.
-
-## Better GroBro 3.3.53
-
-**Neu in 3.3.53:** MQTT-Auswahlfelder (`select`) zeigen den ausgewählten Modus sofort als optimistischen Zustand an. Der bisherige `state_topic` bleibt erhalten, damit spätere bestätigte Geräteantworten weiterhin den tatsächlichen Zustand setzen oder eine fehlgeschlagene Einstellung korrigieren können. Die bisherige sofortige Rücklesung ist unverändert; keine zusätzlichen Verzögerungen. Grund: Die NOAH-Gerätebestätigung traf im Diagnoseprotokoll erst 5 bis 9 Sekunden nach dem Schreibbefehl ein.
-
-## Better GroBro 3.3.52
-
-**Neu in 3.3.52:** Gezielt einschaltbare Diagnose für `select`-Auswahlfelder: Mit `LOG_LEVEL: INFO` werden Schreibbefehl, Geräte-Registerantwort und tatsächlich veröffentlichter MQTT-Zustandswechsel unter `SELECT TRACE` protokolliert. Der Schalt- und Rückleseablauf bleibt unverändert (keine experimentellen Verzögerungen).
-
-## Better GroBro 3.3.51
-
-**Neu in 3.3.51:** Alle experimentellen Rückleseverzögerungen für Geräte-Bedienelemente entfernt. `switch`, `select`, `number` und `time` verwenden wieder die ursprüngliche unmittelbare Rücklesung nach dem Schreibbefehl (Verhalten wie 3.3.44). Die zusätzlich eingeführte Timer-Verwaltung und vorübergehende Select-Diagnoseprotokollierung wurden zurückgenommen.
-
-## Better GroBro 3.3.50
-
-**Neu in 3.3.50:** Die erfolglose Verzögerung für `select` wurde zurückgenommen; Select-, Number- und Time-Befehle werden wie ursprünglich sofort zurückgelesen. Ein/Aus-Schalter (`switch`) bleiben bei 3 Sekunden. Neue gezielte INFO-Protokolle zeigen Zustandswechsel von Select-Entitäten, um die Quelle des Zurückspringens anhand echter Geräteantworten zu untersuchen.
-
-## Better GroBro 3.3.49
-
-**Neu in 3.3.49:** Rücklesung bei `select`-Auswahlfeldern nach 5 Sekunden, bei `switch`-Schaltern weiterhin nach 3 Sekunden. `number` und `time` werden weiterhin sofort zurückgelesen.
-
-## Better GroBro 3.3.48
-
-**Neu in 3.3.48:** Nur bei `switch`- und `select`-Einstellungen erfolgt die Kontrollabfrage 3 Sekunden nach dem Schreibbefehl. Für `number` und `time` ist die ursprüngliche sofortige Rücklesung wiederhergestellt. Messwert-Telemetrie bleibt unverändert.
-
-## Better GroBro 3.3.47
-
-**Neu in 3.3.47:** NOAH/NEXA-Zeitplanleistungen (`slot*_power`) werden wie andere schreibbare Einstellungen nach 3 Sekunden zurückgelesen. Der aktuelle Messwert `out_power` („Output Noah“) bleibt reine Telemetrie ohne zusätzliche Rücklesung.
-
-## Better GroBro 3.3.46
-
-**Neu in 3.3.46:** Kontrollabfragen nach Schalt- und Einstellbefehlen erfolgen nach 3 Sekunden statt sofort.
-
-**Neu in 3.3.44:** Der Protokoll-Reiter bietet zusätzlich zum bisherigen Raw-MQTT-Download einen ZIP-Export aller noch vorhandenen Dump-Segmente (aktuell und bis zu drei Rotationsdateien). Die Geräte-, MQTT- und Cloud-Kommunikation bleibt unverändert.
+Better GroBro 3.3.55 — small bugfixes
 
 ### What Better GroBro offers
 
@@ -117,5 +83,3 @@ Existing Better GroBro settings are retained when updating the installed add-on.
 ## Credits
 
 Better GroBro is based on [robertzaage/GroBro](https://github.com/robertzaage/GroBro) by Robert Zaage and contributors.
-
-**Neu in 3.3.4:** Der aktuelle Batterieenergieinhalt wird mit zwei Nachkommastellen angezeigt.
