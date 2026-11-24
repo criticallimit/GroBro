@@ -16,6 +16,10 @@ Better GroBro builds on [Robert Zaage's GroBro](https://github.com/robertzaage/G
 
 ---
 
+## Better GroBro 3.3.49
+
+**Neu in 3.3.49:** Rücklesung bei `select`-Auswahlfeldern nach 5 Sekunden, bei `switch`-Schaltern weiterhin nach 3 Sekunden. `number` und `time` werden weiterhin sofort zurückgelesen.
+
 ## Better GroBro 3.3.48
 
 **Neu in 3.3.48:** Nur bei `switch`- und `select`-Einstellungen erfolgt die Kontrollabfrage 3 Sekunden nach dem Schreibbefehl. Für `number` und `time` ist die ursprüngliche sofortige Rücklesung wiederhergestellt. Messwert-Telemetrie bleibt unverändert.
