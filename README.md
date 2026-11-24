@@ -16,6 +16,10 @@ Better GroBro builds on [Robert Zaage's GroBro](https://github.com/robertzaage/G
 
 ---
 
+## Better GroBro 3.3.48
+
+**Neu in 3.3.48:** Nur bei `switch`- und `select`-Einstellungen erfolgt die Kontrollabfrage 3 Sekunden nach dem Schreibbefehl. Für `number` und `time` ist die ursprüngliche sofortige Rücklesung wiederhergestellt. Messwert-Telemetrie bleibt unverändert.
+
 ## Better GroBro 3.3.47
 
 **Neu in 3.3.47:** NOAH/NEXA-Zeitplanleistungen (`slot*_power`) werden wie andere schreibbare Einstellungen nach 3 Sekunden zurückgelesen. Der aktuelle Messwert `out_power` („Output Noah“) bleibt reine Telemetrie ohne zusätzliche Rücklesung.
