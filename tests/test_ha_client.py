@@ -889,7 +889,7 @@ class TestClientOnMessage:
         assert read.function == GrowattModbusFunction.READ_SINGLE_REGISTER
         assert read.register_no == write.register_no
 
-    def test_noah_slot_mode_readback_waits_until_after_write(self, ha_client):
+    def test_noah_slot_mode_readback_is_immediate(self, ha_client):
         device = "0PVP0000TEST0001"
         msg = _msg(
             f"homeassistant/select/grobro/{device}/slot1_mode/set",
@@ -898,17 +898,12 @@ class TestClientOnMessage:
         ha_client.on_command.return_value = (0, None)
         with patch("grobro.ha.client.Timer") as timer_class:
             ha_client._client.on_message(None, None, msg)
-            commands = [call.args[0] for call in ha_client.on_command.call_args_list]
-            assert len(commands) == 1
-            assert commands[0].function == GrowattModbusFunction.PRESET_SINGLE_REGISTER
-            assert commands[0].register_no == 256
-            assert commands[0].value == 1
-            timer_class.assert_called_once()
-            assert timer_class.call_args.args[0] == 5.0
-            timer_class.return_value.start.assert_called_once()
-            timer_class.call_args.args[1]()
+            timer_class.assert_not_called()
         commands = [call.args[0] for call in ha_client.on_command.call_args_list]
         assert len(commands) == 2
+        assert commands[0].function == GrowattModbusFunction.PRESET_SINGLE_REGISTER
+        assert commands[0].register_no == 256
+        assert commands[0].value == 1
         assert commands[1].function == GrowattModbusFunction.READ_SINGLE_REGISTER
         assert commands[1].register_no == 256
 
@@ -924,10 +919,10 @@ class TestClientOnMessage:
         ha_client.on_command.assert_called_once()
         timer_class.assert_not_called()
 
-    def test_rapid_writes_to_same_register_coalesce_readback(self, ha_client):
+    def test_rapid_switch_writes_to_same_register_coalesce_readback(self, ha_client):
         device = "0PVP0000TEST0001"
-        msg1 = _msg(f"homeassistant/select/grobro/{device}/slot1_mode/set", b"Battery First")
-        msg2 = _msg(f"homeassistant/select/grobro/{device}/slot1_mode/set", b"Load First")
+        msg1 = _msg(f"homeassistant/switch/grobro/{device}/slot1_enabled/set", b"ON")
+        msg2 = _msg(f"homeassistant/switch/grobro/{device}/slot1_enabled/set", b"OFF")
         ha_client.on_command.return_value = (0, None)
         with patch("grobro.ha.client.Timer") as timer_class:
             first_timer, second_timer = MagicMock(), MagicMock()
@@ -943,9 +938,9 @@ class TestClientOnMessage:
         assert ha_client.on_command.call_count == 3
         assert ha_client.on_command.call_args.args[0].function == GrowattModbusFunction.READ_SINGLE_REGISTER
 
-    def test_pending_readback_does_not_run_after_shutdown(self, ha_client):
+    def test_pending_switch_readback_does_not_run_after_shutdown(self, ha_client):
         device = "0PVP0000TEST0001"
-        msg = _msg(f"homeassistant/select/grobro/{device}/slot1_mode/set", b"Battery First")
+        msg = _msg(f"homeassistant/switch/grobro/{device}/slot1_enabled/set", b"ON")
         ha_client.on_command.return_value = (0, None)
         with patch("grobro.ha.client.Timer") as timer_class:
             ha_client._client.on_message(None, None, msg)
