@@ -72,6 +72,11 @@ def build_discovery_payload(
             ),
             **ha_data,
         }
+        if platform == "select":
+            # NOAH/NEXA can take several seconds to confirm a changed mode.
+            # Keep the selected option visible until the real state_topic
+            # confirms or corrects it, rather than showing the stale state.
+            component["optimistic"] = True
         if platform != "sensor":
             component["command_topic"] = (
                 f"{base_topic}/{entry['topic_root']}/grobro/"
