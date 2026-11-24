@@ -874,7 +874,7 @@ class TestClientOnMessage:
             ("0HVR1234567890", "slot9_power"),
         ],
     )
-    def test_noah_nexa_slot_power_skips_extra_readback(self, ha_client, device, name):
+    def test_noah_nexa_slot_power_readback_is_delayed(self, ha_client, device, name):
         msg = _msg(
             f"homeassistant/number/grobro/{device}/{name}/set",
             b"100",
@@ -882,10 +882,15 @@ class TestClientOnMessage:
         ha_client.on_command.return_value = (0, None)
         with patch("grobro.ha.client.Timer") as timer_class:
             ha_client._client.on_message(None, None, msg)
-            timer_class.assert_not_called()
-        ha_client.on_command.assert_called_once()
-        write = ha_client.on_command.call_args.args[0]
+            assert ha_client.on_command.call_count == 1
+            timer_class.assert_called_once()
+            assert timer_class.call_args.args[0] == 3.0
+            timer_class.call_args.args[1]()
+        assert ha_client.on_command.call_count == 2
+        write, read = [call.args[0] for call in ha_client.on_command.call_args_list]
         assert write.function == GrowattModbusFunction.PRESET_SINGLE_REGISTER
+        assert read.function == GrowattModbusFunction.READ_SINGLE_REGISTER
+        assert read.register_no == write.register_no
 
     @pytest.mark.parametrize("device", ["0PVP0000TEST0001", "0HVR1234567890"])
     def test_noah_nexa_default_power_readback_is_delayed(self, ha_client, device):
