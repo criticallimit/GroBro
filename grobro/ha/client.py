@@ -1072,12 +1072,11 @@ class Client:
                 )
                 return
 
-            # Only ON/OFF switches need settling time before verification.
-            # Select, number and time controls retain their original immediate
-            # read-after-write behavior.
-            if cmd_type == "switch":
+            # Switch and select controls need settling time before verification.
+            # Number and time controls retain their immediate read-after-write.
+            if cmd_type in {"switch", "select"}:
                 LOG.debug(
-                    "Scheduling switch read-after-write for Command %s register %s",
+                    "Scheduling delayed read-after-write for Command %s register %s",
                     cmd_name,
                     pos.register_no,
                 )
