@@ -22,6 +22,7 @@ from grobro.ha.battery_position import (
     save_manual_assignments,
 )
 from grobro.ha.device_inventory import get_device_inventory
+from grobro.grobro.cloud_status import snapshot as cloud_status_snapshot
 from grobro.ha.supervisor_config import (
     SupervisorConfigError,
     get_addon_options,
@@ -139,6 +140,12 @@ _INDEX_HTML = r"""<!doctype html>
     .tabs button[data-tab="logs"]::before { content:"≡"; }
 
     .tab, #config-message { grid-column:2; grid-row:2; min-width:0; padding:10px 12px 12px; }
+    .cloud-leds { display:flex; flex-wrap:wrap; gap:18px; align-items:center; margin:0 0 12px; font-size:12px; color:var(--muted); }
+    .cloud-leds span { display:inline-flex; gap:6px; align-items:center; }
+    .cloud-led { display:inline-block; flex:none; width:9px; height:9px; border-radius:50%; background:#536575; box-shadow:0 0 0 1px #243e50; }
+    .cloud-led.ok { background:var(--ok); box-shadow:0 0 7px rgba(69,212,131,.55); }
+    .cloud-led.warn { background:var(--warning); }
+    .cloud-led.off { background:var(--danger); }
     .tab { display:none; align-self:start; }
     .tab.active { display:block; }
 
@@ -513,6 +520,11 @@ _INDEX_HTML = r"""<!doctype html>
   <section id="tab-cloud" class="tab">
     <div class="card">
       <h2>Growatt Cloud</h2>
+      <div id="cloud-leds" class="cloud-leds" role="status" aria-live="off">
+        <span><i id="cloud-link-led" class="cloud-led"></i><b id="cloud-link-text">Verbindung: –</b></span>
+        <span><i id="cloud-tx-led" class="cloud-led"></i>TX</span>
+        <span><i id="cloud-rx-led" class="cloud-led"></i>RX</span>
+      </div>
       <div class="grid">
         <div class="field"><label>Cloud-Weiterleitung</label><div class="check"><input id="cfg-GROWATT_CLOUD" type="checkbox">Nachrichten zur/von der Growatt Cloud weiterleiten</div></div>
         <div class="field"><label>Konfigurationsfilter</label><div class="check"><input id="cfg-GROWATT_CLOUD_CONFIG_FILTER" type="checkbox">Ferninitiierte Konfigurationsnachrichten blockieren</div></div>
@@ -727,6 +739,7 @@ function activateTab(name){
     loadLogs().catch(showError);
     logTimer=setInterval(()=>loadLogs().catch(()=>{}),5000);
   }
+  if(name==="cloud")loadCloudStatus().catch(()=>{});
 }
 document.querySelectorAll("[data-tab]").forEach(b=>b.addEventListener("click",()=>activateTab(b.dataset.tab)));
 document.getElementById("back-top").addEventListener("click",goBackToAddon);
@@ -990,6 +1003,23 @@ function collectConfigChanges(){
   const changes={};for(const [key,value] of Object.entries(collectConfig()))if(value!==configBaseline[key])changes[key]=value;
   return changes;
 }
+async function loadCloudStatus(){
+  const r=await fetch(apiUrl("api/cloud-status"),{cache:"no-store"});
+  if(!r.ok)throw new Error("Cloud status unavailable");
+  const state=await r.json();
+  const link=document.getElementById("cloud-link-led");
+  const title=document.getElementById("cloud-link-text");
+  const states={
+    connected:l({de:"Verbunden",en:"Connected",fr:"Connecté",es:"Conectado",nl:"Verbonden"}),
+    partial:l({de:"Teilweise verbunden",en:"Partially connected",fr:"Partiellement connecté",es:"Conexión parcial",nl:"Gedeeltelijk verbonden"}),
+    disconnected:l({de:"Getrennt",en:"Disconnected",fr:"Déconnecté",es:"Desconectado",nl:"Verbroken"}),
+    disabled:l({de:"Ausgeschaltet",en:"Disabled",fr:"Désactivé",es:"Desactivado",nl:"Uitgeschakeld"})
+  };
+  link.className="cloud-led"+(state.status==="connected"?" ok":state.status==="partial"?" warn":state.status==="disconnected"?" off":"");
+  title.textContent=states[state.status]||"–";
+  document.getElementById("cloud-tx-led").className="cloud-led"+(state.tx?" ok":"");
+  document.getElementById("cloud-rx-led").className="cloud-led"+(state.rx?" ok":"");
+}
 async function loadConfig(){
   const r=await fetch(apiUrl("api/config"),{cache:"no-store"});const out=await r.json();if(!r.ok)throw new Error(out.error||"Konfiguration konnte nicht geladen werden");
   configState=out;
@@ -1113,6 +1143,10 @@ document.getElementById("raw-dump-download").addEventListener("click",()=>downlo
 document.getElementById("raw-dump-archive-download").addEventListener("click",()=>downloadRawDumpArchive().catch(showError));
 function showError(error){showMessage("config-message",error.message||String(error),"error");}
 loadConfig().then(loadBatteries).then(loadOverviewLogs).catch(showError);
+setInterval(()=>{
+  const cloud=document.getElementById("tab-cloud");
+  if(cloud&&cloud.classList.contains("active"))loadCloudStatus().catch(()=>{});
+},1000);
 setInterval(()=>{
   const overview=document.getElementById("tab-overview");
   if(overview&&overview.classList.contains("active")){
@@ -1317,6 +1351,10 @@ class BatteryIngressHandler(BaseHTTPRequestHandler):
         if self._reject_untrusted_client():
             return
         path = urlsplit(self.path).path.rstrip("/")
+        if path.endswith("/api/cloud-status"):
+            from grobro.grobro.client import _current_cloud_policy
+            self._send_json(cloud_status_snapshot(enabled=_current_cloud_policy().enabled))
+            return
         if path.endswith("/api/state"):
             state = load_battery_ui_state()
             state["inventory"] = get_device_inventory()
