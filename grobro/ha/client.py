@@ -1042,16 +1042,33 @@ class Client:
                 pos.register_no,
             )
 
-            try:
-                self.on_command(
-                    make_modbus_command(
-                        device_id,
-                        GrowattModbusFunction.READ_SINGLE_REGISTER,
-                        pos.register_no,
+            def read_after_write():
+                if getattr(self, "_stopped", False):
+                    return
+                try:
+                    self.on_command(
+                        make_modbus_command(
+                            device_id,
+                            GrowattModbusFunction.READ_SINGLE_REGISTER,
+                            pos.register_no,
+                        )
                     )
-                )
-            except Exception:
-                LOG.exception("Could not request readback for %s setting %s", device_id, cmd_name)
+                except Exception:
+                    LOG.exception("Could not request readback for %s setting %s", device_id, cmd_name)
+
+            # NOAH schedule modes may still report the old value immediately
+            # after a write. Let the device apply it before verifying the state.
+            if (
+                cmd_type == "select"
+                and model.is_family(device_id, "noah")
+                and cmd_name.startswith("slot")
+                and cmd_name.endswith("_mode")
+            ):
+                timer = Timer(1.5, read_after_write)
+                timer.daemon = True
+                timer.start()
+            else:
+                read_after_write()
 
             # Some NEO firmware does not reliably answer a standalone read of
             # holding register 0. Mirror the accepted user command as retained
