@@ -625,6 +625,13 @@ class Client:
                     LOG.exception("Could not publish holding state for %s setting %s; will retry", device_id, value.name)
                     continue
                 if publish_succeeded(result):
+                    if value.register_def.type == "select":
+                        LOG.info(
+                            "SELECT TRACE state %s/%s previous=%r reported=%r mqtt_state_published",
+                            _device_label(device_id), value.name,
+                            self._last_holding_state.get((device_id, value.name)),
+                            value.value,
+                        )
                     _should_publish_holding_state(self, device_id, value.name, value.value)
         except Exception as exc:
             LOG.error("HA: publish msg: %s", exc)
@@ -1035,6 +1042,13 @@ class Client:
                     cmd_name,
                 )
                 return
+
+            if cmd_type == "select":
+                LOG.info(
+                    "SELECT TRACE command %s/%s register=%s requested=%r encoded=%s write_mqtt_accepted",
+                    _device_label(device_id), cmd_name, pos.register_no,
+                    raw_value, parsed_value,
+                )
 
             LOG.debug(
                 "Triggering read-after-write for Command %s register %s",
