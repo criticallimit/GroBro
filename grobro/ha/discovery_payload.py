@@ -72,10 +72,9 @@ def build_discovery_payload(
             ),
             **ha_data,
         }
-        if platform == "select":
-            # NOAH/NEXA can take several seconds to confirm a changed mode.
-            # Keep the selected option visible until the real state_topic
-            # confirms or corrects it, rather than showing the stale state.
+        if platform in {"select", "switch", "number"}:
+            # Keep the user's chosen setting visible while the device
+            # processes it. Subsequent real state_topic updates still apply.
             component["optimistic"] = True
         if platform != "sensor":
             component["command_topic"] = (
