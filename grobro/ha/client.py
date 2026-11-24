@@ -473,7 +473,7 @@ class Client:
                     except Exception:
                         LOG.exception("Could not request readback for %s setting %s", device_id, name)
 
-            timer = Timer(2.0, readback)
+            timer = Timer(3.0, readback)
             timer.daemon = True
             self._holding_readback_timers[key] = timer
             timer.start()
