@@ -661,6 +661,12 @@ class Client:
                     LOG.exception("Could not publish holding state for %s setting %s; will retry", device_id, value.name)
                     continue
                 if publish_succeeded(result):
+                    if value.register_def.type == "select":
+                        previous = self._last_holding_state.get((device_id, value.name))
+                        LOG.info(
+                            "%s: select %s state %r -> %r (HA MQTT publish accepted)",
+                            device_id, value.name, previous, value.value,
+                        )
                     _should_publish_holding_state(self, device_id, value.name, value.value)
         except Exception as exc:
             LOG.error("HA: publish msg: %s", exc)
