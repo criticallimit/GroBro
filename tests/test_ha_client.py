@@ -906,9 +906,10 @@ class TestClientOnMessage:
         msg2 = _msg(f"homeassistant/select/grobro/{device}/slot1_mode/set", b"Load First")
         ha_client.on_command.return_value = (0, None)
         with patch("grobro.ha.client.Timer") as timer_class:
+            first_timer, second_timer = MagicMock(), MagicMock()
+            timer_class.side_effect = [first_timer, second_timer]
             ha_client._client.on_message(None, None, msg1)
             first_callback = timer_class.call_args.args[1]
-            first_timer = timer_class.return_value
             ha_client._client.on_message(None, None, msg2)
             first_timer.cancel.assert_called_once()
             assert ha_client.on_command.call_count == 2
