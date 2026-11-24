@@ -96,6 +96,29 @@ def test_slot_mode_select_is_optimistic_but_keeps_hardware_state_topic(family_ke
     assert "optimistic" not in time
 
 
+def test_neo_inverter_switch_uses_bridge_availability_only():
+    family = next(f for f in DEVICE_FAMILIES if f.key == "neo")
+    serial = family.prefixes[0] + "TEST"
+    payload = build_discovery_payload(
+        serial, family.registers,
+        {"identifiers": [serial], "manufacturer": "Growatt"},
+        base_topic="ha-test", bridge_topic="ha-test/bridge/availability",
+        effective_max_bat=4, pv_count=4, max_slots=3,
+        device_timeout=120, availability_sensor=True,
+    )
+    switch = payload["cmps"][f"grobro_{serial}_cmd_inverter_power"]
+    assert switch["platform"] == "switch"
+    assert switch["availability"] == [{"topic": "ha-test/bridge/availability"}]
+    assert switch["state_topic"] == f"ha-test/switch/grobro/{serial}/inverter_power/get"
+    assert switch["command_topic"] == f"ha-test/switch/grobro/{serial}/inverter_power/set"
+    assert payload["availability"] == [
+        {"topic": f"ha-test/grobro/{serial}/availability"},
+        {"topic": "ha-test/bridge/availability"},
+    ]
+    other = payload["cmps"][f"grobro_{serial}_cmd_output_power_limit"]
+    assert "availability" not in other
+
+
 @pytest.mark.parametrize("family_key", ["neo", "noah", "nexa"])
 def test_common_config_entities_keep_identical_register_topics(family_key):
     family = next(f for f in DEVICE_FAMILIES if f.key == family_key)
