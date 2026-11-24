@@ -819,9 +819,7 @@ class TestClientOnMessage:
         msg = _msg("homeassistant/number/grobro/QMN000ABC1D2E3FG/output_power_limit/set", b"75")
         with patch("grobro.ha.client.Timer") as timer_class:
             ha_client._client.on_message(None, None, msg)
-            assert ha_client.on_command.call_count == 1
-            timer_class.assert_called_once()
-            timer_class.call_args.args[1]()
+            timer_class.assert_not_called()
         assert ha_client.on_command.call_count == 2
 
     def test_switch_set_on(self, ha_client):
@@ -870,38 +868,20 @@ class TestClientOnMessage:
         [
             ("0PVP0000TEST0001", "slot1_power"),
             ("0PVP0000TEST0001", "slot9_power"),
+            ("0PVP0000TEST0001", "default_power"),
             ("0HVR1234567890", "slot1_power"),
             ("0HVR1234567890", "slot9_power"),
+            ("0HVR1234567890", "default_power"),
         ],
     )
-    def test_noah_nexa_slot_power_readback_is_delayed(self, ha_client, device, name):
+    def test_noah_nexa_power_readback_is_immediate(self, ha_client, device, name):
         msg = _msg(
-            f"homeassistant/number/grobro/{device}/{name}/set",
-            b"100",
+            f"homeassistant/number/grobro/{device}/{name}/set", b"100"
         )
         ha_client.on_command.return_value = (0, None)
         with patch("grobro.ha.client.Timer") as timer_class:
             ha_client._client.on_message(None, None, msg)
-            assert ha_client.on_command.call_count == 1
-            timer_class.assert_called_once()
-            assert timer_class.call_args.args[0] == 3.0
-            timer_class.call_args.args[1]()
-        assert ha_client.on_command.call_count == 2
-        write, read = [call.args[0] for call in ha_client.on_command.call_args_list]
-        assert write.function == GrowattModbusFunction.PRESET_SINGLE_REGISTER
-        assert read.function == GrowattModbusFunction.READ_SINGLE_REGISTER
-        assert read.register_no == write.register_no
-
-    @pytest.mark.parametrize("device", ["0PVP0000TEST0001", "0HVR1234567890"])
-    def test_noah_nexa_default_power_readback_is_delayed(self, ha_client, device):
-        msg = _msg(f"homeassistant/number/grobro/{device}/default_power/set", b"100")
-        ha_client.on_command.return_value = (0, None)
-        with patch("grobro.ha.client.Timer") as timer_class:
-            ha_client._client.on_message(None, None, msg)
-            assert ha_client.on_command.call_count == 1
-            timer_class.assert_called_once()
-            assert timer_class.call_args.args[0] == 3.0
-            timer_class.call_args.args[1]()
+            timer_class.assert_not_called()
         assert ha_client.on_command.call_count == 2
         write, read = [call.args[0] for call in ha_client.on_command.call_args_list]
         assert write.function == GrowattModbusFunction.PRESET_SINGLE_REGISTER
