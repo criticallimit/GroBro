@@ -1161,6 +1161,24 @@ class TestClientAvailability:
         assert availability_calls[-1].args[1] == "offline"
         assert all("/online" not in call.args[0] for call in calls)
 
+    def test_neo_offline_displays_switch_off_without_device_command(self, ha_client):
+        device_id = "QMN000ABC1D2E3FG"
+        power_topic = f"homeassistant/switch/grobro/{device_id}/inverter_power/get"
+        ha_client._client.publish.return_value = (0, None)
+        assert ha_client._Client__publish_availability(device_id, False) is True
+        ha_client._client.publish.assert_any_call(power_topic, "OFF", retain=True)
+        ha_client.on_command.assert_not_called()
+        assert (device_id, "inverter_power") not in ha_client._last_holding_state
+
+    def test_noah_offline_does_not_fake_power_switch_state(self, ha_client):
+        device_id = "0PVP0000TEST0001"
+        ha_client._client.publish.return_value = (0, None)
+        ha_client._Client__publish_availability(device_id, False)
+        assert not any(
+            "/inverter_power/get" in call.args[0]
+            for call in ha_client._client.publish.call_args_list
+        )
+
     @patch("grobro.ha.client.AVAILABILITY_SENSOR", True)
     def test_publish_availability_offline_with_sensor(self, ha_client):
         device_id = "QMN000ABC1D2E3FG"
