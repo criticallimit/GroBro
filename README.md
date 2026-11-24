@@ -16,6 +16,10 @@ Better GroBro builds on [Robert Zaage's GroBro](https://github.com/robertzaage/G
 
 ---
 
+## Better GroBro 3.3.53
+
+**Neu in 3.3.53:** MQTT-Auswahlfelder (`select`) zeigen den ausgewählten Modus sofort als optimistischen Zustand an. Der bisherige `state_topic` bleibt erhalten, damit spätere bestätigte Geräteantworten weiterhin den tatsächlichen Zustand setzen oder eine fehlgeschlagene Einstellung korrigieren können. Die bisherige sofortige Rücklesung ist unverändert; keine zusätzlichen Verzögerungen. Grund: Die NOAH-Gerätebestätigung traf im Diagnoseprotokoll erst 5 bis 9 Sekunden nach dem Schreibbefehl ein.
+
 ## Better GroBro 3.3.52
 
 **Neu in 3.3.52:** Gezielt einschaltbare Diagnose für `select`-Auswahlfelder: Mit `LOG_LEVEL: INFO` werden Schreibbefehl, Geräte-Registerantwort und tatsächlich veröffentlichter MQTT-Zustandswechsel unter `SELECT TRACE` protokolliert. Der Schalt- und Rückleseablauf bleibt unverändert (keine experimentellen Verzögerungen).
