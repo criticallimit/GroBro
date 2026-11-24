@@ -65,6 +65,28 @@ def test_discovery_builder_preserves_definitions_and_entity_identity(family):
 
 
 
+@pytest.mark.parametrize("family_key", ["noah", "nexa"])
+def test_slot_mode_select_is_optimistic_but_keeps_hardware_state_topic(family_key):
+    family = next(f for f in DEVICE_FAMILIES if f.key == family_key)
+    serial = family.prefixes[0] + "TEST"
+    components = build_discovery_payload(
+        serial, family.registers,
+        {"identifiers": [serial], "manufacturer": "Growatt"},
+        base_topic="ha-test", bridge_topic="ha-test/bridge/availability",
+        effective_max_bat=4, pv_count=4, max_slots=3,
+        device_timeout=120, availability_sensor=True,
+    )["cmps"]
+    entity = components[f"grobro_{serial}_cmd_slot1_mode"]
+    assert entity["platform"] == "select"
+    assert entity["optimistic"] is True
+    assert entity["state_topic"] == f"ha-test/select/grobro/{serial}/slot1_mode/get"
+    assert entity["command_topic"] == f"ha-test/select/grobro/{serial}/slot1_mode/set"
+    assert entity["options"] == ["Load First", "Battery First", "Smart Mode"]
+    power = components[f"grobro_{serial}_cmd_slot1_power"]
+    assert power["platform"] == "number"
+    assert "optimistic" not in power
+
+
 @pytest.mark.parametrize("family_key", ["neo", "noah", "nexa"])
 def test_common_config_entities_keep_identical_register_topics(family_key):
     family = next(f for f in DEVICE_FAMILIES if f.key == family_key)
