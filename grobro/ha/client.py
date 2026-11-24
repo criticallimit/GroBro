@@ -1083,9 +1083,12 @@ class Client:
             # a short settling period instead of publishing stale readbacks.
             if (
                 model.is_family(device_id, "noah") or model.is_family(device_id, "nexa")
-            ) and cmd_type == "number" and cmd_name.startswith("slot") and cmd_name.endswith("_power"):
-                # Timed power outputs apply immediately on NOAH/NEXA; unlike
-                # operating modes, their confirmation should not be delayed.
+            ) and cmd_type == "number" and (
+                cmd_name == "default_power"
+                or (cmd_name.startswith("slot") and cmd_name.endswith("_power"))
+            ):
+                # NOAH/NEXA standard and scheduled output-power settings
+                # keep their existing immediate readback.
                 try:
                     read_result = self.on_command(
                         make_modbus_command(
